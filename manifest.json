@@ -1,0 +1,28 @@
+{
+  "name": "Mon patrimoine",
+  "short_name": "Patrimoine",
+  "description": "Suivi de votre patrimoine financier",
+  "start_url": "./mon-patrimoine.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#2563eb",
+  "background_color": "#F0F5FF",
+  "lang": "fr-FR",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["finance"],
+  "prefer_related_applications": false
+}
