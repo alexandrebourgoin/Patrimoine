@@ -55,12 +55,12 @@
   --loss-dim: rgba(220,38,38,0.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
-html,body{height:100%;overflow:hidden}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 #app{width:100%;max-width:480px;height:100vh;height:100dvh;margin:0 auto;position:relative;overflow:hidden}
 
 /* SCREENS */
-.screen{position:absolute;inset:0;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:80px;transform:translateX(100%);will-change:transform}
+.screen{position:absolute;inset:0;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform}
 .screen.no-nav{padding-bottom:20px}
 #s-dashboard{transform:translateX(0)}
 
@@ -227,9 +227,12 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .sort-pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
 
 /* ─── HOLD ROWS ─── */
-.hold-item{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
+.hold-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
 .hold-item:last-child{border-bottom:none}
 .hold-item:active{background:var(--card2)}
+.hold-item-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.hold-item-top{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.hold-item-bot{display:flex;align-items:center;gap:6px}
 .hold-del-btn{width:32px;height:32px;border-radius:9px;background:var(--loss-dim);display:flex;align-items:center;justify-content:center;color:var(--loss);flex-shrink:0;cursor:pointer;transition:background .15s}
 .hold-del-btn:active{background:var(--loss);color:#fff}
 .hold-del-btn svg{width:15px;height:15px;pointer-events:none}
@@ -388,6 +391,8 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 <body>
 <div id="app">
   <div id="s-dashboard" class="screen"></div>
+  <div id="s-comptes"   class="screen"></div>
+  <div id="s-recherche" class="screen"></div>
   <div id="s-account"   class="screen no-nav"></div>
   <div id="s-stock"     class="screen no-nav"></div>
   <div id="s-analysis"  class="screen"></div>
@@ -397,6 +402,16 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
     <div class="nav-btn on" data-nav="dashboard">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
       <span>Accueil</span>
+      <div class="nav-pip"></div>
+    </div>
+    <div class="nav-btn" data-nav="comptes">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 10v7h3v-7H4zm6 0v7h3v-7h-3zM2 22h19v-3H2v3zm14-12v7h3v-7h-3zM11.5 1L2 6v2h19V6l-9.5-5z"/></svg>
+      <span>Comptes</span>
+      <div class="nav-pip"></div>
+    </div>
+    <div class="nav-btn" data-nav="recherche">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <span>Recherche</span>
       <div class="nav-pip"></div>
     </div>
     <div class="nav-btn" data-nav="analysis">
@@ -754,6 +769,7 @@ const S = {
   histPeriod: '1M',
   targets: { Action: 60, ETF: 25, Obligation: 10, Cash: 5 },
   _histCache: {},
+  srchQuery: '',
   watchlist: [
     { ticker: 'OR',   name: "L'Oréal",       price: 412.35, change1d:  0.68 },
     { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
@@ -1135,7 +1151,7 @@ function initStockChart(container, h) {
 // NAVIGATION
 // ═══════════════════════════════════════════════
 const EASE='cubic-bezier(.4,0,.2,1)';
-const NAV_SCREENS=['dashboard','analysis'];
+const NAV_SCREENS=['dashboard','comptes','recherche','analysis'];
 
 // dir: 'back' | 'forward' | null (null = auto-detect from stack for hierarchical nav)
 function go(target, dir=null) {
@@ -1184,7 +1200,7 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings};
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings};
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
@@ -1270,6 +1286,107 @@ function renderDash() {
     </div>
   </div>
   <div class="col gap12 px">${accs}${empty}</div>`;
+}
+
+// ── COMPTES ──
+function renderComptes() {
+  const w=totalWealth();
+  const accs=S.accounts.map(a=>{
+    const pct=w>0?(a.value/w*100).toFixed(1):'0';
+    const up=a.change1d>=0;
+    const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
+    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+      <div class="row gap12">
+        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
+        <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
+          <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
+            <div style="font-size:15px;font-weight:700">${a.name}</div>${obsTag}
+          </div>
+          <div class="t-sm">${a.type} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
+        </div>
+        <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
+          <div style="font-size:15px;font-weight:800" class="t-num">${masked(a.value)}</div>
+          <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${fmtPct(a.change1d)}</div>
+        </div>
+        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </div>
+      </div>
+      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
+    </div>`;
+  }).join('');
+  const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">
+    <div style="font-size:40px;margin-bottom:12px">🏦</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
+    <div style="font-size:13px">Ajoutez un compte pour commencer</div>
+  </div>`:'';
+  return `<div style="padding:20px 20px 12px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:20px;font-weight:900;letter-spacing:-.6px">Mes comptes</div>
+    <div class="row gap8" style="align-items:center">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px">${S.accounts.length}</div>
+      <div class="hold-add-btn" id="js-acc-add" style="width:32px;height:32px;border-radius:10px">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="col gap12 px">${accs}${empty}</div>`;
+}
+
+// ── RECHERCHE ──
+function renderRecherche() {
+  return `<div style="padding:20px 20px 10px">
+    <div style="font-size:20px;font-weight:900;letter-spacing:-.6px;margin-bottom:14px">Recherche</div>
+    <div class="search-box" id="js-srch-box">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input type="text" id="js-srch-inp" placeholder="Nom, ticker, secteur…" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
+      ${S.srchQuery?`<div class="search-clear" id="js-srch-clr">✕</div>`:''}
+    </div>
+  </div>
+  <div id="js-srch-results">${srchResults(S.srchQuery||'')}</div>`;
+}
+
+function srchResults(q) {
+  if(!q.trim()) {
+    // No query — show all holdings grouped by account
+    if(!S.accounts.length) return `<div style="text-align:center;padding:40px 20px;color:var(--text2);font-size:13px">Aucun compte</div>`;
+    return S.accounts.map(acc=>{
+      if(!acc.holdings.length) return '';
+      const rows=acc.holdings.map(h=>srchRow(h,acc)).join('');
+      return `<div style="margin-bottom:6px">
+        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${acc.icon} ${acc.name}</div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">${rows}</div>
+      </div>`;
+    }).join('');
+  }
+  const ql=q.toLowerCase();
+  const results=S.accounts.flatMap(acc=>
+    acc.holdings
+      .filter(h=>h.name.toLowerCase().includes(ql)||h.ticker.toLowerCase().includes(ql)||h.sector.toLowerCase().includes(ql)||h.type.toLowerCase().includes(ql))
+      .map(h=>({h,acc}))
+  );
+  if(!results.length) return `<div style="text-align:center;padding:40px 20px;color:var(--text2)">
+    <div style="font-size:32px;margin-bottom:10px">🔍</div>
+    <div style="font-size:14px">Aucun résultat pour <strong>${q}</strong></div>
+  </div>`;
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">
+    ${results.map(({h,acc})=>srchRow(h,acc)).join('')}
+  </div>`;
+}
+
+function srchRow(h, acc) {
+  return `<div class="hold-item" data-hid="${h.id}" data-accid="${acc.id}">
+    <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
+    <div class="hold-item-body">
+      <div class="hold-item-top">
+        <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
+        <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.value)}</div>
+      </div>
+      <div class="hold-item-bot">
+        <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.name} · ${h.type}</div>
+        <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
+      </div>
+    </div>
+  </div>`;
 }
 
 // ── WATCHLIST CARD ──
@@ -1415,20 +1532,22 @@ function renderHoldsHTML(acc) {
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>`
       <div class="hold-item" data-hid="${h.id}">
-        <div class="ticker">${h.ticker.slice(0,4)}</div>
-        <div class="flex1 col gap4" style="min-width:0">
-          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.name}</div>
-          <div class="t-sm">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
-        </div>
-        <div class="col right gap4" style="margin-right:10px;flex-shrink:0">
-          <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.value)}</div>
-          <div style="font-size:12px;font-weight:700" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
-        </div>
-        <div class="hold-add-btn" data-add="${h.id}" style="margin-right:6px">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        </div>
-        <div class="hold-del-btn" data-del="${h.id}">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
+        <div class="hold-item-body">
+          <div class="hold-item-top">
+            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
+            <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.value)}</div>
+          </div>
+          <div class="hold-item-bot">
+            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
+            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
+            <div class="hold-add-btn" data-add="${h.id}" style="width:26px;height:26px;border-radius:7px">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </div>
+            <div class="hold-del-btn" data-del="${h.id}" style="width:26px;height:26px;border-radius:7px">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </div>
+          </div>
         </div>
       </div>`).join('')+
   `</div>`;
@@ -1458,8 +1577,7 @@ function deleteHolding(accId,holdId) {
     acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
     acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
     renderHoldsHTML(acc);
-    renderScreen('dashboard');
-    renderScreen('analysis');
+    refreshMain();
     toast('Position supprimée');
   });
 }
@@ -1785,19 +1903,21 @@ function renderSettings() {
 // ═══════════════════════════════════════════════
 // EVENT BINDING
 // ═══════════════════════════════════════════════
+function _bindAccCards(el) {
+  el.querySelectorAll('[data-acc]').forEach(c=>c.addEventListener('click',e=>{
+    if(e.target.closest('[data-menu]')) return;
+    if(S.accountId!==c.dataset.acc){S.search='';S.sort='value';S.sortDir=-1;}
+    S.accountId=c.dataset.acc; go('account');
+  }));
+  el.querySelectorAll('[data-menu]').forEach(btn=>btn.addEventListener('click',e=>{
+    e.stopPropagation();
+    openAccMenu(btn.dataset.menu);
+  }));
+}
+
 function bindEvents(id, el) {
   if(id==='dashboard') {
-    // Navigate to account on card body click (not menu button)
-    el.querySelectorAll('[data-acc]').forEach(c=>c.addEventListener('click',e=>{
-      if(e.target.closest('[data-menu]')) return;
-      if(S.accountId!==c.dataset.acc){S.search='';S.sort='value';S.sortDir=-1;}
-      S.accountId=c.dataset.acc; go('account');
-    }));
-    // ⋮ menu button
-    el.querySelectorAll('[data-menu]').forEach(btn=>btn.addEventListener('click',e=>{
-      e.stopPropagation();
-      openAccMenu(btn.dataset.menu);
-    }));
+    _bindAccCards(el);
     // History period selector
     el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
       S.histPeriod=p.dataset.period;
@@ -1819,12 +1939,56 @@ function bindEvents(id, el) {
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
     // Privacy toggle
+
     el.querySelector('#js-privacy-btn')?.addEventListener('click',()=>{
       S.privacy=!S.privacy;
       renderScreen('dashboard');
+      renderScreen('comptes');
       renderScreen('account');
       renderScreen('stock');
     });
+  }
+  if(id==='comptes') {
+    _bindAccCards(el);
+    el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
+  }
+  if(id==='recherche') {
+    const inp=el.querySelector('#js-srch-inp');
+    const clrBtn=el.querySelector('#js-srch-clr');
+    const results=el.querySelector('#js-srch-results');
+    function doSearch(q){
+      S.srchQuery=q;
+      results.innerHTML=srchResults(q);
+      // bind click on results
+      results.querySelectorAll('.hold-item[data-accid]').forEach(item=>{
+        item.addEventListener('click',()=>{
+          S.accountId=item.dataset.accid;
+          S.holdingId=item.dataset.hid;
+          go('stock');
+        });
+      });
+      // update clear button
+      let clr=el.querySelector('#js-srch-clr');
+      const box=el.querySelector('#js-srch-box');
+      if(q&&!clr){
+        clr=document.createElement('div');
+        clr.className='search-clear';clr.id='js-srch-clr';clr.textContent='✕';
+        clr.addEventListener('click',()=>{inp.value='';doSearch('');inp.focus();});
+        box.appendChild(clr);
+      } else if(!q&&clr){clr.remove();}
+    }
+    inp?.addEventListener('input',e=>doSearch(e.target.value));
+    clrBtn?.addEventListener('click',()=>{inp.value='';doSearch('');inp.focus();});
+    // Wire existing results (rendered with initial query)
+    results?.querySelectorAll('.hold-item[data-accid]').forEach(item=>{
+      item.addEventListener('click',()=>{
+        S.accountId=item.dataset.accid;
+        S.holdingId=item.dataset.hid;
+        go('stock');
+      });
+    });
+    // Auto-focus search input only when actually on the recherche screen
+    setTimeout(()=>{if(S.screen==='recherche')inp?.focus();},200);
   }
   if(id==='account') {
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -1872,8 +2036,7 @@ function bindEvents(id, el) {
       renderHoldsHTML(acc);
       const v=el.querySelector('#js-acc-val');
       if(v) v.textContent=masked(acc.value);
-      renderScreen('dashboard');
-      renderScreen('analysis');
+      refreshMain();
       toast('Cours actualisés ↻');
     });
   }
@@ -1901,8 +2064,7 @@ function bindEvents(id, el) {
           recalcHolding(h);
           acc.value=acc.holdings.reduce((s,hh)=>s+hh.value,0);
           renderScreen('stock');
-          renderScreen('dashboard');
-          renderScreen('analysis');
+          refreshMain();
           toast('Mouvement supprimé');
         });
       }
@@ -1955,14 +2117,14 @@ function bindEvents(id, el) {
     el.querySelector('#js-demo-tog')?.addEventListener('click',()=>{
       if(S.accounts.length){ S.accounts=[]; toast('Données effacées'); }
       else { S.accounts=genDemo(); toast('Mode démo activé ✓'); }
-      renderScreen('dashboard'); renderScreen('analysis');
+      refreshMain();
       el.querySelector('#js-demo-tog').classList.toggle('on',S.accounts.length>0);
     });
     el.querySelector('#js-csv-btn')?.addEventListener('click',()=>document.getElementById('csv-file').click());
     el.querySelectorAll('[data-cur]').forEach(b=>b.addEventListener('click',()=>{
       S.currency=b.dataset.cur;
       el.querySelectorAll('[data-cur]').forEach(x=>x.classList.toggle('on',x.dataset.cur===S.currency));
-      renderScreen('dashboard'); renderScreen('analysis');
+      refreshMain();
       toast('Devise : '+S.currency);
     }));
     el.querySelector('#js-theme-tog')?.addEventListener('click',()=>{
@@ -1972,6 +2134,15 @@ function bindEvents(id, el) {
       toast('Thème '+(S.theme==='dark'?'sombre':'clair'));
     });
   }
+}
+
+// Refresh all top-level screens (dashboard, comptes, analysis)
+// + recherche if it's currently visible (search results may change)
+function refreshMain() {
+  renderScreen('dashboard');
+  renderScreen('comptes');
+  renderScreen('analysis');
+  if(S.screen==='recherche') renderScreen('recherche');
 }
 
 // ═══════════════════════════════════════════════
@@ -2022,7 +2193,7 @@ function parseCSV(text) {
     added++;
   });
   S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
-  renderScreen('dashboard'); renderScreen('analysis'); renderScreen('settings');
+  refreshMain(); renderScreen('settings');
   toast(`${added} mouvement(s) importé(s)`);
 }
 
@@ -2070,7 +2241,7 @@ document.getElementById('watch-submit').addEventListener('click',()=>{
   if(S.watchlist.find(w=>w.ticker===ticker)){toast('Ticker déjà suivi');return;}
   S.watchlist.push({ticker,name,price,change1d:change});
   closeWatchModal();
-  renderScreen('dashboard');
+  refreshMain();
   toast(`${ticker} ajouté aux titres suivis ✓`);
 });
 
@@ -2108,7 +2279,7 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const iconBg=bgs[S.accounts.length%bgs.length];
   S.accounts.push({id,name,type,icon,iconBg,value:0,change1d:0,holdings:[],observer:_accObserver});
   closeAccModal();
-  renderScreen('dashboard');
+  refreshMain();
   toast(`Compte "${name}" créé ✓`);
 });
 
@@ -2199,8 +2370,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
   closePosModal();
   if(S.screen==='account'&&S.accountId===_posAccId) renderHoldsHTML(acc);
-  renderScreen('dashboard');
-  renderScreen('analysis');
+  refreshMain();
   toast(`${ticker} ajouté ✓`);
 });
 
@@ -2249,8 +2419,7 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
   acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
   closeEditTx();
   renderScreen('stock');
-  renderScreen('dashboard');
-  renderScreen('analysis');
+  refreshMain();
   toast('Mouvement modifié ✓');
 });
 
@@ -2303,8 +2472,7 @@ function deleteAccount(accId){
   openConfirm(`Supprimer le compte "${acc.name}" ?`,()=>{
     S.accounts=S.accounts.filter(a=>a.id!==accId);
     if(S.screen==='account'&&S.accountId===accId) back();
-    renderScreen('dashboard');
-    renderScreen('analysis');
+    refreshMain();
     toast('Compte supprimé');
   });
 }
@@ -2333,7 +2501,7 @@ document.getElementById('acc-action-obs').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_menuAccId); if(!acc) return;
   acc.observer=!acc.observer;
   closeAccMenu();
-  renderScreen('dashboard');
+  refreshMain();
   if(S.screen==='account'&&S.accountId===_menuAccId) renderScreen('account');
   toast(acc.observer?'Mode observateur activé':'Mode observateur désactivé');
 });
@@ -2373,7 +2541,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_renameAccId); if(!acc) return;
   acc.name=name;
   closeRenameAcc();
-  renderScreen('dashboard');
+  refreshMain();
   if(S.screen==='account'&&S.accountId===_renameAccId) renderScreen('account');
   toast(`Compte renommé en "${name}" ✓`);
 });
@@ -2445,8 +2613,7 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   const accEl=document.getElementById('s-account');
   const holdsEl=accEl?.querySelector('#js-holds');
   if(holdsEl) renderHoldsHTML(acc);
-  renderScreen('dashboard');
-  renderScreen('analysis');
+  refreshMain();
   const lbl={BUY:'Achat',SELL:'Vente',DIV:'Dividende'}[_mType];
   toast(`${lbl} enregistré ✓`);
 });
@@ -2477,7 +2644,7 @@ function toast(msg) {
 // INIT
 // ═══════════════════════════════════════════════
 S.accounts=genDemo();
-['dashboard','analysis','settings'].forEach(renderScreen);
+['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
 
 // ═══════════════════════════════════════════════
