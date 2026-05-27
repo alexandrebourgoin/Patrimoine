@@ -322,6 +322,26 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 /* ─── OBSERVER ACCOUNT ─── */
 .obs-tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;background:rgba(107,114,128,.1);color:#6B7280;border:1px solid rgba(107,114,128,.2);flex-shrink:0}
 
+/* ─── ACCOUNT CARD MENU BUTTON ─── */
+.acc-menu-btn{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;color:var(--text3);transition:background .15s,color .15s;margin-left:4px}
+.acc-menu-btn:active,.acc-menu-btn.on{background:var(--card2);color:var(--text)}
+.acc-menu-btn svg{width:18px;height:18px;pointer-events:none}
+/* ─── ACCOUNT ACTION SHEET ─── */
+.acc-action-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;padding-bottom:max(8px,env(safe-area-inset-bottom));z-index:310;transition:transform .32s cubic-bezier(.4,0,.2,1)}
+.acc-action-sheet.show{transform:translateX(-50%) translateY(0)}
+.acc-action-header{padding:12px 20px 10px;border-bottom:1px solid var(--border)}
+.acc-action-name{font-size:13px;font-weight:700;color:var(--text2)}
+.acc-action-item{display:flex;align-items:center;gap:14px;padding:13px 20px;cursor:pointer;transition:background .12s}
+.acc-action-item:active{background:var(--card2)}
+.acc-action-item:not(:last-child){border-bottom:1px solid var(--border)}
+.acc-action-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.acc-action-icon svg{width:18px;height:18px}
+.acc-action-label{font-size:15px;font-weight:600}
+.acc-action-sublabel{font-size:12px;color:var(--text2);margin-top:1px}
+/* ─── RENAME SHEET ─── */
+.rename-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;padding-bottom:max(8px,env(safe-area-inset-bottom));z-index:320;transition:transform .32s cubic-bezier(.4,0,.2,1)}
+.rename-sheet.show{transform:translateX(-50%) translateY(0)}
+
 /* ─── STOCK INTERACTIVE CHART ─── */
 .stock-chart-wrap{position:relative;user-select:none}
 .stock-chart-tip{position:absolute;top:4px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:4px 9px;font-size:11px;font-weight:700;pointer-events:none;opacity:0;transition:opacity .1s;white-space:nowrap;z-index:10}
@@ -331,6 +351,35 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 .add-modal-bg.show{opacity:1;pointer-events:all}
 .add-modal-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;z-index:215;transition:transform .32s cubic-bezier(.4,0,.2,1);padding-bottom:max(20px,env(safe-area-inset-bottom))}
 .add-modal-sheet.show{transform:translateX(-50%) translateY(0)}
+
+/* ─── AUTOCOMPLETE ─── */
+.ac-wrap{position:relative}
+.ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1.5px solid var(--accent);border-radius:10px;z-index:220;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.15)}
+.ac-list.hidden{display:none}
+.ac-item{padding:9px 12px;display:flex;gap:10px;align-items:center;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--border)}
+.ac-item:last-child{border-bottom:none}
+.ac-item:active{background:var(--card2)}
+.ac-tick{font-size:11px;font-weight:800;color:var(--accent);width:44px;flex-shrink:0}
+.ac-name{flex:1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-sub{font-size:10px;color:var(--text2);flex-shrink:0}
+
+/* ─── EDIT / DELETE TRANSACTION ─── */
+.tx-edit-btn,.tx-del-btn{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s}
+.tx-edit-btn{background:var(--accent-dim);color:var(--accent)}
+.tx-edit-btn:active{background:var(--accent);color:#fff}
+.tx-del-btn{background:var(--loss-dim);color:var(--loss)}
+.tx-del-btn:active{background:var(--loss);color:#fff}
+.tx-edit-btn svg,.tx-del-btn svg{width:14px;height:14px;pointer-events:none}
+
+/* ─── CASHFLOWS ─── */
+.cf-item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border)}
+.cf-item:last-child{border-bottom:none}
+.cf-dot{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.cf-dot.dep{background:var(--gain-dim);color:var(--gain)}
+.cf-dot.wit{background:var(--loss-dim);color:var(--loss)}
+
+/* ─── PRIVACY MODE ─── */
+.prv{display:inline-block;letter-spacing:2px;color:var(--text3)}
 
 /* ─── SIMULATOR (improved) ─── */
 .sim-breakeven{display:flex;align-items:center;justify-content:space-between;background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:14px;border:1px solid var(--border)}
@@ -474,6 +523,59 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
   </div>
 </div>
 
+<!-- ACCOUNT ACTION SHEET -->
+<div id="acc-action-bg" class="add-modal-bg"></div>
+<div id="acc-action-sheet" class="acc-action-sheet">
+  <div class="modal-drag"></div>
+  <div class="acc-action-header">
+    <div class="acc-action-name" id="acc-action-title">Compte</div>
+  </div>
+  <div class="acc-action-item" id="acc-action-obs">
+    <div class="acc-action-icon" style="background:var(--accent-dim)">
+      <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+    </div>
+    <div class="col gap4 flex1">
+      <div class="acc-action-label" id="acc-action-obs-lbl">Passer en observateur</div>
+      <div class="acc-action-sublabel">Non comptabilisé dans le total</div>
+    </div>
+  </div>
+  <div class="acc-action-item" id="acc-action-rename">
+    <div class="acc-action-icon" style="background:rgba(245,158,11,.1)">
+      <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+    </div>
+    <div class="col gap4 flex1">
+      <div class="acc-action-label">Renommer</div>
+      <div class="acc-action-sublabel">Modifier le nom du compte</div>
+    </div>
+  </div>
+  <div class="acc-action-item" id="acc-action-del">
+    <div class="acc-action-icon" style="background:var(--loss-dim)">
+      <svg viewBox="0 0 24 24" fill="var(--loss)"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+    </div>
+    <div class="col gap4 flex1">
+      <div class="acc-action-label" style="color:var(--loss)">Supprimer</div>
+      <div class="acc-action-sublabel">Supprime le compte et toutes ses positions</div>
+    </div>
+  </div>
+</div>
+
+<!-- RENAME ACCOUNT SHEET -->
+<div id="rename-acc-bg" class="add-modal-bg"></div>
+<div id="rename-acc-sheet" class="rename-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Renommer le compte</div>
+      <div id="rename-acc-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="form-field" style="margin-bottom:14px">
+      <div class="form-label">Nouveau nom</div>
+      <input class="form-input" type="text" id="rename-acc-input" placeholder="Nom du compte" autocomplete="off">
+    </div>
+    <button class="form-submit" id="rename-acc-submit">Renommer</button>
+  </div>
+</div>
+
 <!-- ADD POSITION MODAL -->
 <div id="pos-modal-bg" class="add-modal-bg"></div>
 <div id="pos-modal-sheet" class="add-modal-sheet">
@@ -484,9 +586,10 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
       <div id="pos-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
     <div class="form-row">
-      <div class="form-field" style="flex:.5">
+      <div class="form-field ac-wrap" style="flex:.5">
         <div class="form-label">Ticker</div>
-        <input class="form-input" type="text" id="pos-ticker" placeholder="AAPL" autocapitalize="characters" spellcheck="false">
+        <input class="form-input" type="text" id="pos-ticker" placeholder="AAPL" autocapitalize="characters" spellcheck="false" autocomplete="off">
+        <div class="ac-list hidden" id="pos-ac-list"></div>
       </div>
       <div class="form-field">
         <div class="form-label">Nom</div>
@@ -501,6 +604,7 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
           <option value="ETF">ETF</option>
           <option value="Obligation">Obligation</option>
           <option value="Cash">Cash</option>
+          <option value="Crypto">Crypto</option>
         </select>
       </div>
       <div class="form-field">
@@ -516,7 +620,7 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
     <div class="form-row">
       <div class="form-field">
         <div class="form-label">Quantité</div>
-        <input class="form-input" type="number" id="pos-qty" min="0.001" step="any" placeholder="0" inputmode="decimal">
+        <input class="form-input" type="number" id="pos-qty" min="0.0000001" step="any" placeholder="0" inputmode="decimal">
       </div>
       <div class="form-field">
         <div class="form-label">PRU</div>
@@ -525,15 +629,108 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
     </div>
     <div class="form-row">
       <div class="form-field">
+        <div class="form-label">Date d'achat</div>
+        <input class="form-input" type="date" id="pos-date">
+      </div>
+      <div class="form-field">
         <div class="form-label">Pays / Zone</div>
         <input class="form-input" type="text" id="pos-country" placeholder="France" autocomplete="off">
       </div>
+    </div>
+    <div class="form-row">
       <div class="form-field">
         <div class="form-label">Secteur</div>
-        <input class="form-input" type="text" id="pos-sector" placeholder="Technologie" autocomplete="off">
+        <select class="form-input" id="pos-sector" style="cursor:pointer">
+          <option value="Technologie">Technologie</option>
+          <option value="Finance">Finance</option>
+          <option value="Santé">Santé</option>
+          <option value="Énergie">Énergie</option>
+          <option value="Aéronautique">Aéronautique</option>
+          <option value="Automobile">Automobile</option>
+          <option value="Luxe">Luxe</option>
+          <option value="Agroalimentaire">Agroalimentaire</option>
+          <option value="Chimie">Chimie</option>
+          <option value="Matériaux">Matériaux</option>
+          <option value="Immobilier">Immobilier</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Télécoms">Télécoms</option>
+          <option value="Consommation">Consommation</option>
+          <option value="Industrie">Industrie</option>
+          <option value="Cosmétiques">Cosmétiques</option>
+          <option value="Crypto">Crypto</option>
+          <option value="Diversifié">Diversifié</option>
+          <option value="Autre">Autre</option>
+        </select>
       </div>
     </div>
     <button class="form-submit" id="pos-submit">Ajouter la position</button>
+  </div>
+</div>
+
+<!-- EDIT TRANSACTION MODAL -->
+<div id="edit-tx-bg" class="add-modal-bg"></div>
+<div id="edit-tx-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Modifier le mouvement</div>
+      <div id="edit-tx-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="type-btns" id="edit-type-btns">
+      <div class="type-btn buy" data-etype="BUY">Achat</div>
+      <div class="type-btn sell" data-etype="SELL">Vente</div>
+      <div class="type-btn div" data-etype="DIV">Dividende</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Quantité</div>
+        <input class="form-input" type="number" id="edit-tx-qty" min="0.0000001" step="any" inputmode="decimal">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Prix unitaire</div>
+        <input class="form-input" type="number" id="edit-tx-price" min="0" step="any" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Date</div>
+        <input class="form-input" type="date" id="edit-tx-date">
+      </div>
+    </div>
+    <button class="form-submit" id="edit-tx-submit">Enregistrer</button>
+  </div>
+</div>
+
+<!-- ADD CASHFLOW MODAL -->
+<div id="cf-modal-bg" class="add-modal-bg"></div>
+<div id="cf-modal-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Apport / Retrait</div>
+      <div id="cf-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="type-btns">
+      <div class="type-btn buy on" data-cftype="DEP">Apport</div>
+      <div class="type-btn sell" data-cftype="WIT">Retrait</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Montant</div>
+        <input class="form-input" type="number" id="cf-amount" min="0" step="any" placeholder="0.00" inputmode="decimal">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Date</div>
+        <input class="form-input" type="date" id="cf-date">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Note (optionnel)</div>
+        <input class="form-input" type="text" id="cf-note" placeholder="ex : Virement mensuel" autocomplete="off">
+      </div>
+    </div>
+    <button class="form-submit" id="cf-submit">Enregistrer</button>
   </div>
 </div>
 
@@ -548,6 +745,7 @@ const S = {
   holdingId: null,
   theme: 'light',
   currency: 'EUR',
+  privacy: false,
   user: { name: 'Alexandre Martin' },
   accounts: [],
   sort: 'value',
@@ -598,9 +796,9 @@ function genDemo() {
   ];
   function val(hs){ return hs.reduce((s,h)=>s+h.value,0); }
   return [
-    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', value:val(pea), change1d:1.24, holdings:pea },
-    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', value:val(ct),  change1d:2.18, holdings:ct  },
-    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', value:val(av),  change1d:0.42, holdings:av  },
+    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', value:val(pea), change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:15000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:5000,note:'Versement annuel'}] },
+    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', value:val(ct),  change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:20000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:8000,note:'Renforcement'}] },
+    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', value:val(av),  change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:42000,note:'Versement initial'}] },
   ];
 }
 
@@ -639,6 +837,69 @@ function computeRealizedPnL(h) {
   });
   return realized;
 }
+
+function recalcHolding(h) {
+  let qty=0, costBasis=0;
+  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
+    if(tx.type==='BUY'){costBasis+=tx.qty*tx.price;qty+=tx.qty;}
+    else if(tx.type==='SELL'&&qty>0){const avg=costBasis/qty;costBasis=avg*Math.max(0,qty-tx.qty);qty=Math.max(0,qty-tx.qty);}
+  });
+  h.quantity=+qty.toFixed(8);
+  h.avgBuyPrice=qty>0?costBasis/qty:0;
+  h.value=+(h.quantity*h.currentPrice).toFixed(2);
+  h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
+  h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+}
+
+function masked(v) { return S.privacy?'<span class="prv">● ● ●</span>':fmtCur(v); }
+function maskedNative(v,cur) { return S.privacy?'<span class="prv">● ● ●</span>':fmtNative(v,cur); }
+
+// ─── Securities database for autocomplete ───
+const SECURITIES_DB = {
+  'MC':    {name:'LVMH',                  sector:'Luxe',           country:'France',   currency:'EUR',type:'Action'},
+  'TTE':   {name:'TotalEnergies',          sector:'Énergie',        country:'France',   currency:'EUR',type:'Action'},
+  'BNP':   {name:'BNP Paribas',            sector:'Finance',        country:'France',   currency:'EUR',type:'Action'},
+  'OR':    {name:"L'Oréal",               sector:'Cosmétiques',    country:'France',   currency:'EUR',type:'Action'},
+  'SAN':   {name:'Sanofi',                 sector:'Santé',          country:'France',   currency:'EUR',type:'Action'},
+  'AIR':   {name:'Airbus',                 sector:'Aéronautique',   country:'France',   currency:'EUR',type:'Action'},
+  'BN':    {name:'Danone',                 sector:'Agroalimentaire',country:'France',   currency:'EUR',type:'Action'},
+  'KER':   {name:'Kering',                 sector:'Luxe',           country:'France',   currency:'EUR',type:'Action'},
+  'AI':    {name:'Air Liquide',            sector:'Chimie',         country:'France',   currency:'EUR',type:'Action'},
+  'ORA':   {name:'Orange',                 sector:'Télécoms',       country:'France',   currency:'EUR',type:'Action'},
+  'SGO':   {name:'Saint-Gobain',           sector:'Matériaux',      country:'France',   currency:'EUR',type:'Action'},
+  'DSY':   {name:'Dassault Systèmes',      sector:'Technologie',    country:'France',   currency:'EUR',type:'Action'},
+  'RNO':   {name:'Renault',                sector:'Automobile',     country:'France',   currency:'EUR',type:'Action'},
+  'STLAM': {name:'Stellantis',             sector:'Automobile',     country:'Europe',   currency:'EUR',type:'Action'},
+  'ASML':  {name:'ASML Holding',           sector:'Technologie',    country:'Europe',   currency:'EUR',type:'Action'},
+  'NOVO':  {name:'Novo Nordisk',           sector:'Santé',          country:'Europe',   currency:'EUR',type:'Action'},
+  'SAP':   {name:'SAP',                    sector:'Technologie',    country:'Europe',   currency:'EUR',type:'Action'},
+  'ALV':   {name:'Allianz',                sector:'Finance',        country:'Europe',   currency:'EUR',type:'Action'},
+  'AAPL':  {name:'Apple',                  sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'MSFT':  {name:'Microsoft',              sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'NVDA':  {name:'NVIDIA',                 sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'GOOGL': {name:'Alphabet',               sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'AMZN':  {name:'Amazon',                 sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'META':  {name:'Meta Platforms',         sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'TSLA':  {name:'Tesla',                  sector:'Automobile',     country:'USA',      currency:'USD',type:'Action'},
+  'NFLX':  {name:'Netflix',                sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'V':     {name:'Visa',                   sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
+  'JPM':   {name:'JPMorgan Chase',         sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
+  'JNJ':   {name:'Johnson & Johnson',      sector:'Santé',          country:'USA',      currency:'USD',type:'Action'},
+  'WMT':   {name:'Walmart',                sector:'Consommation',   country:'USA',      currency:'USD',type:'Action'},
+  'UNH':   {name:'UnitedHealth',           sector:'Santé',          country:'USA',      currency:'USD',type:'Action'},
+  'CW8':   {name:'Amundi MSCI World',      sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
+  'IWDA':  {name:'iShares MSCI World',     sector:'Diversifié',     country:'Monde',    currency:'USD',type:'ETF'},
+  'SP5':   {name:'Amundi S&P 500',         sector:'Diversifié',     country:'USA',      currency:'EUR',type:'ETF'},
+  'PAEEM': {name:'Amundi EM ESG',          sector:'Diversifié',     country:'Émergents',currency:'EUR',type:'ETF'},
+  'EWLD':  {name:'iShares MSCI World ESG', sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
+  'QQQ':   {name:'Invesco QQQ (Nasdaq)',   sector:'Technologie',    country:'USA',      currency:'USD',type:'ETF'},
+  'MWRD':  {name:'Lyxor MSCI World',       sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
+  'BTC':   {name:'Bitcoin',                sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'ETH':   {name:'Ethereum',               sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'SOL':   {name:'Solana',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'BNB':   {name:'BNB',                    sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'XRP':   {name:'Ripple',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+};
 
 // ═══════════════════════════════════════════════
 // CHARTS
@@ -769,20 +1030,22 @@ function initHistChart(container, pts) {
 
 // ── SECURITY CHART (90-day price history) ──
 function genSecurityHistory(h) {
-  // Seeded LCG so the same ticker always gives the same chart shape
   let seed = 0;
   for(let i=0;i<h.ticker.length;i++) seed = (Math.imul(31, seed) + h.ticker.charCodeAt(i)) | 0;
   seed = Math.abs(seed) || 42;
   const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
-  const n = 90;
-  const pts = new Array(n);
-  pts[n-1] = h.currentPrice;
-  for(let i=n-2;i>=0;i--) pts[i] = pts[i+1] / (1 + 0.0003 + (lcg()*0.038 - 0.018));
-  return pts;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const txDates = h.transactions.map(t => new Date(t.date+'T00:00:00'));
+  const minDate = txDates.length > 0 ? new Date(Math.min(...txDates)) : new Date(today.getTime() - 90*86400000);
+  const days = Math.max(90, Math.round((today - minDate) / 86400000) + 1);
+  const pts = new Array(days);
+  pts[days-1] = h.currentPrice;
+  for(let i=days-2;i>=0;i--) pts[i] = pts[i+1] / (1 + 0.0003 + (lcg()*0.038 - 0.018));
+  return { pts, startDate: minDate, days };
 }
 
 function stockChartSvg(h, w, ch) {
-  const pts = genSecurityHistory(h);
+  const {pts, startDate, days} = genSecurityHistory(h);
   const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
   const padT=8, padB=8;
   const xs = pts.map((_,i) => (i/(pts.length-1))*w);
@@ -792,24 +1055,24 @@ function stockChartSvg(h, w, ch) {
   const line = 'M'+xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line+`L${xs[xs.length-1].toFixed(1)},${ch}L0,${ch}Z`;
   const gid = 'sc'+Math.random().toString(36).slice(2,7);
-  // PRU line
+  // PRU line with value label
   const pruClamp = Math.max(mn, Math.min(mx, h.avgBuyPrice));
   const pruY = (padT+(1-(pruClamp-mn)/rng)*(ch-padT-padB)).toFixed(1);
+  const pruLabel = `PRU ${h.avgBuyPrice.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
-    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.85">PRU</text>`;
-  // BUY / SELL markers at transaction dates
-  const today = new Date(); today.setHours(0,0,0,0);
+    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
+  // BUY / SELL markers mapped to extended history window
   const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
-    const daysAgo = Math.round((today - new Date(tx.date+'T00:00:00'))/86400000);
-    if(daysAgo<0||daysAgo>=pts.length) return '';
-    const idx = pts.length-1-daysAgo;
+    const idx = Math.max(0, Math.min(days-1, Math.round((new Date(tx.date+'T00:00:00') - startDate) / 86400000)));
     const x = xs[idx].toFixed(1);
     const yy = ys[idx].toFixed(1);
     const mc = tx.type==='BUY'?'var(--gain)':'var(--loss)';
     return `<line x1="${x}" x2="${x}" y1="${padT}" y2="${ch-padB}" stroke="${mc}" stroke-width="1.5" opacity="0.55"/>
       <circle cx="${x}" cy="${yy}" r="3.5" fill="${mc}" stroke="var(--surface)" stroke-width="1.5"/>`;
   }).join('');
-  return `<svg id="stock-svg" width="${w}" height="${ch}" viewBox="0 0 ${w} ${ch}" style="display:block;overflow:visible;cursor:crosshair">
+  // Period label
+  const periodLabel = days>=365 ? Math.round(days/365)+'a' : days>=30 ? Math.round(days/30)+'m' : days+'j';
+  return `<svg id="stock-svg" width="${w}" height="${ch}" viewBox="0 0 ${w} ${ch}" style="display:block;overflow:visible;cursor:crosshair" data-startdate="${startDate.toISOString().slice(0,10)}" data-days="${days}">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".15"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
@@ -820,11 +1083,12 @@ function stockChartSvg(h, w, ch) {
     <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <line id="stock-xhair" x1="0" y1="${padT}" x2="0" y2="${ch-padB}" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
     <circle id="stock-dot" cx="0" cy="0" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
+    <text id="stock-period-lbl" x="${w/2}" y="${ch-2}" text-anchor="middle" font-size="9" fill="var(--text3)" font-weight="600">${periodLabel}</text>
   </svg>`;
 }
 
 function initStockChart(container, h) {
-  const pts = genSecurityHistory(h);
+  const {pts, startDate} = genSecurityHistory(h);
   const svg = container.querySelector('#stock-svg');
   const tip = container.querySelector('.stock-chart-tip');
   if(!svg||!pts||pts.length<2) return;
@@ -832,6 +1096,7 @@ function initStockChart(container, h) {
   const padT=8, padB=8;
   const xhair=svg.querySelector('#stock-xhair');
   const dot=svg.querySelector('#stock-dot');
+  let locked=false;
   function update(clientX) {
     const rect=svg.getBoundingClientRect();
     const relX=Math.max(0,Math.min(rect.width,clientX-rect.left));
@@ -844,19 +1109,25 @@ function initStockChart(container, h) {
     dot.setAttribute('cx',x.toFixed(1)); dot.setAttribute('cy',y.toFixed(1));
     dot.setAttribute('opacity','1');
     let tipX=relX+8;
-    if(tipX+110>rect.width) tipX=relX-118;
+    if(tipX+130>rect.width) tipX=relX-138;
     tip.style.left=Math.max(0,tipX)+'px';
     tip.style.top=Math.max(0,y-22)+'px';
     tip.style.opacity='1';
-    const daysAgo=pts.length-1-i;
-    const d=new Date(); d.setDate(d.getDate()-daysAgo);
+    const d=new Date(startDate.getTime()+i*86400000);
     tip.textContent=fmtCur(pts[i])+'  '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   }
-  function hide(){xhair.setAttribute('opacity','0');dot.setAttribute('opacity','0');tip.style.opacity='0';}
-  svg.addEventListener('touchstart',e=>{e.stopPropagation();update(e.touches[0].clientX);},{passive:true});
-  svg.addEventListener('touchmove',e=>{e.stopPropagation();update(e.touches[0].clientX);},{passive:true});
-  svg.addEventListener('touchend',hide,{passive:true});
-  svg.addEventListener('mousemove',e=>update(e.clientX));
+  function hide(){if(locked) return; xhair.setAttribute('opacity','0');dot.setAttribute('opacity','0');tip.style.opacity='0';}
+  // Touch: drag to scrub, tap to lock/unlock tooltip
+  let touchMoved=false;
+  svg.addEventListener('touchstart',e=>{e.stopPropagation();touchMoved=false;update(e.touches[0].clientX);},{passive:true});
+  svg.addEventListener('touchmove',e=>{e.stopPropagation();touchMoved=true;update(e.touches[0].clientX);},{passive:true});
+  svg.addEventListener('touchend',e=>{
+    if(!touchMoved){locked=!locked;if(!locked)hide();}
+    else{if(!locked)hide();}
+  },{passive:true});
+  // Mouse
+  svg.addEventListener('mousemove',e=>{if(!locked)update(e.clientX);});
+  svg.addEventListener('click',e=>{locked=!locked;if(locked)update(e.clientX);else hide();});
   svg.addEventListener('mouseleave',hide);
 }
 
@@ -920,7 +1191,7 @@ function renderScreen(id) {
 // ── DASHBOARD ──
 function renderDash() {
   const w=totalWealth();
-  const wChg=S.accounts.length?S.accounts.reduce((s,a)=>s+a.change1d*(a.value/w),0):0;
+  const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.change1d*(a.value/w),0):0;
   const allH=S.accounts.flatMap(a=>a.holdings);
   const totPnl=allH.reduce((s,h)=>s+h.pnl,0);
   const totInv=allH.reduce((s,h)=>s+h.avgBuyPrice*h.quantity,0);
@@ -930,21 +1201,24 @@ function renderDash() {
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const up=a.change1d>=0;
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    return `<div class="acc-card anim tap" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
-        <div class="acc-icon" style="background:${a.iconBg}">${a.icon}</div>
-        <div class="flex1 col gap4" style="min-width:0">
+        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
+        <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${a.name}</div>${obsTag}
           </div>
           <div class="t-sm">${a.type}</div>
         </div>
-        <div class="col right gap4">
-          <div style="font-size:15px;font-weight:800" class="t-num">${fmtCur(a.value)}</div>
+        <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
+          <div style="font-size:15px;font-weight:800" class="t-num">${masked(a.value)}</div>
           <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${fmtPct(a.change1d)}</div>
         </div>
+        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </div>
       </div>
-      ${!a.observer?`<div class="acc-bar"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
+      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
   }).join('');
 
@@ -954,23 +1228,34 @@ function renderDash() {
     <div style="font-size:13px">Activez le mode démo ou importez un CSV dans les réglages</div>
   </div>`:'';
 
+  const wealthDisplay = S.privacy
+    ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
+    : `<div class="wealth-amount t-num">${fmtCur(w)}</div>`;
   return `<div class="dash-top">
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:20px">
       <div style="font-size:20px;font-weight:900;letter-spacing:-.6px">Mon patrimoine</div>
-      <div id="js-settings-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      <div class="row gap8">
+        <div id="js-privacy-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:${S.privacy?'var(--accent)':'var(--text2)'};cursor:pointer" title="Masquer les montants">
+          ${S.privacy
+            ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`
+            : `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
+          }
+        </div>
+        <div id="js-settings-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </div>
       </div>
     </div>
   </div>
     <div class="wealth-card anim">
     <div class="wealth-label">Fortune totale</div>
-    <div class="wealth-amount t-num">${fmtCur(w)}</div>
+    ${wealthDisplay}
     <div class="row gap8" style="margin:8px 0 0">
       <div class="badge ${wChg>=0?'up':'dn'}">${wChg>=0?'▲':'▼'} ${Math.abs(wChg).toFixed(2)}%</div>
       <span style="font-size:12px;color:rgba(255,255,255,.38)">Aujourd'hui · ${S.accounts.length} compte${S.accounts.length>1?'s':''}</span>
     </div>
     <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">
-      P&amp;L total&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${totPnl>=0?'+':''}${fmtCur(totPnl)}&nbsp;(${fmtPct(totPnlPct)})</span>
+      P&amp;L total&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
     </div>
   </div>
   ${renderHistCard()}
@@ -1058,24 +1343,36 @@ function renderAccount() {
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
     return `<div class="sort-pill${on?' on':''}" data-sort="${o.key}" data-label="${o.label}">${o.label}${arrow}</div>`;
   }).join('');
+  // Cashflow total
+  const cfs=acc.cashflows||[];
+  const totalDep=cfs.filter(c=>c.type==='DEP').reduce((s,c)=>s+c.amount,0);
+  const totalWit=cfs.filter(c=>c.type==='WIT').reduce((s,c)=>s+c.amount,0);
+  const netCf=totalDep-totalWit;
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     Retour
   </div>
   <div class="acc-hero">
-    <div class="row gap10" style="margin-bottom:6px">
+    <div class="row gap10" style="margin-bottom:6px;align-items:center">
       <div style="font-size:26px">${acc.icon}</div>
-      <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${acc.name}</div>
+      <div style="font-size:20px;font-weight:800;letter-spacing:-.5px;flex:1">${acc.name}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
     </div>
-    <div class="acc-hero-val t-num" id="js-acc-val">${fmtCur(acc.value)}</div>
+    <div class="acc-hero-val t-num" id="js-acc-val">${masked(acc.value)}</div>
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
-        <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${fmtCur(totPnl)}</div></div>
+        <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
       <div class="stat-box"><div class="t-label">Performance</div>
         <div style="font-size:15px;font-weight:800" class="${totPnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(totPnlPct)}</div></div>
       <div class="stat-box"><div class="t-label">Variation J</div>
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
+    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);align-items:center">
+      <div style="flex:1">
+        <div class="t-label" style="color:rgba(255,255,255,.5)">Apport net</div>
+        <div style="font-size:14px;font-weight:800;color:${netCf>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${netCf>=0?'+':''}${masked(netCf)}</div>
+      </div>
+      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.2);font-size:11px;font-weight:700;color:rgba(255,255,255,.8);cursor:pointer">Apports / Retraits</div>
+    </div>`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.2);font-size:11px;font-weight:700;color:rgba(255,255,255,.8);cursor:pointer">+ Apport / Retrait</div>'}
   </div>
   <div class="search-wrap">
     <div class="search-box">
@@ -1124,7 +1421,7 @@ function renderHoldsHTML(acc) {
           <div class="t-sm">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
         </div>
         <div class="col right gap4" style="margin-right:10px;flex-shrink:0">
-          <div style="font-size:14px;font-weight:800" class="t-num">${fmtCur(h.value)}</div>
+          <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.value)}</div>
           <div style="font-size:12px;font-weight:700" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
         </div>
         <div class="hold-add-btn" data-add="${h.id}" style="margin-right:6px">
@@ -1215,6 +1512,9 @@ function initPTR(screenEl, onRefresh) {
 function renderStock() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   const h=acc.holdings.find(h=>h.id===S.holdingId); if(!h) return '';
+  const hCur=h.currency||'EUR';
+  const fmt=v=>maskedNative(v,hCur);
+  const fmtE=v=>masked(v); // account currency
   const invested=h.avgBuyPrice*h.quantity;
   const pnl=h.value-invested;
   const pnlPct=invested>0?(pnl/invested)*100:0;
@@ -1224,37 +1524,36 @@ function renderStock() {
   const realizedPnL=computeRealizedPnL(h);
 
   // P/L produit (FX-neutral, in native currency)
-  const hCur=h.currency||'EUR';
-  const showProduit=hCur!=='EUR';
+  const showProduit=hCur!==S.currency;
   const pnlProduit=(h.currentPrice-h.avgBuyPrice)*h.quantity; // in native currency
   const fx=FX_RATES[hCur]||1;
   const pnlProduitEur=pnlProduit/fx;
   const fxEffect=pnl-pnlProduitEur;
 
-  const txs=[...h.transactions].reverse().map(tx=>{
+  const txs=[...h.transactions].map((tx,idx)=>({tx,idx})).reverse().map(({tx,idx})=>{
     const tot=tx.qty*tx.price;
     const isDiv=tx.type==='DIV';
     const isBuy=tx.type==='BUY';
     const dot=isDiv?'DIV':isBuy?'ACH':'VTE';
     const cls=isDiv?'div':isBuy?'buy':'sell';
-    const subLabel=`${tx.qty} titre${tx.qty>1?'s':''} · ${fmtCur(tx.price)}/titre`;
+    const subLabel=`${tx.qty} × ${fmtNative(tx.price,hCur)}`;
     const valCls=isDiv?'t-gain':isBuy?'t-loss':'t-gain';
     const sign=isDiv?'+':isBuy?'-':'+';
     const typeLabel=isDiv?'Dividende':isBuy?'Achat':'Vente';
-    return `<div class="tx-item">
+    return `<div class="tx-item" data-txidx="${idx}">
       <div class="tx-dot ${cls}">${dot}</div>
       <div class="flex1 col gap4">
         <div style="font-size:13px;font-weight:600">${fmtDate(tx.date)}</div>
         <div class="t-sm">${subLabel}</div>
       </div>
-      <div class="col right gap4">
-        <div style="font-size:14px;font-weight:800" class="${valCls} t-num">${sign}${fmtCur(tot)}</div>
+      <div class="col right gap4" style="margin-right:8px">
+        <div style="font-size:14px;font-weight:800" class="${valCls} t-num">${sign}${fmtNative(tot,hCur)}</div>
         <div class="t-sm">${typeLabel}</div>
       </div>
+      <div class="tx-edit-btn tap" data-txidx="${idx}" title="Modifier">✏️</div>
+      <div class="tx-del-btn tap" data-txidx="${idx}" title="Supprimer">🗑</div>
     </div>`;
   }).join('');
-
-  const isPea=acc.id==='pea';
 
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
@@ -1263,7 +1562,7 @@ function renderStock() {
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
     <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
     <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
-    <div class="stock-price t-num">${fmtCur(h.currentPrice)}</div>
+    <div class="stock-price t-num">${fmtNative(h.currentPrice,hCur)}</div>
     <div class="row gap8">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
       <span class="t-sm">${h.type} · ${h.country} · ${h.sector}</span>
@@ -1273,68 +1572,29 @@ function renderStock() {
     ${stockChartSvg(h,chartW,120)}
     <div class="stock-chart-tip" id="js-stock-chart-tip"></div>
   </div>
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 16px 10px">
-    <div class="row gap8">
-      <div style="width:14px;height:0;border-top:2px dashed #2563eb;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">PRU</span>
-      <div style="width:14px;height:2px;background:var(--gain);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Achat</span>
-      <div style="width:14px;height:2px;background:var(--loss);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Vente</span>
-    </div>
-    <span style="font-size:10px;color:var(--text3)">90 jours</span>
+  <div style="display:flex;align-items:center;padding:5px 16px 10px;gap:10px">
+    <div style="width:14px;height:0;border-top:2px dashed #2563eb;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">PRU</span>
+    <div style="width:10px;height:2px;background:var(--gain);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Achat</span>
+    <div style="width:10px;height:2px;background:var(--loss);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Vente</span>
+    <div style="flex:1"></div>
+    <span style="font-size:10px;color:var(--text3);font-style:italic">Tap pour verrouiller</span>
   </div>
   <div class="metrics">
     <div class="metric"><div class="t-label">Quantité</div><div class="metric-val">${h.quantity}</div></div>
-    <div class="metric"><div class="t-label">PRU</div><div class="metric-val t-num">${fmtCur(h.avgBuyPrice)}</div></div>
-    <div class="metric"><div class="t-label">Investi</div><div class="metric-val t-num">${fmtCur(invested)}</div></div>
-    <div class="metric"><div class="t-label">P&amp;L latent</div><div class="metric-val ${pnl>=0?'t-gain':'t-loss'} t-num">${pnl>=0?'+':''}${fmtCur(pnl)}</div></div>
-    <div class="metric"><div class="t-label">Valeur act.</div><div class="metric-val t-num">${fmtCur(h.value)}</div></div>
-    <div class="metric"><div class="t-label">P&amp;L latent %</div><div class="metric-val ${pnl>=0?'t-gain':'t-loss'} t-num">${fmtPct(pnlPct)}</div></div>
-    ${realizedPnL!==0?`<div class="metric"><div class="t-label">P&amp;L réalisé</div><div class="metric-val ${realizedPnL>=0?'t-gain':'t-loss'} t-num">${realizedPnL>=0?'+':''}${fmtCur(realizedPnL)}</div></div>`:''}
-    ${showProduit?`<div class="metric"><div class="t-label">P&amp;L produit (${hCur})</div><div class="metric-val ${pnlProduit>=0?'t-gain':'t-loss'} t-num">${pnlProduit>=0?'+':''}${fmtNative(pnlProduit,hCur)}</div></div>
-    <div class="metric"><div class="t-label">Effet change</div><div class="metric-val ${fxEffect>=0?'t-gain':'t-loss'} t-num">${fxEffect>=0?'+':''}${fmtCur(fxEffect)}</div></div>`:''}
-    ${divTotal>0?`<div class="metric" style="grid-column:1/-1"><div class="t-label">Dividendes perçus</div><div class="metric-val t-gain t-num">+${fmtCur(divTotal)}</div></div>`:''}
+    <div class="metric"><div class="t-label">PRU (${hCur})</div><div class="metric-val t-num">${fmtNative(h.avgBuyPrice,hCur)}</div></div>
+    <div class="metric"><div class="t-label">Investi (${hCur})</div><div class="metric-val t-num">${fmt(invested)}</div></div>
+    <div class="metric"><div class="t-label">P&amp;L latent (${hCur})</div><div class="metric-val ${pnlProduit>=0?'t-gain':'t-loss'} t-num">${pnlProduit>=0?'+':''}${fmt(pnlProduit)}</div></div>
+    <div class="metric"><div class="t-label">Valeur (${hCur})</div><div class="metric-val t-num">${fmt(h.quantity*h.currentPrice)}</div></div>
+    <div class="metric"><div class="t-label">P&amp;L latent %</div><div class="metric-val ${pnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(pnlPct)}</div></div>
+    ${realizedPnL!==0?`<div class="metric"><div class="t-label">P&amp;L réalisé (${hCur})</div><div class="metric-val ${realizedPnL>=0?'t-gain':'t-loss'} t-num">${realizedPnL>=0?'+':''}${fmtNative(realizedPnL,hCur)}</div></div>`:''}
+    ${showProduit?`<div class="metric"><div class="t-label">Effet change (${S.currency})</div><div class="metric-val ${fxEffect>=0?'t-gain':'t-loss'} t-num">${fxEffect>=0?'+':''}${fmtCur(fxEffect)}</div></div>`:''}
+    ${divTotal>0?`<div class="metric" style="grid-column:1/-1"><div class="t-label">Dividendes perçus (${hCur})</div><div class="metric-val t-gain t-num">+${fmtNative(divTotal,hCur)}</div></div>`:''}
   </div>
-  <div class="sim-card" id="js-sim-card">
-    <div class="sim-head" style="margin-bottom:14px">Scénario de vente</div>
-    <div class="sim-breakeven">
-      <div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Prix d'équilibre</div>
-        <div style="font-size:17px;font-weight:800" class="t-num">${fmtCur(h.avgBuyPrice)}</div>
-      </div>
-      <div class="t-sm">PRU = seuil de rentabilité</div>
-    </div>
-    <div class="form-row">
-      <div class="form-field">
-        <div class="form-label">Prix cible (${S.currency})</div>
-        <input class="form-input" type="number" id="js-sim-target" min="0" step="any"
-          value="${h.currentPrice.toFixed(2)}" inputmode="decimal"
-          data-qty="${h.quantity}" data-pru="${h.avgBuyPrice.toFixed(4)}" data-ispea="${isPea?1:0}">
-      </div>
-      <div class="form-field" style="flex:.55;display:flex;flex-direction:column;justify-content:flex-end">
-        <div class="form-label" style="margin-bottom:5px">Vs PRU</div>
-        <div id="js-sim-vspru" class="${pnl>=0?'t-gain':'t-loss'} t-num" style="font-size:15px;font-weight:800;padding:10px 0">${fmtPct(pnlPct)}</div>
-      </div>
-    </div>
-    <div id="js-sim-results">${simResults(h.currentPrice,h.quantity,h.avgBuyPrice,isPea)}</div>
-    <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:14px">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:10px">DCA — Renforcer à cours actuel</div>
-      <div class="form-row" style="margin-bottom:0">
-        <div class="form-field">
-          <div class="form-label">Qté supplémentaire</div>
-          <input class="form-input" type="number" id="js-dca-qty" min="0" step="any" placeholder="0" inputmode="decimal"
-            data-qty="${h.quantity}" data-pru="${h.avgBuyPrice.toFixed(4)}" data-cur="${h.currentPrice.toFixed(4)}">
-        </div>
-        <div class="form-field">
-          <div class="form-label">Nouveau PRU</div>
-          <div id="js-dca-pru" class="t-num" style="font-size:15px;font-weight:800;padding:10px 0;color:var(--text2)">—</div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="row" style="padding:4px 20px 10px;justify-content:space-between">
+  <div class="row" style="padding:4px 20px 10px;justify-content:space-between;align-items:center">
     <div class="t-section">Mouvements</div>
     <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
   </div>
-  <div>${txs}</div>`;
+  <div id="js-tx-list">${txs}</div>`;
 }
 
 function simResults(price, qty, pru, isPea) {
@@ -1516,7 +1776,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version 1.0.0 — Suivi de patrimoine</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version 1.0.1 — Mai 2025 · Suivi de patrimoine</div></div>
     </div>
   </div>
   <div style="height:20px"></div>`;
@@ -1527,46 +1787,55 @@ function renderSettings() {
 // ═══════════════════════════════════════════════
 function bindEvents(id, el) {
   if(id==='dashboard') {
-    el.querySelectorAll('[data-acc]').forEach(c=>c.addEventListener('click',()=>{
+    // Navigate to account on card body click (not menu button)
+    el.querySelectorAll('[data-acc]').forEach(c=>c.addEventListener('click',e=>{
+      if(e.target.closest('[data-menu]')) return;
       if(S.accountId!==c.dataset.acc){S.search='';S.sort='value';S.sortDir=-1;}
       S.accountId=c.dataset.acc; go('account');
+    }));
+    // ⋮ menu button
+    el.querySelectorAll('[data-menu]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      openAccMenu(btn.dataset.menu);
     }));
     // History period selector
     el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
       S.histPeriod=p.dataset.period;
       const wrap=el.querySelector('#js-hist-wrap');
-      const tip=el.querySelector('#js-hist-tip');
       if(!wrap) return;
       const pts=genHistData(S.histPeriod);
       const chartW=Math.min(window.innerWidth,480)-72;
       wrap.innerHTML=histSvg(pts,chartW,80)+'<div class="hist-tip" id="js-hist-tip"></div>';
       el.querySelectorAll('.hperiod').forEach(x=>x.classList.toggle('on',x.dataset.period===S.histPeriod));
-      // Update range line
       const pct=((pts[pts.length-1]-pts[0])/pts[0]*100);
       const color=pct>=0?'var(--gain)':'var(--loss)';
       const rangeEl=el.querySelector('.hist-range');
       if(rangeEl) rangeEl.innerHTML=`<span>${fmtCur(pts[0])}</span><span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span><span>${fmtCur(pts[pts.length-1])}</span>`;
       initHistChart(el.querySelector('.hist-card'), pts);
     }));
-    // Init chart interaction
     const histCard=el.querySelector('.hist-card');
     if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
-    // Gear → settings
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
-    // Add account
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
-    // Add watchlist item
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
+    // Privacy toggle
+    el.querySelector('#js-privacy-btn')?.addEventListener('click',()=>{
+      S.privacy=!S.privacy;
+      renderScreen('dashboard');
+      renderScreen('account');
+      renderScreen('stock');
+    });
   }
   if(id==='account') {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     el.querySelector('#js-back')?.addEventListener('click',back);
 
-    // Populate holdings
     if(acc) renderHoldsHTML(acc);
 
-    // Add holding button
     el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
+
+    // Cashflows button
+    el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{
@@ -1585,7 +1854,6 @@ function bindEvents(id, el) {
       if(acc) renderHoldsHTML(acc);
     });
 
-    // Sort pills
     el.querySelectorAll('.sort-pill').forEach(pill=>pill.addEventListener('click',()=>{
       const key=pill.dataset.sort;
       if(S.sort===key) S.sortDir*=-1;
@@ -1598,13 +1866,12 @@ function bindEvents(id, el) {
       if(acc) renderHoldsHTML(acc);
     }));
 
-    // Pull to refresh
     initPTR(el,()=>{
       if(!acc) return;
       applyRefresh(S.accountId);
       renderHoldsHTML(acc);
       const v=el.querySelector('#js-acc-val');
-      if(v) v.textContent=fmtCur(acc.value);
+      if(v) v.textContent=masked(acc.value);
       renderScreen('dashboard');
       renderScreen('analysis');
       toast('Cours actualisés ↻');
@@ -1612,42 +1879,34 @@ function bindEvents(id, el) {
   }
   if(id==='stock') {
     el.querySelector('#js-back')?.addEventListener('click',back);
-    // Simulator: price target input
-    const simTarget=el.querySelector('#js-sim-target');
-    if(simTarget) {
-      simTarget.addEventListener('input',()=>{
-        const price=parseFloat(simTarget.value)||0;
-        const qty=parseFloat(simTarget.dataset.qty);
-        const pru=parseFloat(simTarget.dataset.pru);
-        const isPea=simTarget.dataset.ispea==='1';
-        const chgPct=pru>0?(price-pru)/pru*100:0;
-        const vsPru=el.querySelector('#js-sim-vspru');
-        if(vsPru){vsPru.textContent=fmtPct(chgPct);vsPru.className=(chgPct>=0?'t-gain':'t-loss')+' t-num';}
-        const resEl=el.querySelector('#js-sim-results');
-        if(resEl) resEl.innerHTML=simResults(price,qty,pru,isPea);
-      });
-    }
-    // DCA calculator
-    const dcaQty=el.querySelector('#js-dca-qty');
-    if(dcaQty) {
-      dcaQty.addEventListener('input',()=>{
-        const addQty=parseFloat(dcaQty.value)||0;
-        const curQty=parseFloat(dcaQty.dataset.qty);
-        const curPru=parseFloat(dcaQty.dataset.pru);
-        const curPrice=parseFloat(dcaQty.dataset.cur);
-        const pruEl=el.querySelector('#js-dca-pru');
-        if(!pruEl) return;
-        if(addQty<=0){pruEl.textContent='—';pruEl.style.color='var(--text2)';return;}
-        const newPru=(curQty*curPru+addQty*curPrice)/(curQty+addQty);
-        pruEl.textContent=fmtCur(newPru);
-        pruEl.style.color=newPru<curPru?'var(--gain)':'var(--text)';
-      });
-    }
     // Interactive stock chart with overlays
     const chartWrap=el.querySelector('#js-stock-chart-wrap');
     const acc=S.accounts.find(a=>a.id===S.accountId);
     const h=acc?.holdings.find(h=>h.id===S.holdingId);
     if(chartWrap&&h) initStockChart(chartWrap,h);
+    // Transaction edit and delete buttons
+    el.querySelector('#js-tx-list')?.addEventListener('click',e=>{
+      const editBtn=e.target.closest('.tx-edit-btn');
+      const delBtn=e.target.closest('.tx-del-btn');
+      if(editBtn&&h){
+        const idx=parseInt(editBtn.dataset.txidx);
+        openEditTx(S.accountId,S.holdingId,idx);
+      }
+      if(delBtn&&h&&acc){
+        const idx=parseInt(delBtn.dataset.txidx);
+        const tx=h.transactions[idx];
+        const lbl={BUY:'achat',SELL:'vente',DIV:'dividende'}[tx.type]||'mouvement';
+        openConfirm(`Supprimer ce ${lbl} du ${fmtDate(tx.date)} ?`,()=>{
+          h.transactions.splice(idx,1);
+          recalcHolding(h);
+          acc.value=acc.holdings.reduce((s,hh)=>s+hh.value,0);
+          renderScreen('stock');
+          renderScreen('dashboard');
+          renderScreen('analysis');
+          toast('Mouvement supprimé');
+        });
+      }
+    });
   }
   if(id==='analysis') {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
@@ -1859,9 +2118,12 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
 let _posAccId=null;
 function openPosModal(accId){
   _posAccId=accId;
-  ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country','pos-sector'].forEach(id=>document.getElementById(id).value='');
+  ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pos-type').value='Action';
   document.getElementById('pos-currency').value='EUR';
+  document.getElementById('pos-sector').value='Technologie';
+  document.getElementById('pos-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pos-ac-list').classList.add('hidden');
   document.getElementById('pos-modal-bg').classList.add('show');
   document.getElementById('pos-modal-sheet').classList.add('show');
   setTimeout(()=>document.getElementById('pos-ticker').focus(),330);
@@ -1869,7 +2131,49 @@ function openPosModal(accId){
 function closePosModal(){
   document.getElementById('pos-modal-bg').classList.remove('show');
   document.getElementById('pos-modal-sheet').classList.remove('show');
+  document.getElementById('pos-ac-list').classList.add('hidden');
 }
+
+// ── Autocomplete for ticker ──
+(function initPosAutocomplete(){
+  const tickerInp=document.getElementById('pos-ticker');
+  const acList=document.getElementById('pos-ac-list');
+  function fillFromDB(ticker){
+    const db=SECURITIES_DB[ticker];
+    if(!db) return;
+    document.getElementById('pos-name').value=db.name;
+    document.getElementById('pos-type').value=db.type;
+    document.getElementById('pos-currency').value=db.currency;
+    document.getElementById('pos-country').value=db.country;
+    document.getElementById('pos-sector').value=db.sector;
+    acList.classList.add('hidden');
+  }
+  tickerInp.addEventListener('input',()=>{
+    const q=tickerInp.value.trim().toUpperCase();
+    if(!q){acList.classList.add('hidden');return;}
+    const matches=Object.entries(SECURITIES_DB).filter(([k,v])=>
+      k.startsWith(q)||v.name.toUpperCase().includes(q)
+    ).slice(0,6);
+    if(!matches.length){acList.classList.add('hidden');return;}
+    acList.innerHTML=matches.map(([ticker,db])=>
+      `<div class="ac-item" data-ticker="${ticker}">
+        <span class="ac-tick">${ticker}</span>
+        <span class="ac-name">${db.name}</span>
+        <span class="ac-sub">${db.type} · ${db.currency}</span>
+      </div>`
+    ).join('');
+    acList.classList.remove('hidden');
+  });
+  acList.addEventListener('click',e=>{
+    const item=e.target.closest('.ac-item');
+    if(!item) return;
+    tickerInp.value=item.dataset.ticker;
+    fillFromDB(item.dataset.ticker);
+  });
+  tickerInp.addEventListener('blur',()=>setTimeout(()=>acList.classList.add('hidden'),200));
+  tickerInp.addEventListener('change',()=>fillFromDB(tickerInp.value.trim().toUpperCase()));
+})();
+
 document.getElementById('pos-modal-bg').addEventListener('click',closePosModal);
 document.getElementById('pos-modal-close').addEventListener('click',closePosModal);
 document.getElementById('pos-submit').addEventListener('click',()=>{
@@ -1878,18 +2182,18 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const qty=parseFloat(document.getElementById('pos-qty').value);
   const pru=parseFloat(document.getElementById('pos-pru').value);
   const country=document.getElementById('pos-country').value.trim()||'Inconnu';
-  const sector=document.getElementById('pos-sector').value.trim()||'Inconnu';
+  const sector=document.getElementById('pos-sector').value||'Autre';
   const type=document.getElementById('pos-type').value;
   const currency=document.getElementById('pos-currency').value;
+  const dateVal=document.getElementById('pos-date').value||new Date().toISOString().slice(0,10);
   if(!ticker||!(qty>0)||!(pru>0)){toast('Ticker, quantité et PRU requis');return;}
   const acc=S.accounts.find(a=>a.id===_posAccId);
   if(!acc) return;
   if(acc.holdings.find(h=>h.ticker===ticker)){toast('Ce ticker existe déjà dans ce compte');return;}
   const hid=ticker+'_'+Date.now().toString(36);
-  const today=new Date().toISOString().slice(0,10);
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
     type,country,sector,currency,
-    transactions:[{date:today,type:'BUY',qty,price:pru}],
+    transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
     value:qty*pru,pnl:0,pnlPct:0};
   acc.holdings.push(newH);
   acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
@@ -1898,6 +2202,184 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   renderScreen('dashboard');
   renderScreen('analysis');
   toast(`${ticker} ajouté ✓`);
+});
+
+// ═══════════════════════════════════════════════
+// EDIT TRANSACTION MODAL
+// ═══════════════════════════════════════════════
+let _editTxAccId=null, _editTxHoldId=null, _editTxIdx=null, _editTxType='BUY';
+
+function openEditTx(accId, holdId, idx){
+  _editTxAccId=accId; _editTxHoldId=holdId; _editTxIdx=idx;
+  const acc=S.accounts.find(a=>a.id===accId);
+  const h=acc?.holdings.find(h=>h.id===holdId);
+  if(!h||idx<0||idx>=h.transactions.length) return;
+  const tx=h.transactions[idx];
+  _editTxType=tx.type;
+  document.querySelectorAll('#edit-type-btns .type-btn').forEach(b=>{
+    b.classList.toggle('on',b.dataset.etype===tx.type);
+  });
+  document.getElementById('edit-tx-qty').value=tx.qty;
+  document.getElementById('edit-tx-price').value=tx.price;
+  document.getElementById('edit-tx-date').value=tx.date;
+  document.getElementById('edit-tx-bg').classList.add('show');
+  document.getElementById('edit-tx-sheet').classList.add('show');
+}
+function closeEditTx(){
+  document.getElementById('edit-tx-bg').classList.remove('show');
+  document.getElementById('edit-tx-sheet').classList.remove('show');
+}
+document.getElementById('edit-tx-bg').addEventListener('click',closeEditTx);
+document.getElementById('edit-tx-close').addEventListener('click',closeEditTx);
+document.querySelectorAll('#edit-type-btns .type-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#edit-type-btns .type-btn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  _editTxType=b.dataset.etype;
+}));
+document.getElementById('edit-tx-submit').addEventListener('click',()=>{
+  const qty=parseFloat(document.getElementById('edit-tx-qty').value);
+  const price=parseFloat(document.getElementById('edit-tx-price').value);
+  const date=document.getElementById('edit-tx-date').value;
+  if(!(qty>0)||!(price>0)||!date){toast('Quantité, prix et date requis');return;}
+  const acc=S.accounts.find(a=>a.id===_editTxAccId);
+  const h=acc?.holdings.find(h=>h.id===_editTxHoldId);
+  if(!h){toast('Position introuvable');return;}
+  h.transactions[_editTxIdx]={date,type:_editTxType,qty,price};
+  recalcHolding(h);
+  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+  closeEditTx();
+  renderScreen('stock');
+  renderScreen('dashboard');
+  renderScreen('analysis');
+  toast('Mouvement modifié ✓');
+});
+
+// ═══════════════════════════════════════════════
+// CASHFLOW MODAL
+// ═══════════════════════════════════════════════
+let _cfAccId=null, _cfType='DEP';
+
+function openCfModal(accId){
+  _cfAccId=accId; _cfType='DEP';
+  document.getElementById('cf-amount').value='';
+  document.getElementById('cf-note').value='';
+  document.getElementById('cf-date').value=new Date().toISOString().slice(0,10);
+  document.querySelectorAll('[data-cftype]').forEach(b=>b.classList.toggle('on',b.dataset.cftype==='DEP'));
+  document.getElementById('cf-modal-bg').classList.add('show');
+  document.getElementById('cf-modal-sheet').classList.add('show');
+  setTimeout(()=>document.getElementById('cf-amount').focus(),330);
+}
+function closeCfModal(){
+  document.getElementById('cf-modal-bg').classList.remove('show');
+  document.getElementById('cf-modal-sheet').classList.remove('show');
+}
+document.getElementById('cf-modal-bg').addEventListener('click',closeCfModal);
+document.getElementById('cf-modal-close').addEventListener('click',closeCfModal);
+document.querySelectorAll('[data-cftype]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-cftype]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  _cfType=b.dataset.cftype;
+}));
+document.getElementById('cf-submit').addEventListener('click',()=>{
+  const amount=parseFloat(document.getElementById('cf-amount').value);
+  const date=document.getElementById('cf-date').value||new Date().toISOString().slice(0,10);
+  const note=document.getElementById('cf-note').value.trim();
+  if(!(amount>0)){toast('Montant requis');return;}
+  const acc=S.accounts.find(a=>a.id===_cfAccId);
+  if(!acc) return;
+  if(!acc.cashflows) acc.cashflows=[];
+  acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,note});
+  acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
+  closeCfModal();
+  renderScreen('account');
+  toast((_cfType==='DEP'?'Apport':'Retrait')+' enregistré ✓');
+});
+
+// ═══════════════════════════════════════════════
+// DELETE ACCOUNT
+// ═══════════════════════════════════════════════
+function deleteAccount(accId){
+  const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
+  openConfirm(`Supprimer le compte "${acc.name}" ?`,()=>{
+    S.accounts=S.accounts.filter(a=>a.id!==accId);
+    if(S.screen==='account'&&S.accountId===accId) back();
+    renderScreen('dashboard');
+    renderScreen('analysis');
+    toast('Compte supprimé');
+  });
+}
+
+// ═══════════════════════════════════════════════
+// ACCOUNT ACTION MENU
+// ═══════════════════════════════════════════════
+let _menuAccId=null;
+
+function openAccMenu(accId){
+  _menuAccId=accId;
+  const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
+  document.getElementById('acc-action-title').textContent=acc.name;
+  const obsLbl=document.getElementById('acc-action-obs-lbl');
+  if(obsLbl) obsLbl.textContent=acc.observer?'Retirer le mode observateur':'Passer en observateur';
+  document.getElementById('acc-action-bg').classList.add('show');
+  document.getElementById('acc-action-sheet').classList.add('show');
+}
+function closeAccMenu(){
+  document.getElementById('acc-action-bg').classList.remove('show');
+  document.getElementById('acc-action-sheet').classList.remove('show');
+  _menuAccId=null;
+}
+document.getElementById('acc-action-bg').addEventListener('click',closeAccMenu);
+document.getElementById('acc-action-obs').addEventListener('click',()=>{
+  const acc=S.accounts.find(a=>a.id===_menuAccId); if(!acc) return;
+  acc.observer=!acc.observer;
+  closeAccMenu();
+  renderScreen('dashboard');
+  if(S.screen==='account'&&S.accountId===_menuAccId) renderScreen('account');
+  toast(acc.observer?'Mode observateur activé':'Mode observateur désactivé');
+});
+document.getElementById('acc-action-rename').addEventListener('click',()=>{
+  const acc=S.accounts.find(a=>a.id===_menuAccId); if(!acc) return;
+  closeAccMenu();
+  openRenameAcc(_menuAccId, acc.name);
+});
+document.getElementById('acc-action-del').addEventListener('click',()=>{
+  const id=_menuAccId;
+  closeAccMenu();
+  deleteAccount(id);
+});
+
+// ═══════════════════════════════════════════════
+// RENAME ACCOUNT
+// ═══════════════════════════════════════════════
+let _renameAccId=null;
+function openRenameAcc(accId, currentName){
+  _renameAccId=accId;
+  const inp=document.getElementById('rename-acc-input');
+  inp.value=currentName||'';
+  document.getElementById('rename-acc-bg').classList.add('show');
+  document.getElementById('rename-acc-sheet').classList.add('show');
+  setTimeout(()=>{inp.focus();inp.select();},330);
+}
+function closeRenameAcc(){
+  document.getElementById('rename-acc-bg').classList.remove('show');
+  document.getElementById('rename-acc-sheet').classList.remove('show');
+  _renameAccId=null;
+}
+document.getElementById('rename-acc-bg').addEventListener('click',closeRenameAcc);
+document.getElementById('rename-acc-close').addEventListener('click',closeRenameAcc);
+document.getElementById('rename-acc-submit').addEventListener('click',()=>{
+  const name=document.getElementById('rename-acc-input').value.trim();
+  if(!name){toast('Nom requis');return;}
+  const acc=S.accounts.find(a=>a.id===_renameAccId); if(!acc) return;
+  acc.name=name;
+  closeRenameAcc();
+  renderScreen('dashboard');
+  if(S.screen==='account'&&S.accountId===_renameAccId) renderScreen('account');
+  toast(`Compte renommé en "${name}" ✓`);
+});
+// Also submit on Enter key
+document.getElementById('rename-acc-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('rename-acc-submit').click();}
 });
 
 // ═══════════════════════════════════════════════
@@ -2021,10 +2503,12 @@ document.getElementById('nav').classList.remove('hidden');
     if (S.stack.length > 1) {
       // Close any open modal first
       const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
-                       'acc-modal-sheet','pos-modal-sheet']
+                       'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
+                       'acc-action-sheet','rename-acc-sheet']
                       .some(id => document.getElementById(id)?.classList.contains('show'));
       if (anyOpen) {
         closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
+        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc();
         return;
       }
       back();
