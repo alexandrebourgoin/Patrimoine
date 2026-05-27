@@ -309,6 +309,31 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 .form-input:focus{border-color:var(--accent)}
 .form-submit{width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;margin-top:6px;font-family:inherit;transition:opacity .15s;letter-spacing:-.2px}
 .form-submit:active{opacity:.8}
+
+/* ─── CONFIRM DIALOG ─── */
+.confirm-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;z-index:212;transition:transform .28s cubic-bezier(.4,0,.2,1);padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.confirm-sheet.show{transform:translateX(-50%) translateY(0)}
+.confirm-msg{font-size:16px;font-weight:700;letter-spacing:-.3px;text-align:center;padding:22px 24px 18px;color:var(--text)}
+.confirm-btns{display:flex;gap:10px;padding:0 20px 8px}
+.confirm-cancel{flex:1;padding:13px;border-radius:12px;font-size:15px;font-weight:700;border:1.5px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-family:inherit;transition:background .12s}
+.confirm-ok{flex:1;padding:13px;border-radius:12px;font-size:15px;font-weight:700;border:none;background:var(--loss);color:#fff;cursor:pointer;font-family:inherit;transition:opacity .12s}
+.confirm-ok:active{opacity:.8}
+
+/* ─── OBSERVER ACCOUNT ─── */
+.obs-tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;background:rgba(107,114,128,.1);color:#6B7280;border:1px solid rgba(107,114,128,.2);flex-shrink:0}
+
+/* ─── STOCK INTERACTIVE CHART ─── */
+.stock-chart-wrap{position:relative;user-select:none}
+.stock-chart-tip{position:absolute;top:4px;background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:4px 9px;font-size:11px;font-weight:700;pointer-events:none;opacity:0;transition:opacity .1s;white-space:nowrap;z-index:10}
+
+/* ─── ADD MODALS (watchlist / account / position) ─── */
+.add-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:214;opacity:0;pointer-events:none;transition:opacity .25s}
+.add-modal-bg.show{opacity:1;pointer-events:all}
+.add-modal-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;z-index:215;transition:transform .32s cubic-bezier(.4,0,.2,1);padding-bottom:max(20px,env(safe-area-inset-bottom))}
+.add-modal-sheet.show{transform:translateX(-50%) translateY(0)}
+
+/* ─── SIMULATOR (improved) ─── */
+.sim-breakeven{display:flex;align-items:center;justify-content:space-between;background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:14px;border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -369,6 +394,149 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
   </div>
 </div>
 
+<!-- CONFIRM DIALOG -->
+<div id="confirm-bg" class="modal-bg" style="z-index:211"></div>
+<div id="confirm-sheet" class="confirm-sheet">
+  <div class="modal-drag"></div>
+  <div class="confirm-msg" id="confirm-msg">Confirmer la suppression ?</div>
+  <div class="confirm-btns">
+    <button class="confirm-cancel" id="confirm-cancel">Annuler</button>
+    <button class="confirm-ok" id="confirm-ok">Supprimer</button>
+  </div>
+</div>
+
+<!-- ADD WATCHLIST MODAL -->
+<div id="watch-modal-bg" class="add-modal-bg"></div>
+<div id="watch-modal-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Ajouter un titre suivi</div>
+      <div id="watch-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field" style="flex:.55">
+        <div class="form-label">Ticker</div>
+        <input class="form-input" type="text" id="watch-ticker" placeholder="AAPL" autocapitalize="characters" spellcheck="false">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Nom</div>
+        <input class="form-input" type="text" id="watch-name" placeholder="Apple Inc." autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Prix actuel</div>
+        <input class="form-input" type="number" id="watch-price" min="0" step="any" placeholder="0.00" inputmode="decimal">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Var. J (%)</div>
+        <input class="form-input" type="number" id="watch-change" step="any" placeholder="0.00" inputmode="decimal" value="0">
+      </div>
+    </div>
+    <button class="form-submit" id="watch-submit">Ajouter</button>
+  </div>
+</div>
+
+<!-- ADD ACCOUNT MODAL -->
+<div id="acc-modal-bg" class="add-modal-bg"></div>
+<div id="acc-modal-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Ajouter un compte</div>
+      <div id="acc-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field" style="flex:.4">
+        <div class="form-label">Icône</div>
+        <input class="form-input" type="text" id="acc-icon" placeholder="📊" maxlength="2" style="text-align:center;font-size:20px;padding:7px 8px">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Nom du compte</div>
+        <input class="form-input" type="text" id="acc-name" placeholder="Mon PEA" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Type</div>
+        <input class="form-input" type="text" id="acc-type" placeholder="Plan d'Épargne en Actions" autocomplete="off">
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div>
+        <div style="font-size:14px;font-weight:600">Compte observateur</div>
+        <div class="t-sm" style="margin-top:2px">Non comptabilisé dans le patrimoine total</div>
+      </div>
+      <div class="toggle" id="acc-obs-tog"><div class="toggle-thumb"></div></div>
+    </div>
+    <button class="form-submit" id="acc-submit">Créer le compte</button>
+  </div>
+</div>
+
+<!-- ADD POSITION MODAL -->
+<div id="pos-modal-bg" class="add-modal-bg"></div>
+<div id="pos-modal-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Ajouter une position</div>
+      <div id="pos-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field" style="flex:.5">
+        <div class="form-label">Ticker</div>
+        <input class="form-input" type="text" id="pos-ticker" placeholder="AAPL" autocapitalize="characters" spellcheck="false">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Nom</div>
+        <input class="form-input" type="text" id="pos-name" placeholder="Apple Inc." autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Type</div>
+        <select class="form-input" id="pos-type" style="cursor:pointer">
+          <option value="Action">Action</option>
+          <option value="ETF">ETF</option>
+          <option value="Obligation">Obligation</option>
+          <option value="Cash">Cash</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <div class="form-label">Devise native</div>
+        <select class="form-input" id="pos-currency" style="cursor:pointer">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+          <option value="GBP">GBP £</option>
+          <option value="CHF">CHF ₣</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Quantité</div>
+        <input class="form-input" type="number" id="pos-qty" min="0.001" step="any" placeholder="0" inputmode="decimal">
+      </div>
+      <div class="form-field">
+        <div class="form-label">PRU</div>
+        <input class="form-input" type="number" id="pos-pru" min="0" step="any" placeholder="0.00" inputmode="decimal">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Pays / Zone</div>
+        <input class="form-input" type="text" id="pos-country" placeholder="France" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Secteur</div>
+        <input class="form-input" type="text" id="pos-sector" placeholder="Technologie" autocomplete="off">
+      </div>
+    </div>
+    <button class="form-submit" id="pos-submit">Ajouter la position</button>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 // STATE
@@ -399,11 +567,11 @@ const S = {
 // ═══════════════════════════════════════════════
 // DEMO DATA
 // ═══════════════════════════════════════════════
-function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs) {
+function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, currency='EUR') {
   const value = qty * cur;
   const pnl = (cur - buy) * qty;
   const pnlPct = ((cur - buy) / buy) * 100;
-  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct };
+  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency };
 }
 function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
@@ -416,9 +584,9 @@ function genDemo() {
     mkH('CW8','CW8','Amundi MSCI World',25,312,368.5,'ETF','Monde','Diversifié',[mkTx('2022-06-15','BUY',10,290),mkTx('2023-01-20','BUY',10,318.5),mkTx('2023-09-10','BUY',5,341)]),
   ];
   const ct = [
-    mkH('AAPL','AAPL','Apple Inc.',20,148.5,189.3,'Action','USA','Technologie',[mkTx('2022-05-20','BUY',15,142.3),mkTx('2023-03-08','BUY',5,165.5),mkTx('2023-02-16','DIV',20,0.23),mkTx('2023-05-11','DIV',20,0.24),mkTx('2023-08-10','DIV',20,0.24),mkTx('2023-11-09','DIV',20,0.24)]),
-    mkH('MSFT','MSFT','Microsoft',15,285.2,378.5,'Action','USA','Technologie',[mkTx('2022-07-14','BUY',10,268.4),mkTx('2023-05-22','BUY',5,319.5)]),
-    mkH('NVDA','NVDA','NVIDIA',10,312.4,495.8,'Action','USA','Technologie',[mkTx('2022-10-12','BUY',10,312.4)]),
+    mkH('AAPL','AAPL','Apple Inc.',20,148.5,189.3,'Action','USA','Technologie',[mkTx('2022-05-20','BUY',15,142.3),mkTx('2023-03-08','BUY',5,165.5),mkTx('2023-02-16','DIV',20,0.23),mkTx('2023-05-11','DIV',20,0.24),mkTx('2023-08-10','DIV',20,0.24),mkTx('2023-11-09','DIV',20,0.24)],'USD'),
+    mkH('MSFT','MSFT','Microsoft',15,285.2,378.5,'Action','USA','Technologie',[mkTx('2022-07-14','BUY',10,268.4),mkTx('2023-05-22','BUY',5,319.5)],'USD'),
+    mkH('NVDA','NVDA','NVIDIA',10,312.4,495.8,'Action','USA','Technologie',[mkTx('2022-10-12','BUY',10,312.4)],'USD'),
     mkH('ASML','ASML','ASML Holding',5,610,742.8,'Action','Europe','Technologie',[mkTx('2023-04-18','BUY',5,610)]),
     mkH('IWDA','IWDA','iShares Core MSCI World',30,78.4,91.2,'ETF','Monde','Diversifié',[mkTx('2022-08-10','BUY',20,74.2),mkTx('2023-02-28','BUY',10,86.8)]),
     mkH('NOVO','NOVO','Novo Nordisk',18,92.3,108.6,'Action','Europe','Santé',[mkTx('2023-06-30','BUY',18,92.3)]),
@@ -445,7 +613,32 @@ function fmtCur(v) {
 function fmtPct(v) { return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' %'; }
 function fmtDate(s) { return new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
 function initials(n) { return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
-function totalWealth() { return S.accounts.reduce((s,a)=>s+a.value,0); }
+// Observer accounts excluded from total wealth
+function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value,0); }
+
+// Approximate FX rates for P/L produit display only
+const FX_RATES = { EUR:1, USD:1.08, GBP:1.16, CHF:1.05, JPY:0.0066 };
+
+function fmtNative(v, cur) {
+  return new Intl.NumberFormat('fr-FR',{style:'currency',currency:cur||'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+}
+
+function computeRealizedPnL(h) {
+  let runQty=0, runCost=0, realized=0;
+  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
+    if(tx.type==='BUY'){
+      runCost+=tx.qty*tx.price;
+      runQty+=tx.qty;
+    } else if(tx.type==='SELL' && runQty>0){
+      const avgCost=runCost/runQty;
+      realized+=(tx.price-avgCost)*tx.qty;
+      const remQty=Math.max(0,runQty-tx.qty);
+      runCost=avgCost*remQty;
+      runQty=remQty;
+    }
+  });
+  return realized;
+}
 
 // ═══════════════════════════════════════════════
 // CHARTS
@@ -574,6 +767,99 @@ function initHistChart(container, pts) {
   svg.addEventListener('mouseleave', hide);
 }
 
+// ── SECURITY CHART (90-day price history) ──
+function genSecurityHistory(h) {
+  // Seeded LCG so the same ticker always gives the same chart shape
+  let seed = 0;
+  for(let i=0;i<h.ticker.length;i++) seed = (Math.imul(31, seed) + h.ticker.charCodeAt(i)) | 0;
+  seed = Math.abs(seed) || 42;
+  const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
+  const n = 90;
+  const pts = new Array(n);
+  pts[n-1] = h.currentPrice;
+  for(let i=n-2;i>=0;i--) pts[i] = pts[i+1] / (1 + 0.0003 + (lcg()*0.038 - 0.018));
+  return pts;
+}
+
+function stockChartSvg(h, w, ch) {
+  const pts = genSecurityHistory(h);
+  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
+  const padT=8, padB=8;
+  const xs = pts.map((_,i) => (i/(pts.length-1))*w);
+  const ys = pts.map(v => padT + (1-(v-mn)/rng)*(ch-padT-padB));
+  const isUp = pts[pts.length-1] >= pts[0];
+  const color = isUp ? 'var(--gain)' : 'var(--loss)';
+  const line = 'M'+xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
+  const area = line+`L${xs[xs.length-1].toFixed(1)},${ch}L0,${ch}Z`;
+  const gid = 'sc'+Math.random().toString(36).slice(2,7);
+  // PRU line
+  const pruClamp = Math.max(mn, Math.min(mx, h.avgBuyPrice));
+  const pruY = (padT+(1-(pruClamp-mn)/rng)*(ch-padT-padB)).toFixed(1);
+  const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
+    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.85">PRU</text>`;
+  // BUY / SELL markers at transaction dates
+  const today = new Date(); today.setHours(0,0,0,0);
+  const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
+    const daysAgo = Math.round((today - new Date(tx.date+'T00:00:00'))/86400000);
+    if(daysAgo<0||daysAgo>=pts.length) return '';
+    const idx = pts.length-1-daysAgo;
+    const x = xs[idx].toFixed(1);
+    const yy = ys[idx].toFixed(1);
+    const mc = tx.type==='BUY'?'var(--gain)':'var(--loss)';
+    return `<line x1="${x}" x2="${x}" y1="${padT}" y2="${ch-padB}" stroke="${mc}" stroke-width="1.5" opacity="0.55"/>
+      <circle cx="${x}" cy="${yy}" r="3.5" fill="${mc}" stroke="var(--surface)" stroke-width="1.5"/>`;
+  }).join('');
+  return `<svg id="stock-svg" width="${w}" height="${ch}" viewBox="0 0 ${w} ${ch}" style="display:block;overflow:visible;cursor:crosshair">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity=".15"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gid})"/>
+    ${pruLine}
+    ${markers}
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line id="stock-xhair" x1="0" y1="${padT}" x2="0" y2="${ch-padB}" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+    <circle id="stock-dot" cx="0" cy="0" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
+  </svg>`;
+}
+
+function initStockChart(container, h) {
+  const pts = genSecurityHistory(h);
+  const svg = container.querySelector('#stock-svg');
+  const tip = container.querySelector('.stock-chart-tip');
+  if(!svg||!pts||pts.length<2) return;
+  const mn=Math.min(...pts), mx=Math.max(...pts), rng=mx-mn||1;
+  const padT=8, padB=8;
+  const xhair=svg.querySelector('#stock-xhair');
+  const dot=svg.querySelector('#stock-dot');
+  function update(clientX) {
+    const rect=svg.getBoundingClientRect();
+    const relX=Math.max(0,Math.min(rect.width,clientX-rect.left));
+    const idx=Math.round(relX/rect.width*(pts.length-1));
+    const i=Math.max(0,Math.min(pts.length-1,idx));
+    const x=(i/(pts.length-1))*rect.width;
+    const y=padT+(1-(pts[i]-mn)/rng)*(rect.height-padT-padB);
+    xhair.setAttribute('x1',x.toFixed(1)); xhair.setAttribute('x2',x.toFixed(1));
+    xhair.setAttribute('opacity','1');
+    dot.setAttribute('cx',x.toFixed(1)); dot.setAttribute('cy',y.toFixed(1));
+    dot.setAttribute('opacity','1');
+    let tipX=relX+8;
+    if(tipX+110>rect.width) tipX=relX-118;
+    tip.style.left=Math.max(0,tipX)+'px';
+    tip.style.top=Math.max(0,y-22)+'px';
+    tip.style.opacity='1';
+    const daysAgo=pts.length-1-i;
+    const d=new Date(); d.setDate(d.getDate()-daysAgo);
+    tip.textContent=fmtCur(pts[i])+'  '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  }
+  function hide(){xhair.setAttribute('opacity','0');dot.setAttribute('opacity','0');tip.style.opacity='0';}
+  svg.addEventListener('touchstart',e=>{e.stopPropagation();update(e.touches[0].clientX);},{passive:true});
+  svg.addEventListener('touchmove',e=>{e.stopPropagation();update(e.touches[0].clientX);},{passive:true});
+  svg.addEventListener('touchend',hide,{passive:true});
+  svg.addEventListener('mousemove',e=>update(e.clientX));
+  svg.addEventListener('mouseleave',hide);
+}
+
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
@@ -641,13 +927,16 @@ function renderDash() {
   const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
   const spark=sparkData(w*.86,28,.022); spark[spark.length-1]=w;
   const accs=S.accounts.map((a,i)=>{
-    const pct=(a.value/w*100).toFixed(1);
+    const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const up=a.change1d>=0;
-    return `<div class="acc-card anim tap" data-acc="${a.id}">
+    const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
+    return `<div class="acc-card anim tap" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
         <div class="acc-icon" style="background:${a.iconBg}">${a.icon}</div>
-        <div class="flex1 col gap4">
-          <div style="font-size:15px;font-weight:700">${a.name}</div>
+        <div class="flex1 col gap4" style="min-width:0">
+          <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
+            <div style="font-size:15px;font-weight:700">${a.name}</div>${obsTag}
+          </div>
           <div class="t-sm">${a.type}</div>
         </div>
         <div class="col right gap4">
@@ -655,7 +944,7 @@ function renderDash() {
           <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${fmtPct(a.change1d)}</div>
         </div>
       </div>
-      <div class="acc-bar"><div class="acc-bar-fill" style="width:${pct}%"></div></div>
+      ${!a.observer?`<div class="acc-bar"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
   }).join('');
 
@@ -866,11 +1155,16 @@ function renderHoldsHTML(acc) {
 
 function deleteHolding(accId,holdId) {
   const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
-  acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
-  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
-  renderHoldsHTML(acc);
-  renderScreen('dashboard');
-  toast('Position supprimée');
+  const h=acc.holdings.find(h=>h.id===holdId);
+  if(!h) return;
+  openConfirm(`Supprimer ${h.name} ?`, ()=>{
+    acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
+    acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+    renderHoldsHTML(acc);
+    renderScreen('dashboard');
+    renderScreen('analysis');
+    toast('Position supprimée');
+  });
 }
 
 function applyRefresh(accId) {
@@ -923,11 +1217,19 @@ function renderStock() {
   const h=acc.holdings.find(h=>h.id===S.holdingId); if(!h) return '';
   const invested=h.avgBuyPrice*h.quantity;
   const pnl=h.value-invested;
-  const pnlPct=(pnl/invested)*100;
-  const spark=sparkData(h.avgBuyPrice*.92,32,.025); spark[spark.length-1]=h.currentPrice;
-  const color=pnl>=0?'#00D68F':'#FF5A5A';
+  const pnlPct=invested>0?(pnl/invested)*100:0;
+  const chartW=Math.min(window.innerWidth,480);
 
   const divTotal=h.transactions.filter(t=>t.type==='DIV').reduce((s,t)=>s+t.qty*t.price,0);
+  const realizedPnL=computeRealizedPnL(h);
+
+  // P/L produit (FX-neutral, in native currency)
+  const hCur=h.currency||'EUR';
+  const showProduit=hCur!=='EUR';
+  const pnlProduit=(h.currentPrice-h.avgBuyPrice)*h.quantity; // in native currency
+  const fx=FX_RATES[hCur]||1;
+  const pnlProduitEur=pnlProduit/fx;
+  const fxEffect=pnl-pnlProduitEur;
 
   const txs=[...h.transactions].reverse().map(tx=>{
     const tot=tx.qty*tx.price;
@@ -935,9 +1237,7 @@ function renderStock() {
     const isBuy=tx.type==='BUY';
     const dot=isDiv?'DIV':isBuy?'ACH':'VTE';
     const cls=isDiv?'div':isBuy?'buy':'sell';
-    const subLabel=isDiv?`${tx.qty} action${tx.qty>1?'s':''} · ${fmtCur(tx.price)}/action`:
-                   isBuy?`${tx.qty} action${tx.qty>1?'s':''} · ${fmtCur(tx.price)}/action`:
-                         `${tx.qty} action${tx.qty>1?'s':''} · ${fmtCur(tx.price)}/action`;
+    const subLabel=`${tx.qty} titre${tx.qty>1?'s':''} · ${fmtCur(tx.price)}/titre`;
     const valCls=isDiv?'t-gain':isBuy?'t-loss':'t-gain';
     const sign=isDiv?'+':isBuy?'-':'+';
     const typeLabel=isDiv?'Dividende':isBuy?'Achat':'Vente';
@@ -954,35 +1254,32 @@ function renderStock() {
     </div>`;
   }).join('');
 
-  // Simulator
-  const simMin=0, simMax=h.currentPrice*2.5;
   const isPea=acc.id==='pea';
-  const simHtml=`<div class="sim-card" id="js-sim-card">
-    <div class="sim-head">Simulateur de revente</div>
-    <div class="sim-price-display t-num" id="js-sim-price">${fmtCur(h.currentPrice)}</div>
-    <div class="sim-chg" id="js-sim-chg" style="color:var(--text2)">Prix actuel</div>
-    <input class="sim-range" type="range" id="js-sim-range"
-      min="0" max="250" step="1" value="40"
-      data-min="${simMin.toFixed(2)}" data-max="${simMax.toFixed(2)}"
-      data-qty="${h.quantity}" data-pru="${h.avgBuyPrice}" data-ispea="${isPea?1:0}">
-    <div id="js-sim-results">
-      ${simResults(h.currentPrice, h.quantity, h.avgBuyPrice, isPea)}
-    </div>
-  </div>`;
 
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     ${acc.name}
   </div>
-  <div class="stock-hero">
-    <div class="stock-ticker-badge">${h.ticker}</div>
+  <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
+    <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
     <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
     <div class="stock-price t-num">${fmtCur(h.currentPrice)}</div>
-    <div class="row gap8" style="margin-bottom:12px">
+    <div class="row gap8">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
       <span class="t-sm">${h.type} · ${h.country} · ${h.sector}</span>
     </div>
-    ${sparkSvg(spark,Math.min(window.innerWidth,480)-40,66,color,true)}
+  </div>
+  <div class="stock-chart-wrap" id="js-stock-chart-wrap" style="padding:8px 0 0">
+    ${stockChartSvg(h,chartW,120)}
+    <div class="stock-chart-tip" id="js-stock-chart-tip"></div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 16px 10px">
+    <div class="row gap8">
+      <div style="width:14px;height:0;border-top:2px dashed #2563eb;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">PRU</span>
+      <div style="width:14px;height:2px;background:var(--gain);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Achat</span>
+      <div style="width:14px;height:2px;background:var(--loss);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Vente</span>
+    </div>
+    <span style="font-size:10px;color:var(--text3)">90 jours</span>
   </div>
   <div class="metrics">
     <div class="metric"><div class="t-label">Quantité</div><div class="metric-val">${h.quantity}</div></div>
@@ -990,10 +1287,49 @@ function renderStock() {
     <div class="metric"><div class="t-label">Investi</div><div class="metric-val t-num">${fmtCur(invested)}</div></div>
     <div class="metric"><div class="t-label">P&amp;L latent</div><div class="metric-val ${pnl>=0?'t-gain':'t-loss'} t-num">${pnl>=0?'+':''}${fmtCur(pnl)}</div></div>
     <div class="metric"><div class="t-label">Valeur act.</div><div class="metric-val t-num">${fmtCur(h.value)}</div></div>
-    <div class="metric"><div class="t-label">Rendement</div><div class="metric-val ${pnl>=0?'t-gain':'t-loss'} t-num">${fmtPct(pnlPct)}</div></div>
+    <div class="metric"><div class="t-label">P&amp;L latent %</div><div class="metric-val ${pnl>=0?'t-gain':'t-loss'} t-num">${fmtPct(pnlPct)}</div></div>
+    ${realizedPnL!==0?`<div class="metric"><div class="t-label">P&amp;L réalisé</div><div class="metric-val ${realizedPnL>=0?'t-gain':'t-loss'} t-num">${realizedPnL>=0?'+':''}${fmtCur(realizedPnL)}</div></div>`:''}
+    ${showProduit?`<div class="metric"><div class="t-label">P&amp;L produit (${hCur})</div><div class="metric-val ${pnlProduit>=0?'t-gain':'t-loss'} t-num">${pnlProduit>=0?'+':''}${fmtNative(pnlProduit,hCur)}</div></div>
+    <div class="metric"><div class="t-label">Effet change</div><div class="metric-val ${fxEffect>=0?'t-gain':'t-loss'} t-num">${fxEffect>=0?'+':''}${fmtCur(fxEffect)}</div></div>`:''}
     ${divTotal>0?`<div class="metric" style="grid-column:1/-1"><div class="t-label">Dividendes perçus</div><div class="metric-val t-gain t-num">+${fmtCur(divTotal)}</div></div>`:''}
   </div>
-  ${simHtml}
+  <div class="sim-card" id="js-sim-card">
+    <div class="sim-head" style="margin-bottom:14px">Scénario de vente</div>
+    <div class="sim-breakeven">
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Prix d'équilibre</div>
+        <div style="font-size:17px;font-weight:800" class="t-num">${fmtCur(h.avgBuyPrice)}</div>
+      </div>
+      <div class="t-sm">PRU = seuil de rentabilité</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Prix cible (${S.currency})</div>
+        <input class="form-input" type="number" id="js-sim-target" min="0" step="any"
+          value="${h.currentPrice.toFixed(2)}" inputmode="decimal"
+          data-qty="${h.quantity}" data-pru="${h.avgBuyPrice.toFixed(4)}" data-ispea="${isPea?1:0}">
+      </div>
+      <div class="form-field" style="flex:.55;display:flex;flex-direction:column;justify-content:flex-end">
+        <div class="form-label" style="margin-bottom:5px">Vs PRU</div>
+        <div id="js-sim-vspru" class="${pnl>=0?'t-gain':'t-loss'} t-num" style="font-size:15px;font-weight:800;padding:10px 0">${fmtPct(pnlPct)}</div>
+      </div>
+    </div>
+    <div id="js-sim-results">${simResults(h.currentPrice,h.quantity,h.avgBuyPrice,isPea)}</div>
+    <div style="border-top:1px solid var(--border);margin-top:4px;padding-top:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2);margin-bottom:10px">DCA — Renforcer à cours actuel</div>
+      <div class="form-row" style="margin-bottom:0">
+        <div class="form-field">
+          <div class="form-label">Qté supplémentaire</div>
+          <input class="form-input" type="number" id="js-dca-qty" min="0" step="any" placeholder="0" inputmode="decimal"
+            data-qty="${h.quantity}" data-pru="${h.avgBuyPrice.toFixed(4)}" data-cur="${h.currentPrice.toFixed(4)}">
+        </div>
+        <div class="form-field">
+          <div class="form-label">Nouveau PRU</div>
+          <div id="js-dca-pru" class="t-num" style="font-size:15px;font-weight:800;padding:10px 0;color:var(--text2)">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="row" style="padding:4px 20px 10px;justify-content:space-between">
     <div class="t-section">Mouvements</div>
     <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
@@ -1218,9 +1554,9 @@ function bindEvents(id, el) {
     // Gear → settings
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     // Add account
-    el.querySelector('#js-acc-add')?.addEventListener('click', ()=>toast('Ajout de compte — bientôt disponible'));
+    el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     // Add watchlist item
-    el.querySelector('#js-watch-add')?.addEventListener('click', ()=>toast('Ajout de titre — bientôt disponible'));
+    el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
   }
   if(id==='account') {
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -1230,7 +1566,7 @@ function bindEvents(id, el) {
     if(acc) renderHoldsHTML(acc);
 
     // Add holding button
-    el.querySelector('#js-add-hold')?.addEventListener('click',()=>toast('Ajout de position — bientôt disponible'));
+    el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{
@@ -1276,28 +1612,42 @@ function bindEvents(id, el) {
   }
   if(id==='stock') {
     el.querySelector('#js-back')?.addEventListener('click',back);
-    const slider=el.querySelector('#js-sim-range');
-    if(slider) {
-      slider.addEventListener('input',()=>{
-        const pct=parseInt(slider.value)/100;
-        const minP=parseFloat(slider.dataset.min);
-        const maxP=parseFloat(slider.dataset.max);
-        const price=minP+(maxP-minP)*pct;
-        const qty=parseFloat(slider.dataset.qty);
-        const pru=parseFloat(slider.dataset.pru);
-        const isPea=slider.dataset.ispea==='1';
-        const priceEl=el.querySelector('#js-sim-price');
-        const chgEl=el.querySelector('#js-sim-chg');
+    // Simulator: price target input
+    const simTarget=el.querySelector('#js-sim-target');
+    if(simTarget) {
+      simTarget.addEventListener('input',()=>{
+        const price=parseFloat(simTarget.value)||0;
+        const qty=parseFloat(simTarget.dataset.qty);
+        const pru=parseFloat(simTarget.dataset.pru);
+        const isPea=simTarget.dataset.ispea==='1';
+        const chgPct=pru>0?(price-pru)/pru*100:0;
+        const vsPru=el.querySelector('#js-sim-vspru');
+        if(vsPru){vsPru.textContent=fmtPct(chgPct);vsPru.className=(chgPct>=0?'t-gain':'t-loss')+' t-num';}
         const resEl=el.querySelector('#js-sim-results');
-        if(priceEl) priceEl.textContent=fmtCur(price);
-        if(chgEl){
-          const chgPct=(price-pru)/pru*100;
-          chgEl.textContent=(chgPct>=0?'+':'')+chgPct.toFixed(2)+'% vs PRU';
-          chgEl.style.color=chgPct>=0?'var(--gain)':'var(--loss)';
-        }
         if(resEl) resEl.innerHTML=simResults(price,qty,pru,isPea);
       });
     }
+    // DCA calculator
+    const dcaQty=el.querySelector('#js-dca-qty');
+    if(dcaQty) {
+      dcaQty.addEventListener('input',()=>{
+        const addQty=parseFloat(dcaQty.value)||0;
+        const curQty=parseFloat(dcaQty.dataset.qty);
+        const curPru=parseFloat(dcaQty.dataset.pru);
+        const curPrice=parseFloat(dcaQty.dataset.cur);
+        const pruEl=el.querySelector('#js-dca-pru');
+        if(!pruEl) return;
+        if(addQty<=0){pruEl.textContent='—';pruEl.style.color='var(--text2)';return;}
+        const newPru=(curQty*curPru+addQty*curPrice)/(curQty+addQty);
+        pruEl.textContent=fmtCur(newPru);
+        pruEl.style.color=newPru<curPru?'var(--gain)':'var(--text)';
+      });
+    }
+    // Interactive stock chart with overlays
+    const chartWrap=el.querySelector('#js-stock-chart-wrap');
+    const acc=S.accounts.find(a=>a.id===S.accountId);
+    const h=acc?.holdings.find(h=>h.id===S.holdingId);
+    if(chartWrap&&h) initStockChart(chartWrap,h);
   }
   if(id==='analysis') {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
@@ -1418,6 +1768,139 @@ function parseCSV(text) {
 }
 
 // ═══════════════════════════════════════════════
+// CONFIRM DIALOG
+// ═══════════════════════════════════════════════
+let _confirmCb=null;
+function openConfirm(msg,cb){
+  _confirmCb=cb;
+  document.getElementById('confirm-msg').textContent=msg;
+  document.getElementById('confirm-bg').classList.add('show');
+  document.getElementById('confirm-sheet').classList.add('show');
+}
+function closeConfirm(){
+  document.getElementById('confirm-bg').classList.remove('show');
+  document.getElementById('confirm-sheet').classList.remove('show');
+  _confirmCb=null;
+}
+document.getElementById('confirm-cancel').addEventListener('click',closeConfirm);
+document.getElementById('confirm-bg').addEventListener('click',closeConfirm);
+document.getElementById('confirm-ok').addEventListener('click',()=>{ if(_confirmCb)_confirmCb(); closeConfirm(); });
+
+// ═══════════════════════════════════════════════
+// ADD WATCHLIST MODAL
+// ═══════════════════════════════════════════════
+function openWatchModal(){
+  ['watch-ticker','watch-name','watch-price'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('watch-change').value='0';
+  document.getElementById('watch-modal-bg').classList.add('show');
+  document.getElementById('watch-modal-sheet').classList.add('show');
+  setTimeout(()=>document.getElementById('watch-ticker').focus(),330);
+}
+function closeWatchModal(){
+  document.getElementById('watch-modal-bg').classList.remove('show');
+  document.getElementById('watch-modal-sheet').classList.remove('show');
+}
+document.getElementById('watch-modal-bg').addEventListener('click',closeWatchModal);
+document.getElementById('watch-modal-close').addEventListener('click',closeWatchModal);
+document.getElementById('watch-submit').addEventListener('click',()=>{
+  const ticker=document.getElementById('watch-ticker').value.trim().toUpperCase();
+  const name=document.getElementById('watch-name').value.trim();
+  const price=parseFloat(document.getElementById('watch-price').value);
+  const change=parseFloat(document.getElementById('watch-change').value)||0;
+  if(!ticker||!name||!(price>0)){toast('Ticker, nom et prix requis');return;}
+  if(S.watchlist.find(w=>w.ticker===ticker)){toast('Ticker déjà suivi');return;}
+  S.watchlist.push({ticker,name,price,change1d:change});
+  closeWatchModal();
+  renderScreen('dashboard');
+  toast(`${ticker} ajouté aux titres suivis ✓`);
+});
+
+// ═══════════════════════════════════════════════
+// ADD ACCOUNT MODAL
+// ═══════════════════════════════════════════════
+let _accObserver=false;
+function openAccModal(){
+  _accObserver=false;
+  document.getElementById('acc-icon').value='📊';
+  document.getElementById('acc-name').value='';
+  document.getElementById('acc-type').value='';
+  document.getElementById('acc-obs-tog').classList.remove('on');
+  document.getElementById('acc-modal-bg').classList.add('show');
+  document.getElementById('acc-modal-sheet').classList.add('show');
+  setTimeout(()=>document.getElementById('acc-name').focus(),330);
+}
+function closeAccModal(){
+  document.getElementById('acc-modal-bg').classList.remove('show');
+  document.getElementById('acc-modal-sheet').classList.remove('show');
+}
+document.getElementById('acc-modal-bg').addEventListener('click',closeAccModal);
+document.getElementById('acc-modal-close').addEventListener('click',closeAccModal);
+document.getElementById('acc-obs-tog').addEventListener('click',()=>{
+  _accObserver=!_accObserver;
+  document.getElementById('acc-obs-tog').classList.toggle('on',_accObserver);
+});
+document.getElementById('acc-submit').addEventListener('click',()=>{
+  const icon=document.getElementById('acc-icon').value.trim()||'📊';
+  const name=document.getElementById('acc-name').value.trim();
+  const type=document.getElementById('acc-type').value.trim()||'Compte titre';
+  if(!name){toast('Nom du compte requis');return;}
+  const id='acc_'+Date.now().toString(36);
+  const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
+  const iconBg=bgs[S.accounts.length%bgs.length];
+  S.accounts.push({id,name,type,icon,iconBg,value:0,change1d:0,holdings:[],observer:_accObserver});
+  closeAccModal();
+  renderScreen('dashboard');
+  toast(`Compte "${name}" créé ✓`);
+});
+
+// ═══════════════════════════════════════════════
+// ADD POSITION MODAL
+// ═══════════════════════════════════════════════
+let _posAccId=null;
+function openPosModal(accId){
+  _posAccId=accId;
+  ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country','pos-sector'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pos-type').value='Action';
+  document.getElementById('pos-currency').value='EUR';
+  document.getElementById('pos-modal-bg').classList.add('show');
+  document.getElementById('pos-modal-sheet').classList.add('show');
+  setTimeout(()=>document.getElementById('pos-ticker').focus(),330);
+}
+function closePosModal(){
+  document.getElementById('pos-modal-bg').classList.remove('show');
+  document.getElementById('pos-modal-sheet').classList.remove('show');
+}
+document.getElementById('pos-modal-bg').addEventListener('click',closePosModal);
+document.getElementById('pos-modal-close').addEventListener('click',closePosModal);
+document.getElementById('pos-submit').addEventListener('click',()=>{
+  const ticker=document.getElementById('pos-ticker').value.trim().toUpperCase();
+  const name=document.getElementById('pos-name').value.trim()||ticker;
+  const qty=parseFloat(document.getElementById('pos-qty').value);
+  const pru=parseFloat(document.getElementById('pos-pru').value);
+  const country=document.getElementById('pos-country').value.trim()||'Inconnu';
+  const sector=document.getElementById('pos-sector').value.trim()||'Inconnu';
+  const type=document.getElementById('pos-type').value;
+  const currency=document.getElementById('pos-currency').value;
+  if(!ticker||!(qty>0)||!(pru>0)){toast('Ticker, quantité et PRU requis');return;}
+  const acc=S.accounts.find(a=>a.id===_posAccId);
+  if(!acc) return;
+  if(acc.holdings.find(h=>h.ticker===ticker)){toast('Ce ticker existe déjà dans ce compte');return;}
+  const hid=ticker+'_'+Date.now().toString(36);
+  const today=new Date().toISOString().slice(0,10);
+  const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
+    type,country,sector,currency,
+    transactions:[{date:today,type:'BUY',qty,price:pru}],
+    value:qty*pru,pnl:0,pnlPct:0};
+  acc.holdings.push(newH);
+  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+  closePosModal();
+  if(S.screen==='account'&&S.accountId===_posAccId) renderHoldsHTML(acc);
+  renderScreen('dashboard');
+  renderScreen('analysis');
+  toast(`${ticker} ajouté ✓`);
+});
+
+// ═══════════════════════════════════════════════
 // ADD ORDER MODAL
 // ═══════════════════════════════════════════════
 let _mAccId=null, _mHoldId=null, _mType='BUY';
@@ -1450,7 +1933,6 @@ document.querySelectorAll('.type-btn').forEach(b=>b.addEventListener('click',()=
   document.querySelectorAll('.type-btn').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   _mType=b.dataset.type;
-  // Show/hide qty field for DIV (qty = nb of shares held = informational)
   const qtyLabel=document.querySelector('#modal-qty').closest('.form-field').querySelector('.form-label');
   qtyLabel.textContent=_mType==='DIV'?'Nb actions':'Quantité';
   const priceLabel=document.querySelector('#modal-price').closest('.form-field').querySelector('.form-label');
@@ -1493,10 +1975,9 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
 document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
   const t=b.dataset.nav;
   if(t===S.screen) return;
-  // Direction based on tab order: going left = 'back' (slide in from left), right = 'forward'
   const fi=NAV_SCREENS.indexOf(S.screen), ti=NAV_SCREENS.indexOf(t);
-  const dir = (fi>=0 && ti<fi) ? 'back' : 'forward';
-  go(t, dir);
+  const dir=(fi>=0&&ti<fi)?'back':'forward';
+  go(t,dir);
 }));
 
 // ═══════════════════════════════════════════════
@@ -1516,6 +1997,53 @@ function toast(msg) {
 S.accounts=genDemo();
 ['dashboard','analysis','settings'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
+
+// ═══════════════════════════════════════════════
+// ANDROID BACK BUTTON (PWA)
+// Intercepts the hardware/gesture back so it navigates
+// within the app instead of exiting the PWA.
+// ═══════════════════════════════════════════════
+(function initBackHandler() {
+  // Seed the history stack with one extra entry so the
+  // very first back press triggers popstate instead of
+  // closing the WebView.
+  history.replaceState({ appNav: true, depth: 0 }, '');
+  history.pushState({ appNav: true, depth: 1 }, '');
+
+  let _exitTs = 0;
+
+  window.addEventListener('popstate', () => {
+    // Always re-push immediately so there is always a
+    // forward entry — this permanently blocks the browser
+    // from reaching the "exit" entry.
+    history.pushState({ appNav: true, depth: 1 }, '');
+
+    if (S.stack.length > 1) {
+      // Close any open modal first
+      const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
+                       'acc-modal-sheet','pos-modal-sheet']
+                      .some(id => document.getElementById(id)?.classList.contains('show'));
+      if (anyOpen) {
+        closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
+        return;
+      }
+      back();
+      _exitTs = 0;
+    } else {
+      // Already at root
+      const now = Date.now();
+      if (now - _exitTs < 2200) {
+        // Second tap within 2.2 s — nothing more to do in standalone mode
+        // (Android will close via the task switcher)
+        toast('Utilisez le sélecteur d\'apps pour fermer');
+        _exitTs = 0;
+      } else {
+        _exitTs = now;
+        toast('Appuyez à nouveau pour quitter');
+      }
+    }
+  });
+})();
 
 // ═══════════════════════════════════════════════
 // SERVICE WORKER (PWA)
