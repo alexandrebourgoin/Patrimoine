@@ -132,6 +132,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 
 /* ANIMATIONS */
 @keyframes up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{animation:spin .7s linear infinite}
 .anim{animation:up .35s ease both}
 .anim:nth-child(1){animation-delay:.04s}
 .anim:nth-child(2){animation-delay:.09s}
@@ -287,7 +289,8 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 /* ─── WATCHLIST ─── */
 .watch-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:14px 20px 0;overflow:hidden}
 .watch-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px 11px;border-bottom:1px solid var(--border)}
-.watch-item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .12s;cursor:default}
+.watch-item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);transition:background .12s;cursor:pointer}
+.watch-item:active{background:var(--card2)}
 .watch-item:last-child{border-bottom:none}
 .watch-tick{width:40px;height:40px;border-radius:10px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--accent);letter-spacing:-.3px;flex-shrink:0;text-align:center;line-height:1.2}
 
@@ -396,7 +399,8 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
   <div id="s-account"   class="screen no-nav"></div>
   <div id="s-stock"     class="screen no-nav"></div>
   <div id="s-analysis"  class="screen"></div>
-  <div id="s-settings" class="screen no-nav"></div>
+  <div id="s-settings"   class="screen no-nav"></div>
+  <div id="s-watchstock" class="screen no-nav"></div>
 
   <nav id="nav">
     <div class="nav-btn on" data-nav="dashboard">
@@ -758,7 +762,7 @@ const S = {
   stack: ['dashboard'],
   accountId: null,
   holdingId: null,
-  theme: 'light',
+  theme: 'auto',
   currency: 'EUR',
   privacy: false,
   user: { name: 'Alexandre Martin' },
@@ -775,8 +779,18 @@ const S = {
     { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
     { ticker: 'MSFT', name: 'Microsoft',      price: 378.50, change1d:  1.15 },
     { ticker: 'TSLA', name: 'Tesla',          price: 248.20, change1d: -2.45 },
-  ]
+  ],
+  lastPriceUpdate: null,
+  isDemo: true,   // true = données démo (jamais sauvegardées)
+  watchTicker: null,
+  watchPeriod: '3M',
 };
+
+// ═══════════════════════════════════════════════
+// STORAGE KEYS
+// ═══════════════════════════════════════════════
+const STORE_DATA   = 'patrimoine-data';
+const STORE_PRICES = 'patrimoine-prices';
 
 // ═══════════════════════════════════════════════
 // DEMO DATA
@@ -915,6 +929,29 @@ const SECURITIES_DB = {
   'SOL':   {name:'Solana',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'BNB':   {name:'BNB',                    sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'XRP':   {name:'Ripple',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+};
+
+// ─── Yahoo Finance symbol mapping ───
+// Ticker app → symbole Yahoo Finance
+const YAHOO_MAP = {
+  // France – Euronext Paris
+  'MC':'MC.PA','TTE':'TTE.PA','BNP':'BNP.PA','OR':'OR.PA','SAN':'SAN.PA',
+  'AIR':'AIR.PA','BN':'BN.PA','KER':'KER.PA','AI':'AI.PA','ORA':'ORA.PA',
+  'SGO':'SGO.PA','DSY':'DSY.PA','RNO':'RNO.PA','STLAM':'STLAM.MI',
+  // Europe
+  'ASML':'ASML.AS','NOVO':'NOVO-B.CO','SAP':'SAP.DE','ALV':'ALV.DE',
+  // USA (identiques)
+  'AAPL':'AAPL','MSFT':'MSFT','NVDA':'NVDA','GOOGL':'GOOGL','AMZN':'AMZN',
+  'META':'META','TSLA':'TSLA','NFLX':'NFLX','V':'V','JPM':'JPM',
+  'JNJ':'JNJ','WMT':'WMT','UNH':'UNH',
+  // ETFs
+  'CW8':'CW8.PA','IWDA':'IWDA.AS','SP5':'SP5.PA','PAEEM':'PAEEM.PA',
+  'EWLD':'EWLD.PA','QQQ':'QQQ','MWRD':'MWRD.PA',
+};
+
+// ─── CoinGecko IDs (crypto uniquement) ───
+const CG_IDS = {
+  'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
 };
 
 // ═══════════════════════════════════════════════
@@ -1147,6 +1184,90 @@ function initStockChart(container, h) {
   svg.addEventListener('mouseleave',hide);
 }
 
+// ── WATCHSTOCK CHART ──
+function genWatchHistory(ticker, price, period) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let days;
+  if (period === 'YTD') {
+    days = Math.max(2, Math.round((today - new Date(today.getFullYear(), 0, 1)) / 86400000) + 1);
+  } else {
+    const map = {'1S':7,'1M':30,'3M':90,'6M':182,'1A':365};
+    days = map[period] || 90;
+  }
+  let seed = 0;
+  for (let i = 0; i < ticker.length; i++) seed = (Math.imul(31, seed) + ticker.charCodeAt(i)) | 0;
+  seed = Math.abs(seed) || 42;
+  const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
+  const pts = new Array(days);
+  pts[days - 1] = price;
+  for (let i = days - 2; i >= 0; i--) pts[i] = pts[i + 1] / (1 + 0.0002 + (lcg() * 0.032 - 0.015));
+  const startDate = new Date(today.getTime() - (days - 1) * 86400000);
+  return { pts, startDate, days };
+}
+
+function watchChartSvg(pts, w, h) {
+  if (!pts || pts.length < 2) return '';
+  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
+  const pad = 2;
+  const color = pts[pts.length - 1] >= pts[0] ? 'var(--gain)' : 'var(--loss)';
+  const xs = pts.map((_, i) => pad + (i / (pts.length - 1)) * (w - pad * 2));
+  const ys = pts.map(v => pad + (1 - (v - mn) / rng) * (h - pad * 2));
+  const line = 'M' + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
+  const area = line + `L${xs[xs.length-1].toFixed(1)},${h}L${xs[0].toFixed(1)},${h}Z`;
+  const gid = 'wg' + Math.random().toString(36).slice(2, 7);
+  return `<svg id="watch-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:visible;cursor:crosshair">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity=".22"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <line id="watch-xhair" x1="0" y1="0" x2="0" y2="${h}" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+    <circle id="watch-dot" cx="0" cy="0" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
+  </svg>`;
+}
+
+function initWatchChart(container, pts, startDate) {
+  const svg = container.querySelector('#watch-svg');
+  const tip = container.querySelector('#watch-chart-tip');
+  if (!svg || !pts || pts.length < 2) return;
+  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
+  const pad = 2;
+  const xhair = svg.querySelector('#watch-xhair');
+  const dot = svg.querySelector('#watch-dot');
+  function update(clientX) {
+    const rect = svg.getBoundingClientRect();
+    const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const idx = Math.round((relX - pad) / (rect.width - pad * 2) * (pts.length - 1));
+    const i = Math.max(0, Math.min(pts.length - 1, idx));
+    const x = pad + (i / (pts.length - 1)) * (rect.width - pad * 2);
+    const y = pad + (1 - (pts[i] - mn) / rng) * (rect.height - pad * 2);
+    xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
+    xhair.setAttribute('opacity', '1');
+    dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
+    dot.setAttribute('opacity', '1');
+    let tipX = relX + 10;
+    if (tipX + 145 > rect.width) tipX = relX - 153;
+    if (tip) {
+      tip.style.left = Math.max(0, tipX) + 'px';
+      tip.style.top = Math.max(0, y - 22) + 'px';
+      tip.style.opacity = '1';
+      const d = new Date(startDate.getTime() + i * 86400000);
+      tip.textContent = fmtCur(pts[i]) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    }
+  }
+  function hide() {
+    xhair.setAttribute('opacity', '0');
+    dot.setAttribute('opacity', '0');
+    if (tip) tip.style.opacity = '0';
+  }
+  svg.addEventListener('touchstart', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
+  svg.addEventListener('touchmove',  e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
+  svg.addEventListener('touchend', hide, { passive: true });
+  svg.addEventListener('mousemove', e => update(e.clientX));
+  svg.addEventListener('mouseleave', hide);
+}
+
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
@@ -1206,7 +1327,7 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings};
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock};
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
@@ -1233,6 +1354,9 @@ function renderDash() {
             : `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
           }
         </div>
+        <div id="js-refresh-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer" title="Actualiser les cours">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        </div>
         <div id="js-settings-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
         </div>
@@ -1249,6 +1373,7 @@ function renderDash() {
     <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">
       P&amp;L total&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
     </div>
+    ${S.lastPriceUpdate?`<div style="font-size:10px;color:rgba(255,255,255,.28);margin-top:5px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}
   </div>
   ${renderHistCard()}
   ${renderWatchlistCard()}`;
@@ -1361,7 +1486,7 @@ function renderWatchlistCard() {
   const rows = S.watchlist.map(w => {
     const delta = w.price * w.change1d / 100;
     const up = w.change1d >= 0;
-    return `<div class="watch-item">
+    return `<div class="watch-item tap" data-watch="${w.ticker}">
       <div class="watch-tick">${w.ticker.slice(0,4)}</div>
       <div class="flex1 col gap4" style="min-width:0">
         <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
@@ -1799,7 +1924,7 @@ function renderAnalysis() {
 
 // ── SETTINGS ──
 function renderSettings() {
-  const demo=S.accounts.length>0;
+  const demo=S.isDemo;
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     Retour
@@ -1834,6 +1959,29 @@ function renderSettings() {
       <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>
   </div>
+  <div class="s-section">Stockage</div>
+  <div class="s-group">
+    <div class="s-item tap" id="js-clear-prices">
+      <div class="s-ico" style="background:rgba(245,158,11,.12)">
+        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm4.24 16L12 15.45 7.77 18l1.12-4.81-3.73-3.23 4.92-.42L12 5l1.92 4.53 4.92.42-3.73 3.23L16.23 18z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Effacer le cache des prix</div>
+        <div class="s-sub" id="js-price-cache-age">${(()=>{const p=loadPrices();return p?'Mis à jour '+timeSince(p.updatedAt):'Aucun cache enregistré';})()}</div>
+      </div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </div>
+    <div class="s-item tap" id="js-reset-all">
+      <div class="s-ico" style="background:var(--loss-dim)">
+        <svg viewBox="0 0 24 24" fill="var(--loss)"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name" style="color:var(--loss)">Réinitialiser toutes les données</div>
+        <div class="s-sub">Supprime comptes, transactions et réglages</div>
+      </div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </div>
+  </div>
   <div class="s-section">Préférences</div>
   <div class="s-group">
     <div class="s-item">
@@ -1846,12 +1994,16 @@ function renderSettings() {
         <div class="cur-opt tap ${S.currency==='USD'?'on':''}" data-cur="USD">USD</div>
       </div>
     </div>
-    <div class="s-item tap" id="js-theme-row">
+    <div class="s-item">
       <div class="s-ico" style="background:rgba(167,139,250,.12)">
         <svg viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Thème sombre</div></div>
-      <div class="toggle ${S.theme==='dark'?'on':''}" id="js-theme-tog"><div class="toggle-thumb"></div></div>
+      <div class="flex1 col gap4"><div class="s-name">Thème</div></div>
+      <div class="cur-opts">
+        <div class="cur-opt tap ${S.theme==='auto'?'on':''}" data-theme-opt="auto">Auto</div>
+        <div class="cur-opt tap ${S.theme==='light'?'on':''}" data-theme-opt="light">☀</div>
+        <div class="cur-opt tap ${S.theme==='dark'?'on':''}" data-theme-opt="dark">🌙</div>
+      </div>
     </div>
   </div>
   <div class="s-section">À propos</div>
@@ -1881,6 +2033,105 @@ function _bindAccCards(el) {
   }));
 }
 
+// ── WATCHSTOCK ──
+function renderWatchStock() {
+  const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
+  if (!watch) return `<div class="back tap" id="js-back">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg> Retour</div>`;
+
+  const period  = S.watchPeriod || '3M';
+  const periods = ['1S','1M','3M','6M','1A'];
+  const chartW  = Math.min(window.innerWidth, 480);
+
+  // History for selected period (chart display)
+  const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, period);
+
+  // Full 1-year history → performance metrics + 52-week range
+  const {pts: fullPts} = genWatchHistory(watch.ticker, watch.price, '1A');
+  const n = fullPts.length; // 365
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ytdDays = Math.max(1, Math.round((today - new Date(today.getFullYear(), 0, 1)) / 86400000));
+  const perf = (daysBack) => {
+    const i = Math.max(0, n - 1 - Math.min(daysBack, n - 1));
+    return (fullPts[n-1] - fullPts[i]) / fullPts[i] * 100;
+  };
+  const perfYTD = perf(ytdDays);
+  const perf1M  = perf(30);
+  const perf3M  = perf(90);
+  const perf6M  = perf(182);
+  const high52  = Math.max(...fullPts);
+  const low52   = Math.min(...fullPts);
+
+  const up    = watch.change1d >= 0;
+  const delta = watch.price * watch.change1d / 100;
+  const sec   = SECURITIES_DB[watch.ticker];
+  const secInfo = sec ? `${sec.type} · ${sec.country} · ${sec.sector}` : '';
+
+  const periodPct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
+
+  const perfBox = (label, val) => {
+    const pos = val >= 0;
+    return `<div class="metric">
+      <div class="t-label">${label}</div>
+      <div class="metric-val ${pos?'t-gain':'t-loss'} t-num">${pos?'+':''}${val.toFixed(2)}%</div>
+    </div>`;
+  };
+
+  return `<div class="back tap" id="js-back">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    Titres suivis
+  </div>
+
+  <div class="stock-hero" style="padding-bottom:10px;border-bottom:none">
+    <div class="stock-ticker-badge">${watch.ticker}</div>
+    <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${watch.name}</div>
+    <div class="stock-price t-num">${fmtCur(watch.price)}</div>
+    <div class="row gap8" style="align-items:center;flex-wrap:wrap">
+      <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(watch.change1d).toFixed(2)}%</div>
+      <span style="font-size:13px;font-weight:700;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${delta.toFixed(2)} ${S.currency==='EUR'?'€':'$'}</span>
+      ${secInfo?`<span class="t-sm">${secInfo}</span>`:''}
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;padding:10px 20px 8px;overflow-x:auto">
+    ${periods.map(p=>`<div class="hperiod${p===period?' on':''}" data-wperiod="${p}">${p}</div>`).join('')}
+  </div>
+
+  <div style="position:relative" id="js-watch-chart-wrap">
+    ${watchChartSvg(pts, chartW, 140)}
+    <div id="watch-chart-tip" class="stock-chart-tip" style="position:absolute;top:4px;left:0"></div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 20px 14px">
+    <span id="js-watch-date-start" style="font-size:11px;color:var(--text3)">${startDate.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}</span>
+    <span id="js-watch-period-perf" style="font-size:13px;font-weight:800;color:${periodPct>=0?'var(--gain)':'var(--loss)'}">${periodPct>=0?'+':''}${periodPct.toFixed(2)}%</span>
+    <span style="font-size:11px;color:var(--text3)">${today.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}</span>
+  </div>
+
+  <div class="t-section" style="padding:0 20px 8px">Performances</div>
+  <div class="metrics">
+    ${perfBox('YTD', perfYTD)}
+    ${perfBox('1 mois', perf1M)}
+    ${perfBox('3 mois', perf3M)}
+    ${perfBox('6 mois', perf6M)}
+    <div class="metric">
+      <div class="t-label">52 sem. haut</div>
+      <div class="metric-val t-num">${fmtCur(high52)}</div>
+    </div>
+    <div class="metric">
+      <div class="t-label">52 sem. bas</div>
+      <div class="metric-val t-num">${fmtCur(low52)}</div>
+    </div>
+  </div>
+
+  <div style="padding:16px 20px 48px">
+    <div class="tap" id="js-watch-remove" style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--loss-dim);color:var(--loss);border:1px solid var(--loss);border-radius:12px;padding:13px;font-size:14px;font-weight:700">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/></svg>
+      Retirer de la liste de suivi
+    </div>
+  </div>`;
+}
+
 function bindEvents(id, el) {
   if(id==='dashboard') {
     // History period selector
@@ -1901,7 +2152,14 @@ function bindEvents(id, el) {
     const histCard=el.querySelector('.hist-card');
     if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    el.querySelector('#js-refresh-btn')?.addEventListener('click', fetchLivePrices);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
+    el.querySelectorAll('[data-watch]').forEach(item => {
+      item.addEventListener('click', () => {
+        S.watchTicker = item.dataset.watch;
+        go('watchstock');
+      });
+    });
     // Privacy toggle
 
     el.querySelector('#js-privacy-btn')?.addEventListener('click',()=>{
@@ -2076,13 +2334,23 @@ function bindEvents(id, el) {
     el.querySelector('#js-name')?.addEventListener('change',e=>{
       S.user.name=e.target.value||S.user.name;
       renderScreen('dashboard');
+      saveData();
       toast('Nom mis à jour');
     });
     el.querySelector('#js-demo-tog')?.addEventListener('click',()=>{
-      if(S.accounts.length){ S.accounts=[]; toast('Données effacées'); }
-      else { S.accounts=genDemo(); toast('Mode démo activé ✓'); }
+      if(S.isDemo){
+        // Démo → mode réel : restaurer les vrais comptes depuis le storage
+        S.isDemo=false;
+        try { S.accounts=JSON.parse(localStorage.getItem(STORE_DATA)||'{}').accounts||[]; } catch(e){ S.accounts=[]; }
+        toast('Mode démo désactivé');
+      } else {
+        // Mode réel → démo
+        S.isDemo=true;
+        S.accounts=genDemo();
+        toast('Mode démo activé ✓');
+      }
       refreshMain();
-      el.querySelector('#js-demo-tog').classList.toggle('on',S.accounts.length>0);
+      el.querySelector('#js-demo-tog').classList.toggle('on',S.isDemo);
     });
     el.querySelector('#js-csv-btn')?.addEventListener('click',()=>document.getElementById('csv-file').click());
     el.querySelectorAll('[data-cur]').forEach(b=>b.addEventListener('click',()=>{
@@ -2091,11 +2359,76 @@ function bindEvents(id, el) {
       refreshMain();
       toast('Devise : '+S.currency);
     }));
-    el.querySelector('#js-theme-tog')?.addEventListener('click',()=>{
-      S.theme=S.theme==='dark'?'light':'dark';
-      document.documentElement.setAttribute('data-theme',S.theme==='light'?'light':'');
-      el.querySelector('#js-theme-tog').classList.toggle('on',S.theme==='dark');
-      toast('Thème '+(S.theme==='dark'?'sombre':'clair'));
+    el.querySelectorAll('[data-theme-opt]').forEach(b=>b.addEventListener('click',()=>{
+      S.theme=b.dataset.themeOpt;
+      applyTheme(S.theme);
+      el.querySelectorAll('[data-theme-opt]').forEach(x=>x.classList.toggle('on',x.dataset.themeOpt===S.theme));
+      saveData();
+      const lbl={auto:'automatique',light:'clair',dark:'sombre'};
+      toast('Thème '+(lbl[S.theme]||S.theme));
+    }));
+    el.querySelector('#js-clear-prices')?.addEventListener('click',()=>{
+      localStorage.removeItem(STORE_PRICES);
+      S.lastPriceUpdate=null;
+      const sub=el.querySelector('#js-price-cache-age');
+      if(sub) sub.textContent='Aucun cache enregistré';
+      toast('Cache des prix effacé');
+    });
+    el.querySelector('#js-reset-all')?.addEventListener('click',()=>{
+      openConfirm('Réinitialiser toutes les données ? Cette action est irréversible.', ()=>{
+        localStorage.removeItem(STORE_DATA);
+        localStorage.removeItem(STORE_PRICES);
+        location.reload();
+      });
+    });
+  }
+  if (id === 'watchstock') {
+    el.querySelector('#js-back')?.addEventListener('click', back);
+
+    // Period selector: swap chart + labels in-place
+    el.querySelectorAll('[data-wperiod]').forEach(btn => btn.addEventListener('click', () => {
+      S.watchPeriod = btn.dataset.wperiod;
+      el.querySelectorAll('[data-wperiod]').forEach(b => b.classList.toggle('on', b.dataset.wperiod === S.watchPeriod));
+      const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
+      if (!watch) return;
+      const chartW = Math.min(window.innerWidth, 480);
+      const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod);
+      const wrap = el.querySelector('#js-watch-chart-wrap');
+      if (wrap) {
+        wrap.innerHTML = watchChartSvg(pts, chartW, 140) +
+          '<div id="watch-chart-tip" class="stock-chart-tip" style="position:absolute;top:4px;left:0"></div>';
+        initWatchChart(wrap, pts, startDate);
+      }
+      const pct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
+      const perfEl = el.querySelector('#js-watch-period-perf');
+      if (perfEl) {
+        perfEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        perfEl.style.color = pct >= 0 ? 'var(--gain)' : 'var(--loss)';
+      }
+      const dateStartEl = el.querySelector('#js-watch-date-start');
+      if (dateStartEl) dateStartEl.textContent = startDate.toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'});
+    }));
+
+    // Init chart on load
+    const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
+    if (watch) {
+      const wrap = el.querySelector('#js-watch-chart-wrap');
+      if (wrap) {
+        const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod || '3M');
+        initWatchChart(wrap, pts, startDate);
+      }
+    }
+
+    // Remove from watchlist
+    el.querySelector('#js-watch-remove')?.addEventListener('click', () => {
+      openConfirm(`Retirer ${S.watchTicker} de la liste de suivi ?`, () => {
+        const name = S.watchlist.find(w => w.ticker === S.watchTicker)?.name || S.watchTicker;
+        S.watchlist = S.watchlist.filter(w => w.ticker !== S.watchTicker);
+        saveData();
+        back();
+        refreshMain();
+        toast(`${name} retiré de la liste`);
+      });
     });
   }
 }
@@ -2107,6 +2440,7 @@ function refreshMain() {
   renderScreen('comptes');
   renderScreen('analysis');
   if(S.screen==='recherche') renderScreen('recherche');
+  saveData();
 }
 
 // ═══════════════════════════════════════════════
@@ -2594,6 +2928,48 @@ document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>
 }));
 
 // ═══════════════════════════════════════════════
+// SWIPE ENTRE ONGLETS
+// ═══════════════════════════════════════════════
+(function(){
+  let x0=0, y0=0, tgt0=null, scrolling=null, lastNav=0;
+  const app=document.getElementById('app');
+
+  app.addEventListener('touchstart', e=>{
+    x0=e.touches[0].clientX;
+    y0=e.touches[0].clientY;
+    tgt0=e.target;
+    scrolling=null;
+  },{passive:true});
+
+  app.addEventListener('touchmove', e=>{
+    if(scrolling!==null) return;
+    const dx=Math.abs(e.touches[0].clientX-x0);
+    const dy=Math.abs(e.touches[0].clientY-y0);
+    if(dy>dx+4) scrolling=true;        // geste vertical → scroll natif
+    else if(dx>10) scrolling=false;    // geste horizontal → swipe
+  },{passive:true});
+
+  app.addEventListener('touchend', e=>{
+    if(scrolling!==false) return;                      // scroll ou ambigu
+    if(!NAV_SCREENS.includes(S.screen)) return;        // hors onglets nav
+    if(tgt0&&tgt0.closest('.tabs')) return;            // chips filtres (scroll horizontal)
+    if(Date.now()-lastNav<350) return;                 // animation déjà en cours
+
+    const dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)<52) return;                        // trop court (<52px)
+
+    const idx=NAV_SCREENS.indexOf(S.screen);
+    if(dx<0 && idx<NAV_SCREENS.length-1){              // ← swipe gauche : onglet suivant
+      lastNav=Date.now();
+      go(NAV_SCREENS[idx+1],'forward');
+    } else if(dx>0 && idx>0){                          // → swipe droite : onglet précédent
+      lastNav=Date.now();
+      go(NAV_SCREENS[idx-1],'back');
+    }
+  },{passive:true});
+})();
+
+// ═══════════════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════════════
 let toastTimer;
@@ -2605,11 +2981,206 @@ function toast(msg) {
 }
 
 // ═══════════════════════════════════════════════
+// PERSISTENCE
+// ═══════════════════════════════════════════════
+
+function timeSince(ts) {
+  const m=Math.floor((Date.now()-ts)/60000);
+  if(m<1) return "à l'instant";
+  if(m<60) return `il y a ${m} min`;
+  const h=Math.floor(m/60);
+  if(h<24) return `il y a ${h}h`;
+  return `il y a ${Math.floor(h/24)}j`;
+}
+
+function saveData() {
+  try {
+    // En mode démo, on préserve les vrais comptes déjà stockés (on ne les écrase pas)
+    let realAccounts = S.accounts;
+    if (S.isDemo) {
+      try { realAccounts = JSON.parse(localStorage.getItem(STORE_DATA)||'{}').accounts || []; } catch(e) { realAccounts = []; }
+    }
+    localStorage.setItem(STORE_DATA, JSON.stringify({
+      accounts:   realAccounts,
+      isDemo:     S.isDemo,
+      watchlist:  S.watchlist,
+      targets:    S.targets,
+      user:       S.user,
+      theme:      S.theme,
+      currency:   S.currency,
+      privacy:    S.privacy,
+      histPeriod: S.histPeriod,
+      sort:       S.sort,
+      sortDir:    S.sortDir,
+    }));
+  } catch(e) {}
+}
+
+function loadData() {
+  try {
+    const raw=localStorage.getItem(STORE_DATA);
+    if(!raw) return false;
+    const d=JSON.parse(raw);
+    if(d.accounts)              S.accounts   = d.accounts;
+    if(d.isDemo!==undefined)    S.isDemo     = d.isDemo;
+    if(d.watchlist)             S.watchlist  = d.watchlist;
+    if(d.targets)               S.targets    = d.targets;
+    if(d.user)                  S.user       = d.user;
+    if(d.theme)                 S.theme      = d.theme;
+    if(d.currency)              S.currency   = d.currency;
+    if(d.privacy!==undefined)   S.privacy    = d.privacy;
+    if(d.histPeriod)            S.histPeriod = d.histPeriod;
+    if(d.sort)                  S.sort       = d.sort;
+    if(d.sortDir!==undefined)   S.sortDir    = d.sortDir;
+    return true;
+  } catch(e) { return false; }
+}
+
+function savePrices(prices) {
+  // prices = { 'MC': 734.2, 'AAPL': 189.3, ... }
+  try {
+    localStorage.setItem(STORE_PRICES, JSON.stringify({ prices, updatedAt: Date.now() }));
+  } catch(e) {}
+}
+
+function loadPrices() {
+  try {
+    const raw=localStorage.getItem(STORE_PRICES);
+    return raw ? JSON.parse(raw) : null;  // { prices:{...}, updatedAt: ms }
+  } catch(e) { return null; }
+}
+
+function applyPrices(priceData) {
+  if(!priceData?.prices) return;
+  S.accounts.flatMap(a=>a.holdings).forEach(h=>{
+    const p=priceData.prices[h.ticker];
+    if(p!=null){ h.currentPrice=p; recalcHolding(h); }
+  });
+  S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
+  S.lastPriceUpdate=priceData.updatedAt;
+}
+
+// ═══════════════════════════════════════════════
+// THÈME
+// ═══════════════════════════════════════════════
+function applyTheme(theme) {
+  const dark = theme === 'dark' ||
+    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? '' : 'light');
+}
+
+// ═══════════════════════════════════════════════
+// LIVE PRICES  (PWA / HTTPS uniquement)
+// ═══════════════════════════════════════════════
+let _fetching = false;
+
+async function fetchLivePrices() {
+  if (_fetching) return;
+  _fetching = true;
+
+  // Indicateur visuel sur le bouton refresh
+  const btnSvg = document.querySelector('#js-refresh-btn svg');
+  if (btnSvg) btnSvg.classList.add('spin');
+
+  const allH = S.accounts.flatMap(a => a.holdings);
+  if (!allH.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+
+  // Tickers uniques par catégorie
+  const yahooSymbols = [...new Set(
+    allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean)
+  )];
+  const cgIds = [...new Set(
+    allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean)
+  )];
+
+  // Map inverse : symbole Yahoo → ticker app
+  const yahooRev = {};
+  Object.entries(YAHOO_MAP).forEach(([app,yh])=>yahooRev[yh]=app);
+  // Map inverse : CoinGecko id → ticker app
+  const cgRev = {};
+  Object.entries(CG_IDS).forEach(([app,cg])=>cgRev[cg]=app);
+
+  let updated = 0;
+  const errors = [];
+  const prices = {}; // pour savePrices()
+
+  // ── Yahoo Finance ──────────────────────────────
+  if (yahooSymbols.length) {
+    try {
+      const url = 'https://query2.finance.yahoo.com/v7/finance/quote?symbols='
+        + yahooSymbols.join(',') + '&lang=fr-FR&corsDomain=finance.yahoo.com';
+      const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      (data?.quoteResponse?.result || []).forEach(q => {
+        const ticker = yahooRev[q.symbol] || q.symbol;
+        const price  = q.regularMarketPrice;
+        if (!price) return;
+        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        prices[ticker] = price;
+      });
+    } catch(e) { errors.push('Yahoo Finance'); }
+  }
+
+  // ── CoinGecko ──────────────────────────────────
+  if (cgIds.length) {
+    try {
+      const vs = S.currency.toLowerCase();
+      const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
+        + cgIds.join(',') + '&vs_currencies=' + vs;
+      const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const data = await res.json();
+      cgIds.forEach(id => {
+        const ticker = cgRev[id];
+        const price  = data[id]?.[vs];
+        if (!ticker || !price) return;
+        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        prices[ticker] = price;
+      });
+    } catch(e) { errors.push('CoinGecko'); }
+  }
+
+  // ── Finalisation ───────────────────────────────
+  if (updated > 0) {
+    S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
+    savePrices(prices);
+    refreshMain();
+    toast(errors.length
+      ? `${updated} cours mis à jour · ⚠ ${errors.join(', ')}`
+      : `${updated} cours mis à jour ✓`);
+  } else {
+    toast(errors.length ? `Erreur : ${errors.join(', ')}` : 'Aucun cours trouvé');
+  }
+
+  _fetching = false;
+  if (btnSvg) btnSvg.classList.remove('spin');
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-S.accounts=genDemo();
+const _hasData=loadData();
+// Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
+if(!_hasData || S.isDemo) S.accounts=genDemo();
+// Première ouverture : sauvegarder les préférences par défaut
+if(!_hasData) saveData();
+// Appliquer thème sauvegardé (auto suit le système)
+applyTheme(S.theme);
+// Appliquer le cache de prix uniquement en mode réel
+const _priceCache=loadPrices();
+if(_priceCache && !S.isDemo) applyPrices(_priceCache);
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
+// Suivre les changements du thème système (uniquement en mode auto)
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
+  if(S.theme==='auto') applyTheme('auto');
+});
+// Auto-refresh si pas de cache ou cache > 15 min (PWA uniquement)
+if (location.protocol === 'https:' || location.hostname === 'localhost') {
+  const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000);
+  if (_stale) setTimeout(fetchLivePrices, 800); // léger délai pour laisser le rendu finir
+}
 
 // ═══════════════════════════════════════════════
 // ANDROID BACK BUTTON (PWA)
