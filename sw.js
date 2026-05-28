@@ -1,11 +1,11 @@
 /* Mon patrimoine – Service Worker
    Strategy:
-   - App shell (HTML, manifest, icon) → cache-first, update in background
+   - App shell (HTML, manifest, icon) → stale-while-revalidate
    - Google Fonts → cache-first (long-lived)
    - Everything else → network-first with cache fallback
 */
 
-const CACHE = 'patrimoine-v6';
+const CACHE = 'patrimoine-v7';
 const SHELL = [
   './mon-patrimoine.html',
   './manifest.json',

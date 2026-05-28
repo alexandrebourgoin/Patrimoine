@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tests — Mon Patrimoine</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #070D1A;
+  color: #E8EFFF;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 14px;
+  padding: 28px 20px 60px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+h1 { font-size: 22px; font-weight: 800; letter-spacing: -.5px; margin-bottom: 4px; }
+.subtitle { font-size: 12px; color: #3A4F6E; margin-bottom: 24px; }
+
+.summary {
+  padding: 14px 20px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.all-pass { background: rgba(0,214,143,.1);  color: #00D68F; border: 1px solid rgba(0,214,143,.25); }
+.has-fail  { background: rgba(255,90,90,.08); color: #FF5A5A; border: 1px solid rgba(255,90,90,.25); }
+.summary-icon { font-size: 20px; }
+.summary-counts { font-size: 12px; font-weight: 500; opacity: .75; margin-top: 2px; }
+
+.suite { margin-bottom: 24px; }
+.suite-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #3A4F6E;
+  margin-bottom: 6px;
+  padding: 0 2px;
+}
+.test {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  margin-bottom: 3px;
+  border: 1px solid transparent;
+}
+.test.pass { background: rgba(0,214,143,.05); border-color: rgba(0,214,143,.1); }
+.test.fail { background: rgba(255,90,90,.07); border-color: rgba(255,90,90,.2); }
+.badge { font-size: 13px; font-weight: 800; flex-shrink: 0; width: 16px; padding-top: 1px; }
+.pass .badge { color: #00D68F; }
+.fail .badge { color: #FF5A5A; }
+.test-body { flex: 1; min-width: 0; }
+.test-name { font-size: 13px; font-weight: 500; line-height: 1.4; }
+.test-err {
+  font-size: 11px;
+  color: #FF8888;
+  margin-top: 6px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  background: rgba(255,90,90,.08);
+  padding: 7px 10px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+</style>
+</head>
+<body>
+
+<h1>Tests — Mon Patrimoine</h1>
+<p class="subtitle">Ouvrir directement dans le navigateur · Aucune dépendance</p>
+<div id="summary"></div>
+<div id="results"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+// ÉTAT GLOBAL MOCKÉ
+// ═══════════════════════════════════════════════════════════════
+const S = { currency: 'EUR', privacy: false, accounts: [], _histCache: {}, targets: {} };
+
+// ═══════════════════════════════════════════════════════════════
+// FONCTIONS SOUS TEST
+// Copiées depuis mon-patrimoine.html — ⚠️ garder synchronisé
+// ═══════════════════════════════════════════════════════════════
+
+// ── Data factories (~ligne 784) ──────────────────────────────
+function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, currency='EUR') {
+  const value = qty * cur;
+  const pnl = (cur - buy) * qty;
+  const pnlPct = ((cur - buy) / buy) * 100;
+  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur,
+           type, country, sector, transactions: txs, value, pnl, pnlPct, currency };
+}
+function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
+
+// ── Formatage (~ligne 827) ───────────────────────────────────
+function fmtPct(v) { return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' %'; }
+function initials(n) { return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+
+// ── Richesse totale (~ligne 831) ─────────────────────────────
+function totalWealth() {
+  return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value, 0);
+}
+
+// ── PnL réalisé (~ligne 840) ─────────────────────────────────
+function computeRealizedPnL(h) {
+  let runQty=0, runCost=0, realized=0;
+  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
+    if(tx.type==='BUY'){
+      runCost+=tx.qty*tx.price;
+      runQty+=tx.qty;
+    } else if(tx.type==='SELL' && runQty>0){
+      const avgCost=runCost/runQty;
+      realized+=(tx.price-avgCost)*tx.qty;
+      const remQty=Math.max(0,runQty-tx.qty);
+      runCost=avgCost*remQty;
+      runQty=remQty;
+    }
+  });
+  return realized;
+}
+
+// ── Recalcul position (~ligne 857) ───────────────────────────
+function recalcHolding(h) {
+  let qty=0, costBasis=0;
+  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
+    if(tx.type==='BUY'){costBasis+=tx.qty*tx.price;qty+=tx.qty;}
+    else if(tx.type==='SELL'&&qty>0){
+      const avg=costBasis/qty;
+      costBasis=avg*Math.max(0,qty-tx.qty);
+      qty=Math.max(0,qty-tx.qty);
+    }
+  });
+  h.quantity=+qty.toFixed(8);
+  h.avgBuyPrice=qty>0?costBasis/qty:0;
+  h.value=+(h.quantity*h.currentPrice).toFixed(2);
+  h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
+  h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+}
+
+// ── Segments analyse (~ligne 1744) ───────────────────────────
+function buildSegs(obj, colors) {
+  const tot=Object.values(obj).reduce((s,v)=>s+v,0);
+  return Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
+    name, value,
+    color: colors[name]||colors[i%colors.length],
+    pct: (value/tot*100).toFixed(1)
+  }));
+}
+
+// ── Données sparkline (~ligne 923) ───────────────────────────
+function sparkData(base, n=22, vol=0.025) {
+  const d=[base];
+  for(let i=1;i<n;i++) d.push(d[i-1]+d[i-1]*vol*(Math.random()*2-.85));
+  d[d.length-1]=base;
+  return d;
+}
+
+// ── Simulation vente (~ligne 1684) ───────────────────────────
+function simResults(price, qty, pru) {
+  const gross = (price - pru) * qty;
+  const netPfu = gross > 0 ? gross * 0.70 : gross;
+  return { gross, netPfu };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEST RUNNER MINIMAL
+// ═══════════════════════════════════════════════════════════════
+let _suite='', _results=[], _pass=0, _fail=0;
+
+function describe(name, fn) { _suite=name; fn(); }
+
+function it(name, fn) {
+  try {
+    fn();
+    _pass++;
+    _results.push({ suite:_suite, name, ok:true });
+  } catch(e) {
+    _fail++;
+    _results.push({ suite:_suite, name, ok:false, err:e.message });
+  }
+}
+
+function expect(val) {
+  return {
+    toBe(exp) {
+      if (val !== exp)
+        throw new Error(`Attendu : ${JSON.stringify(exp)}\nObtenu  : ${JSON.stringify(val)}`);
+    },
+    toBeCloseTo(exp, precision=6) {
+      if (Math.abs(val - exp) > Math.pow(10, -precision))
+        throw new Error(`Attendu ≈ ${exp} (±1e-${precision})\nObtenu  : ${val}`);
+    },
+    toEqual(exp) {
+      const a=JSON.stringify(val), b=JSON.stringify(exp);
+      if (a!==b) throw new Error(`Attendu : ${b}\nObtenu  : ${a}`);
+    },
+    toHaveLength(exp) {
+      if (val.length !== exp)
+        throw new Error(`Attendu longueur ${exp}, obtenu ${val.length}`);
+    },
+    toBeGreaterThan(exp) {
+      if (val <= exp)
+        throw new Error(`Attendu > ${exp}, obtenu ${val}`);
+    },
+    toContain(exp) {
+      if (!val.includes(exp))
+        throw new Error(`"${val}" ne contient pas "${exp}"`);
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ── SUITE 1 : Formatage › fmtPct ────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+describe('Formatage › fmtPct', () => {
+  it('valeur positive',        () => expect(fmtPct(5.5)).toBe('+5,50 %'));
+  it('valeur négative',        () => expect(fmtPct(-3.25)).toBe('-3,25 %'));
+  it('zéro',                   () => expect(fmtPct(0)).toBe('+0,00 %'));
+  it('arrondi 2 décimales',    () => expect(fmtPct(1.123456)).toBe('+1,12 %'));
+  it('100 % exact',            () => expect(fmtPct(100)).toBe('+100,00 %'));
+});
+
+// ── SUITE 2 : Formatage › initials ──────────────────────────
+describe('Formatage › initials', () => {
+  it('prénom + nom',             () => expect(initials('Jean Dupont')).toBe('JD'));
+  it('un seul mot',              () => expect(initials('Alice')).toBe('A'));
+  it('trois mots → 2 initiales', () => expect(initials('Jean Pierre Martin')).toBe('JP'));
+  it('minuscules → majuscules',  () => expect(initials('alice dupont')).toBe('AD'));
+});
+
+// ── SUITE 3 : Factories ──────────────────────────────────────
+describe('Factories › mkTx', () => {
+  it('structure correcte', () => {
+    const tx = mkTx('2023-01-15', 'BUY', 10, 100);
+    expect(tx.date).toBe('2023-01-15');
+    expect(tx.type).toBe('BUY');
+    expect(tx.qty).toBe(10);
+    expect(tx.price).toBe(100);
+  });
+});
+
+describe('Factories › mkH', () => {
+  it('value = qty × currentPrice',   () => expect(mkH('T','T','T',10,100,120,'Action','FR','Tech',[]).value).toBe(1200));
+  it('pnl = (cur − buy) × qty',      () => expect(mkH('T','T','T',10,100,120,'Action','FR','Tech',[]).pnl).toBe(200));
+  it('pnlPct = (120−100)/100 = 20 %',() => expect(mkH('T','T','T',10,100,120,'Action','FR','Tech',[]).pnlPct).toBe(20));
+  it('pnl négatif si cours < PRU',   () => expect(mkH('T','T','T',10,100,80,'Action','FR','Tech',[]).pnl).toBe(-200));
+  it('currency par défaut EUR',      () => expect(mkH('T','T','T',10,100,100,'Action','FR','Tech',[]).currency).toBe('EUR'));
+  it('currency override USD',        () => expect(mkH('T','T','T',10,100,100,'Action','US','Tech',[],'USD').currency).toBe('USD'));
+});
+
+// ── SUITE 4 : computeRealizedPnL ────────────────────────────
+describe('computeRealizedPnL', () => {
+  it('aucune vente → 0', () => {
+    const h = { transactions:[mkTx('2023-01-01','BUY',10,100)] };
+    expect(computeRealizedPnL(h)).toBe(0);
+  });
+
+  it('vente avec gain   Achat 10@100 · Vente 5@120 → +100', () => {
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','SELL',5,120)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(100);
+  });
+
+  it('vente avec perte  Achat 10@100 · Vente 5@80 → −100', () => {
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','SELL',5,80)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(-100);
+  });
+
+  it('deux achats + vente → prix moyen pondéré (avg 110, gain +100)', () => {
+    // Buy10@100 + Buy5@130 → avg=110 ; Sell5@130 → (130−110)×5 = 100
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-03-01','BUY',5,130),
+      mkTx('2023-06-01','SELL',5,130)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(100);
+  });
+
+  it('vente intégrale  10@100 → 10@150 = +500', () => {
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','SELL',10,150)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(500);
+  });
+
+  it('deux ventes successives  +60 puis −60 = 0', () => {
+    // Buy10@100 ; Sell3@120 (+60) ; Sell3@80 (−60) → total 0
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-03-01','SELL',3,120),
+      mkTx('2023-06-01','SELL',3,80)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(0);
+  });
+
+  it('dividendes ignorés', () => {
+    // Les transactions DIV ne modifient pas le PnL réalisé
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-04-01','DIV',10,2),
+      mkTx('2023-06-01','SELL',5,120)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(100);
+  });
+
+  it('transactions non triées → même résultat', () => {
+    // Vente avant achat dans le tableau → tri interne par date
+    const h = { transactions:[
+      mkTx('2023-06-01','SELL',5,120),
+      mkTx('2023-01-01','BUY',10,100)
+    ]};
+    expect(computeRealizedPnL(h)).toBe(100);
+  });
+});
+
+// ── SUITE 5 : recalcHolding ──────────────────────────────────
+describe('recalcHolding', () => {
+  it('achat simple → qty / avg / value / pnl / pnlPct', () => {
+    const h = { transactions:[mkTx('2023-01-01','BUY',10,100)], currentPrice:120 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(10);
+    expect(h.avgBuyPrice).toBe(100);
+    expect(h.value).toBe(1200);
+    expect(h.pnl).toBe(200);
+    expect(h.pnlPct).toBeCloseTo(20, 5);
+  });
+
+  it('deux achats → prix moyen pondéré avg=110', () => {
+    // 10@100 + 5@130 → costBasis=1650, qty=15, avg=110
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','BUY',5,130)
+    ], currentPrice:120 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(15);
+    expect(h.avgBuyPrice).toBe(110);
+    expect(h.value).toBe(1800);
+  });
+
+  it('achat puis vente partielle → qty réduite, avg inchangé', () => {
+    // Buy10@100, Sell4@150 → qty=6, avg=100, value=6×120=720
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','SELL',4,150)
+    ], currentPrice:120 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(6);
+    expect(h.avgBuyPrice).toBe(100);
+    expect(h.value).toBe(720);
+  });
+
+  it('vente intégrale → qty=0, avg=0, pnl=0, pnlPct=0', () => {
+    const h = { transactions:[
+      mkTx('2023-01-01','BUY',10,100),
+      mkTx('2023-06-01','SELL',10,150)
+    ], currentPrice:120 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(0);
+    expect(h.avgBuyPrice).toBe(0);
+    expect(h.pnl).toBe(0);
+    expect(h.pnlPct).toBe(0);
+  });
+
+  it('transactions non triées → résultat identique', () => {
+    // Même scénario "deux achats" mais inversé dans le tableau
+    const h = { transactions:[
+      mkTx('2023-06-01','BUY',5,130),
+      mkTx('2023-01-01','BUY',10,100)
+    ], currentPrice:120 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(15);
+    expect(h.avgBuyPrice).toBe(110);
+  });
+
+  it('achat fractionnaire (ETF)', () => {
+    // Achat 2.5 parts à 300 → qty=2.5, avg=300, value=2.5×320=800
+    const h = { transactions:[mkTx('2023-01-01','BUY',2.5,300)], currentPrice:320 };
+    recalcHolding(h);
+    expect(h.quantity).toBe(2.5);
+    expect(h.avgBuyPrice).toBe(300);
+    expect(h.value).toBe(800);
+  });
+});
+
+// ── SUITE 6 : totalWealth ────────────────────────────────────
+describe('totalWealth', () => {
+  it('somme des comptes non-observer', () => {
+    S.accounts = [{ value:10000, observer:false }, { value:5000, observer:false }];
+    expect(totalWealth()).toBe(15000);
+  });
+  it('exclut les comptes observer', () => {
+    S.accounts = [{ value:10000, observer:false }, { value:99999, observer:true }];
+    expect(totalWealth()).toBe(10000);
+  });
+  it('aucun compte → 0', () => {
+    S.accounts = [];
+    expect(totalWealth()).toBe(0);
+  });
+  it('tous observer → 0', () => {
+    S.accounts = [{ value:5000, observer:true }, { value:3000, observer:true }];
+    expect(totalWealth()).toBe(0);
+  });
+  it('compte à valeur 0 inclus sans erreur', () => {
+    S.accounts = [{ value:0, observer:false }, { value:8000, observer:false }];
+    expect(totalWealth()).toBe(8000);
+  });
+});
+
+// ── SUITE 7 : buildSegs ──────────────────────────────────────
+describe('buildSegs', () => {
+  it('trié par valeur décroissante', () => {
+    const segs = buildSegs({ A:300, B:700 }, ['#r','#b']);
+    expect(segs[0].name).toBe('B');
+    expect(segs[1].name).toBe('A');
+  });
+  it('pourcentages corrects (70 % / 30 %)', () => {
+    const segs = buildSegs({ A:300, B:700 }, ['#r','#b']);
+    expect(segs[0].pct).toBe('70.0');
+    expect(segs[1].pct).toBe('30.0');
+  });
+  it('valeurs conservées', () => {
+    const segs = buildSegs({ X:500, Y:500 }, ['#r','#b']);
+    expect(segs[0].value).toBe(500);
+    expect(segs[1].value).toBe(500);
+  });
+  it('couleur nommée (objet) prioritaire', () => {
+    const segs = buildSegs({ Action:1000 }, { Action:'#mycolor' });
+    expect(segs[0].color).toBe('#mycolor');
+  });
+  it('fallback couleur par index (tableau)', () => {
+    const colors = ['#c0','#c1'];
+    const segs = buildSegs({ X:400, Y:600 }, colors);
+    expect(segs[0].color).toBe('#c0'); // Y en 1er (600>400) → index 0
+    expect(segs[1].color).toBe('#c1'); // X → index 1
+  });
+  it('un seul segment → 100 %', () => {
+    const segs = buildSegs({ Unique:42 }, ['#x']);
+    expect(segs[0].pct).toBe('100.0');
+  });
+});
+
+// ── SUITE 8 : sparkData ──────────────────────────────────────
+describe('sparkData', () => {
+  it('retourne le nombre de points demandé (22)', () => expect(sparkData(1000,22)).toHaveLength(22));
+  it('premier point = base',                     () => expect(sparkData(500,10)[0]).toBe(500));
+  it('dernier point forcé = base',               () => { const d=sparkData(500,10); expect(d[d.length-1]).toBe(500); });
+  it('n personnalisé (5 points)',                () => expect(sparkData(100,5)).toHaveLength(5));
+  it('tous les points positifs (base élevée)',   () => {
+    // vol=0.001 → variations max ±1 % par step ; base=10 000 → toujours positif
+    sparkData(10000, 20, 0.001).forEach(v => expect(v).toBeGreaterThan(0));
+  });
+});
+
+// ── SUITE 9 : simResults ─────────────────────────────────────
+describe('simResults', () => {
+  it('gain brut correct   (150−100)×10 = 500', () => {
+    const r = simResults(150, 10, 100);
+    expect(r.gross).toBe(500);
+  });
+  it('net PFU = brut × 0.70 si gain', () => {
+    const r = simResults(150, 10, 100);
+    expect(r.netPfu).toBe(350);
+  });
+  it('perte brute correcte   (80−100)×10 = −200', () => {
+    const r = simResults(80, 10, 100);
+    expect(r.gross).toBe(-200);
+  });
+  it('net PFU = brut si perte (pas de taxe)', () => {
+    const r = simResults(80, 10, 100);
+    expect(r.netPfu).toBe(-200);
+  });
+  it('gain nul → gross = 0 et netPfu = 0', () => {
+    const r = simResults(100, 10, 100);
+    expect(r.gross).toBe(0);
+    expect(r.netPfu).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// RENDU DES RÉSULTATS
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  const summaryEl = document.getElementById('summary');
+  const resultsEl = document.getElementById('results');
+  const total = _pass + _fail;
+
+  summaryEl.className = 'summary ' + (_fail===0 ? 'all-pass' : 'has-fail');
+  summaryEl.innerHTML = _fail===0
+    ? `<span class="summary-icon">✓</span>
+       <div>
+         <div>${_pass} test${_pass>1?'s':''} passé${_pass>1?'s':''}</div>
+         <div class="summary-counts">${total} assertions · 0 échec</div>
+       </div>`
+    : `<span class="summary-icon">✗</span>
+       <div>
+         <div>${_fail} échec${_fail>1?'s':''} sur ${total}</div>
+         <div class="summary-counts">${_pass} succès · ${_fail} échec${_fail>1?'s':''}</div>
+       </div>`;
+
+  const suites = [...new Set(_results.map(r=>r.suite))];
+  suites.forEach(suite => {
+    const suiteDiv = document.createElement('div');
+    suiteDiv.className = 'suite';
+    suiteDiv.innerHTML = `<div class="suite-name">${suite}</div>`;
+    _results.filter(r=>r.suite===suite).forEach(r => {
+      const t = document.createElement('div');
+      t.className = 'test ' + (r.ok?'pass':'fail');
+      t.innerHTML = `
+        <span class="badge">${r.ok?'✓':'✗'}</span>
+        <div class="test-body">
+          <div class="test-name">${r.name}</div>
+          ${r.err ? `<pre class="test-err">${r.err}</pre>` : ''}
+        </div>`;
+      suiteDiv.appendChild(t);
+    });
+    resultsEl.appendChild(suiteDiv);
+  });
+});
+</script>
+</body>
+</html>

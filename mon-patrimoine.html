@@ -183,7 +183,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .tx-dot.sell{background:var(--loss-dim);color:var(--loss)}
 
 /* ─── ANALYSIS ─── */
-.analysis-top{padding:22px 20px 10px}
+.analysis-top{padding:20px 20px 10px}
 .donut-block{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin:0 20px 14px;display:flex;align-items:center;gap:18px}
 .legend{flex:1}
 .legend-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
@@ -1164,7 +1164,7 @@ function go(target, dir=null) {
     : (S.stack.length>1 && S.stack[S.stack.length-2]===target);
 
   // Always re-render for tab nav and forward; skip re-render on hierarchical back (preserves scroll)
-  if(dir!=null || !isBack) renderScreen(target);
+  if(dir!=null || !isBack) { renderScreen(target); nextEl.scrollTop=0; }
 
   // Bring both transitioning screens above inactive ones
   prevEl.style.zIndex='1';
@@ -1184,7 +1184,13 @@ function go(target, dir=null) {
   else S.stack.push(target);              // forward: push
 
   S.screen=target;
-  setTimeout(()=>{ prevEl.style.zIndex=''; nextEl.style.zIndex=''; }, 350);
+  setTimeout(()=>{
+    prevEl.style.zIndex='';
+    prevEl.style.transition='';
+    prevEl.style.transform='';
+    nextEl.style.zIndex='';
+    nextEl.style.transition='';
+  }, 350);
 
   const showNav=NAV_SCREENS.includes(target);
   document.getElementById('nav').classList.toggle('hidden',!showNav);
@@ -1213,36 +1219,6 @@ function renderDash() {
   const totInv=allH.reduce((s,h)=>s+h.avgBuyPrice*h.quantity,0);
   const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
   const spark=sparkData(w*.86,28,.022); spark[spark.length-1]=w;
-  const accs=S.accounts.map((a,i)=>{
-    const pct=w>0?(a.value/w*100).toFixed(1):'0';
-    const up=a.change1d>=0;
-    const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
-      <div class="row gap12">
-        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
-        <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
-          <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
-            <div style="font-size:15px;font-weight:700">${a.name}</div>${obsTag}
-          </div>
-          <div class="t-sm">${a.type}</div>
-        </div>
-        <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
-          <div style="font-size:15px;font-weight:800" class="t-num">${masked(a.value)}</div>
-          <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${fmtPct(a.change1d)}</div>
-        </div>
-        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-        </div>
-      </div>
-      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
-    </div>`;
-  }).join('');
-
-  const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">
-    <div style="font-size:40px;margin-bottom:12px">📊</div>
-    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
-    <div style="font-size:13px">Activez le mode démo ou importez un CSV dans les réglages</div>
-  </div>`:'';
 
   const wealthDisplay = S.privacy
     ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
@@ -1275,17 +1251,7 @@ function renderDash() {
     </div>
   </div>
   ${renderHistCard()}
-  ${renderWatchlistCard()}
-  <div class="row" style="padding:20px 20px 10px;justify-content:space-between;align-items:center">
-    <div class="t-section">Mes comptes</div>
-    <div class="row gap8" style="align-items:center">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px">${S.accounts.length}</div>
-      <div class="hold-add-btn" id="js-acc-add" style="width:28px;height:28px;border-radius:8px">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-      </div>
-    </div>
-  </div>
-  <div class="col gap12 px">${accs}${empty}</div>`;
+  ${renderWatchlistCard()}`;
 }
 
 // ── COMPTES ──
@@ -1917,7 +1883,6 @@ function _bindAccCards(el) {
 
 function bindEvents(id, el) {
   if(id==='dashboard') {
-    _bindAccCards(el);
     // History period selector
     el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
       S.histPeriod=p.dataset.period;
@@ -1936,7 +1901,6 @@ function bindEvents(id, el) {
     const histCard=el.querySelector('.hist-card');
     if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
-    el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
     // Privacy toggle
 
