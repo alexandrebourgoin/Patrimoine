@@ -803,7 +803,8 @@ const S = {
   watchTicker: null,
   watchPeriod: '3M',
   debug: false,
-  _debugLog: [],   // non persisté, en mémoire seulement
+  priceApiKey: '',  // clé Twelve Data (optionnelle)
+  _debugLog: [],    // non persisté, en mémoire seulement
 };
 
 // ═══════════════════════════════════════════════
@@ -2108,6 +2109,20 @@ function renderSettings() {
     </div>
   </div>
 
+  <div class="s-section">Cours en direct</div>
+  <div class="s-group">
+    <div class="s-item">
+      <div class="s-ico" style="background:rgba(0,214,143,.12)">
+        <svg viewBox="0 0 24 24" fill="#00D68F"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Clé Twelve Data</div>
+        <div class="s-sub">Gratuite sur twelvedata.com · 800 req/jour</div>
+      </div>
+      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Coller la clé ici" style="max-width:130px;font-size:12px">
+    </div>
+  </div>
+
   <div class="s-section">Débogage</div>
   <div class="s-group">
     <div class="s-item tap" id="js-debug-tog">
@@ -2539,6 +2554,11 @@ function bindEvents(id, el) {
         localStorage.removeItem(STORE_PRICES);
         location.reload();
       });
+    });
+    el.querySelector('#js-price-key')?.addEventListener('change', e => {
+      S.priceApiKey = e.target.value.trim();
+      saveData();
+      toast(S.priceApiKey ? 'Clé Twelve Data enregistrée ✓' : 'Clé supprimée');
     });
     el.querySelector('#js-debug-tog')?.addEventListener('click',()=>{
       S.debug = !S.debug;
@@ -3396,6 +3416,7 @@ function saveData() {
       sort:       S.sort,
       sortDir:    S.sortDir,
       debug:      S.debug,
+      priceApiKey:S.priceApiKey,
     }));
   } catch(e) {}
 }
@@ -3417,6 +3438,7 @@ function loadData() {
     if(d.sort)                  S.sort       = d.sort;
     if(d.sortDir!==undefined)   S.sortDir    = d.sortDir;
     if(d.debug!==undefined)     S.debug      = d.debug;
+    if(d.priceApiKey)           S.priceApiKey= d.priceApiKey;
     return true;
   } catch(e) { return false; }
 }
@@ -3532,18 +3554,47 @@ async function fetchLivePrices() {
       if (r2.length) yResults = r2;
     }
 
-    // Tentative 3 : batch v7 via CORS proxy (contourne les restrictions réseau)
+    // Tentative 3 : Twelve Data (API gratuite, clé optionnelle)
+    if (!yResults?.length && S.priceApiKey) {
+      try {
+        const url = 'https://api.twelvedata.com/price?symbol='
+          + yahooSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
+        dbg('[INF]', `T3 → Twelve Data (${yahooSymbols.length} symboles)`);
+        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}`);
+        if (r.ok) {
+          const td = await r.json();
+          // Réponse multiple: {"MC.PA":{"price":"750"},...} | unique: {"price":"750"}
+          const tdArr = td.price && !td.code
+            ? [{ symbol: yahooSymbols[0], regularMarketPrice: parseFloat(td.price) }]
+            : Object.entries(td)
+                .filter(([,v]) => v?.price && !v?.code)
+                .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
+          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,80):''}`);
+          if (tdArr.length) yResults = tdArr;
+        }
+      } catch(e) { dbg('[ERR]', `T3 Twelve Data: ${e?.message||e}`); }
+    }
+
+    // Tentative 4 : Yahoo Finance via allorigins.win (proxy serveur, autre IP)
     if (!yResults?.length) {
       try {
         const target = encodeURIComponent(
           'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',')
         );
-        const proxyUrl = 'https://corsproxy.io/?' + target;
-        dbg('[INF]', `T3 → corsproxy.io`);
-        const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-        dbg(r.ok ? '[OK]' : '[WRN]', `T3 status=${r.status} ${r.statusText}`);
-        if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T3 résultats=${yResults.length}`); }
-      } catch(e) { dbg('[ERR]', `T3 exception: ${e?.message||e}`); }
+        dbg('[INF]', `T4 → allorigins.win`);
+        const r = await fetch('https://api.allorigins.win/get?url=' + target,
+          { signal: AbortSignal.timeout(12000) });
+        dbg(r.ok?'[OK]':'[WRN]', `T4 http=${r.status}`);
+        if (r.ok) {
+          const ao = await r.json();
+          dbg(ao.status?.http_code===200?'[OK]':'[WRN]', `T4 inner=${ao.status?.http_code}`);
+          if (ao.status?.http_code===200 && ao.contents) {
+            yResults = parseV7(JSON.parse(ao.contents));
+            dbg('[OK]', `T4 résultats=${yResults.length}`);
+          }
+        }
+      } catch(e) { dbg('[ERR]', `T4 allorigins: ${e?.message||e}`); }
     }
 
     if (yResults?.length) {
