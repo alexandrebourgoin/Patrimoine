@@ -802,6 +802,8 @@ const S = {
   isDemo: true,   // true = données démo (jamais sauvegardées)
   watchTicker: null,
   watchPeriod: '3M',
+  debug: false,
+  _debugLog: [],   // non persisté, en mémoire seulement
 };
 
 // ═══════════════════════════════════════════════
@@ -2103,9 +2105,35 @@ function renderSettings() {
         <div class="s-name" style="color:var(--loss)">Réinitialiser toutes les données</div>
         <div class="s-sub">Supprime comptes, transactions et réglages</div>
       </div>
-      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>
   </div>
+
+  <div class="s-section">Débogage</div>
+  <div class="s-group">
+    <div class="s-item tap" id="js-debug-tog">
+      <div class="s-ico" style="background:rgba(245,158,11,.12)">
+        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5s-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Mode débogage</div>
+        <div class="s-sub">Affiche les erreurs réseau détaillées</div>
+      </div>
+      <div class="toggle ${S.debug?'on':''}" id="js-debug-tog-inner"><div class="toggle-thumb"></div></div>
+    </div>
+    ${S.debug && S._debugLog.length ? `
+    <div style="padding:12px 16px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Dernier log réseau</div>
+      <div id="js-debug-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;font-family:monospace;line-height:1.7;color:var(--text2);max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all">${S._debugLog.map(l=>{
+        const col=l.startsWith('[OK')  ?'var(--gain)'
+                 :l.startsWith('[ERR') ?'var(--loss)'
+                 :l.startsWith('[WRN') ?'#F59E0B'
+                 :'var(--text2)';
+        return `<span style="color:${col}">${l.replace(/</g,'&lt;')}</span>`;
+      }).join('\n')}</div>
+      <div class="tap" id="js-debug-clear" style="margin-top:8px;font-size:12px;color:var(--text3);text-align:right">Effacer le log ↺</div>
+    </div>` : ''}
+  </div>
+
   <div class="s-section">Préférences</div>
   <div class="s-group">
     <div class="s-item">
@@ -2511,6 +2539,17 @@ function bindEvents(id, el) {
         localStorage.removeItem(STORE_PRICES);
         location.reload();
       });
+    });
+    el.querySelector('#js-debug-tog')?.addEventListener('click',()=>{
+      S.debug = !S.debug;
+      el.querySelector('#js-debug-tog-inner')?.classList.toggle('on', S.debug);
+      saveData();
+      toast('Mode débogage ' + (S.debug ? 'activé' : 'désactivé'));
+      if (S.debug) renderScreen('settings'); // rafraîchit pour afficher le log
+    });
+    el.querySelector('#js-debug-clear')?.addEventListener('click',()=>{
+      S._debugLog = [];
+      renderScreen('settings');
     });
   }
   if (id === 'watchstock') {
@@ -3356,6 +3395,7 @@ function saveData() {
       histPeriod: S.histPeriod,
       sort:       S.sort,
       sortDir:    S.sortDir,
+      debug:      S.debug,
     }));
   } catch(e) {}
 }
@@ -3376,6 +3416,7 @@ function loadData() {
     if(d.histPeriod)            S.histPeriod = d.histPeriod;
     if(d.sort)                  S.sort       = d.sort;
     if(d.sortDir!==undefined)   S.sortDir    = d.sortDir;
+    if(d.debug!==undefined)     S.debug      = d.debug;
     return true;
   } catch(e) { return false; }
 }
@@ -3451,6 +3492,12 @@ async function fetchLivePrices() {
   // ── Yahoo Finance ──────────────────────────────
   if (yahooSymbols.length) {
     let yResults = null;
+    const dbg = (tag, msg) => {
+      if (!S.debug) return;
+      S._debugLog.unshift(`${tag} ${msg}`);
+      if (S._debugLog.length > 60) S._debugLog.length = 60;
+    };
+    dbg('[INF]', `Symboles: ${yahooSymbols.join(', ')}`);
 
     // Helper : parse une réponse v7 quote
     const parseV7 = data => data?.quoteResponse?.result?.filter(q => q.regularMarketPrice) || [];
@@ -3463,23 +3510,25 @@ async function fetchLivePrices() {
 
     // Tentative 1 : batch v7 direct (query1)
     try {
-      const r = await fetch(
-        'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(','),
-        { signal: AbortSignal.timeout(7000), credentials: 'omit' }
-      );
-      if (r.ok) yResults = parseV7(await r.json());
-    } catch(_) {}
+      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',');
+      dbg('[INF]', `T1 → ${url}`);
+      const r = await fetch(url, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
+      dbg(r.ok ? '[OK]' : '[WRN]', `T1 status=${r.status} ${r.statusText}`);
+      if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T1 résultats=${yResults.length}`); }
+    } catch(e) { dbg('[ERR]', `T1 exception: ${e?.message||e}`); }
 
     // Tentative 2 : v8/chart individuels direct (pas de crumb requis)
     if (!yResults?.length) {
+      dbg('[INF]', `T2 → v8/chart individuel × ${yahooSymbols.length}`);
       const settled = await Promise.allSettled(yahooSymbols.map(sym =>
         fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
           { signal: AbortSignal.timeout(6000), credentials: 'omit' })
-          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(r => { dbg(r.ok?'[OK]':'[WRN]',`T2 ${sym} status=${r.status}`); return r.ok ? r.json() : Promise.reject(r.status); })
           .then(d => parseChart(d, sym))
-          .catch(() => null)
+          .catch(e => { dbg('[ERR]',`T2 ${sym}: ${e?.message||e}`); return null; })
       ));
       const r2 = settled.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
+      dbg(r2.length?'[OK]':'[WRN]', `T2 résultats=${r2.length}/${yahooSymbols.length}`);
       if (r2.length) yResults = r2;
     }
 
@@ -3489,11 +3538,12 @@ async function fetchLivePrices() {
         const target = encodeURIComponent(
           'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',')
         );
-        const r = await fetch('https://corsproxy.io/?' + target,
-          { signal: AbortSignal.timeout(10000) }
-        );
-        if (r.ok) yResults = parseV7(await r.json());
-      } catch(_) {}
+        const proxyUrl = 'https://corsproxy.io/?' + target;
+        dbg('[INF]', `T3 → corsproxy.io`);
+        const r = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        dbg(r.ok ? '[OK]' : '[WRN]', `T3 status=${r.status} ${r.statusText}`);
+        if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T3 résultats=${yResults.length}`); }
+      } catch(e) { dbg('[ERR]', `T3 exception: ${e?.message||e}`); }
     }
 
     if (yResults?.length) {
@@ -3525,10 +3575,14 @@ async function fetchLivePrices() {
         allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
         prices[ticker] = price;
       });
-    } catch(e) { errors.push('CoinGecko'); }
+    } catch(e) {
+      errors.push('CoinGecko');
+      if(S.debug){ S._debugLog.unshift(`[ERR] CoinGecko: ${e?.message||e}`); }
+    }
   }
 
   // ── Finalisation ───────────────────────────────
+  if (S.debug && S.screen === 'settings') renderScreen('settings'); // rafraîchit le log
   if (updated > 0) {
     S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
     savePrices(prices);
