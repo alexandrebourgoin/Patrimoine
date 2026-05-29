@@ -506,6 +506,23 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
   </div>
 </div>
 
+<!-- CSV IMPORT PREVIEW -->
+<div id="csv-modal-bg" class="add-modal-bg"></div>
+<div id="csv-modal-sheet" class="add-modal-sheet" style="max-height:90vh;display:flex;flex-direction:column">
+  <div class="modal-drag"></div>
+  <div id="csv-modal-scroll" style="overflow-y:auto;flex:1;padding:0 20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 14px">
+      <div class="modal-title" style="margin-bottom:0" id="csv-modal-title">Importer CSV</div>
+      <div id="csv-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div id="csv-modal-body"></div>
+  </div>
+  <div style="padding:12px 20px 28px;border-top:1px solid var(--border);display:flex;gap:10px">
+    <button id="csv-cancel-btn" class="confirm-cancel" style="flex:1;height:46px;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer">Annuler</button>
+    <button id="csv-import-btn" class="form-submit" style="flex:2;height:46px;margin:0;border-radius:12px">Importer →</button>
+  </div>
+</div>
+
 <!-- ADD ACCOUNT MODAL -->
 <div id="acc-modal-bg" class="add-modal-bg"></div>
 <div id="acc-modal-sheet" class="add-modal-sheet">
@@ -774,6 +791,7 @@ const S = {
   targets: { Action: 60, ETF: 25, Obligation: 10, Cash: 5 },
   _histCache: {},
   srchQuery: '',
+  srchMode: 'titres',   // 'titres' | 'mouvements'
   watchlist: [
     { ticker: 'OR',   name: "L'Oréal",       price: 412.35, change1d:  0.68 },
     { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
@@ -952,6 +970,47 @@ const YAHOO_MAP = {
 // ─── CoinGecko IDs (crypto uniquement) ───
 const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
+};
+
+// ─── ISIN → ticker (pour import Degiro) ───
+const ISIN_MAP = {
+  'US0378331005':{ ticker:'AAPL', name:'Apple' },
+  'US5949181045':{ ticker:'MSFT', name:'Microsoft' },
+  'US02079K3059':{ ticker:'GOOGL',name:'Alphabet' },
+  'US0231351067':{ ticker:'AMZN', name:'Amazon' },
+  'US67066G1040':{ ticker:'NVDA', name:'NVIDIA' },
+  'US30303M1027':{ ticker:'META', name:'Meta' },
+  'US88160R1014':{ ticker:'TSLA', name:'Tesla' },
+  'US5128071082':{ ticker:'NFLX', name:'Netflix' },
+  'US92826C8394':{ ticker:'V',    name:'Visa' },
+  'US46625H1005':{ ticker:'JPM',  name:'JPMorgan' },
+  'US4581401001':{ ticker:'INTC', name:'Intel' },
+  'US17275R1023':{ ticker:'CSCO', name:'Cisco' },
+  'US4592001014':{ ticker:'IBM',  name:'IBM' },
+  'US79466L3024':{ ticker:'SPGI', name:'S&P Global' },
+  'FR0000131104':{ ticker:'BNP',  name:'BNP Paribas' },
+  'FR0000121014':{ ticker:'MC',   name:'LVMH' },
+  'FR0000120271':{ ticker:'TTE',  name:'TotalEnergies' },
+  'FR0000120321':{ ticker:'OR',   name:"L'Oréal" },
+  'FR0000073135':{ ticker:'AI',   name:'Air Liquide' },
+  'FR0000120628':{ ticker:'AXA',  name:'AXA' },
+  'FR0000131228':{ ticker:'BN',   name:'Danone' },
+  'FR0000045072':{ ticker:'GLE',  name:'Société Générale' },
+  'FR0000131906':{ ticker:'SGO',  name:'Saint-Gobain' },
+  'FR0000120073':{ ticker:'AIR',  name:'Airbus' },
+  'FR0000125338':{ ticker:'DSY',  name:'Dassault Systèmes' },
+  'FR0000133308':{ ticker:'ORA',  name:'Orange' },
+  'FR0000120503':{ ticker:'RNO',  name:'Renault' },
+  'FR0000121667':{ ticker:'SAN',  name:'Sanofi' },
+  'FR0000121972':{ ticker:'KER',  name:'Kering' },
+  'NL0010273215':{ ticker:'ASML', name:'ASML' },
+  'DE0007164600':{ ticker:'SAP',  name:'SAP' },
+  'DE0008404005':{ ticker:'ALV',  name:'Allianz' },
+  'IE00B4L5Y983':{ ticker:'IWDA', name:'iShares Core MSCI World' },
+  'LU1681043599':{ ticker:'CW8',  name:'Amundi MSCI World' },
+  'FR0010315770':{ ticker:'SP5',  name:'Amundi S&P 500' },
+  'FR0013412285':{ ticker:'EWLD', name:'Lyxor MSCI World' },
+  'FR0010429068':{ ticker:'PAEEM',name:'Amundi MSCI Emerging' },
 };
 
 // ═══════════════════════════════════════════════
@@ -1425,18 +1484,26 @@ function renderComptes() {
 
 // ── RECHERCHE ──
 function renderRecherche() {
+  const mode = S.srchMode || 'titres';
+  const ph = mode === 'mouvements' ? 'Ticker, date, compte…' : 'Nom, ticker, secteur…';
   return `<div style="padding:20px 20px 10px">
     <div style="font-size:20px;font-weight:900;letter-spacing:-.6px;margin-bottom:14px">Recherche</div>
     <div class="search-box" id="js-srch-box">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-      <input type="text" id="js-srch-inp" placeholder="Nom, ticker, secteur…" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
+      <input type="text" id="js-srch-inp" placeholder="${ph}" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
       ${S.srchQuery?`<div class="search-clear" id="js-srch-clr">✕</div>`:''}
     </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <div class="hperiod${mode==='titres'?' on':''}" data-srchmode="titres">Titres</div>
+      <div class="hperiod${mode==='mouvements'?' on':''}" data-srchmode="mouvements">Mouvements</div>
+    </div>
   </div>
-  <div id="js-srch-results">${srchResults(S.srchQuery||'')}</div>`;
+  <div id="js-srch-results">${srchResults(S.srchQuery||'', mode)}</div>`;
 }
 
-function srchResults(q) {
+function srchResults(q, mode) {
+  mode = mode || S.srchMode || 'titres';
+  if (mode === 'mouvements') return srchTxResults(q);
   if(!q.trim()) {
     // No query — show all holdings grouped by account
     if(!S.accounts.length) return `<div style="text-align:center;padding:40px 20px;color:var(--text2);font-size:13px">Aucun compte</div>`;
@@ -1478,6 +1545,63 @@ function srchRow(h, acc) {
       </div>
     </div>
   </div>`;
+}
+
+// ── RECHERCHE MOUVEMENTS ──
+function srchTxResults(q) {
+  const ql = q.trim().toLowerCase();
+  const allTx = S.accounts.flatMap(acc =>
+    acc.holdings.flatMap(h =>
+      h.transactions.map(tx => ({ tx, h, acc }))
+    )
+  ).sort((a, b) => b.tx.date.localeCompare(a.tx.date));
+
+  const filtered = ql
+    ? allTx.filter(({ tx, h, acc }) =>
+        h.ticker.toLowerCase().includes(ql) ||
+        h.name.toLowerCase().includes(ql) ||
+        tx.date.includes(ql) ||
+        acc.name.toLowerCase().includes(ql) ||
+        (tx.type==='BUY'  && ('achat'.includes(ql)||'ach'.includes(ql))) ||
+        (tx.type==='SELL' && ('vente'.includes(ql)||'vte'.includes(ql))) ||
+        (tx.type==='DIV'  && 'dividende'.includes(ql))
+      )
+    : allTx.slice(0, 30);
+
+  if (!filtered.length) {
+    if (!ql) return `<div style="text-align:center;padding:40px 20px;color:var(--text2);font-size:13px">Aucun mouvement enregistré</div>`;
+    return `<div style="text-align:center;padding:40px 20px;color:var(--text2)">
+      <div style="font-size:32px;margin-bottom:10px">🔍</div>
+      <div style="font-size:14px">Aucun résultat pour <strong>${q}</strong></div>
+    </div>`;
+  }
+
+  const rows = filtered.map(({ tx, h, acc }) => {
+    const isDiv = tx.type === 'DIV', isBuy = tx.type === 'BUY';
+    const dot = isDiv ? 'DIV' : isBuy ? 'ACH' : 'VTE';
+    const cls = isDiv ? 'div' : isBuy ? 'buy' : 'sell';
+    const total = tx.qty * tx.price;
+    const hCur = h.currency || 'EUR';
+    return `<div class="hold-item" data-hid="${h.id}" data-accid="${acc.id}">
+      <div class="tx-dot ${cls}" style="flex-shrink:0">${dot}</div>
+      <div class="hold-item-body">
+        <div class="hold-item-top">
+          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.ticker} · ${h.name}</div>
+          <div style="font-size:13px;font-weight:800;flex-shrink:0" class="t-num ${isBuy?'t-loss':'t-gain'}">${isBuy?'-':'+'}${fmtNative(total,hCur)}</div>
+        </div>
+        <div class="hold-item-bot">
+          <div class="t-sm">${acc.name} · ${fmtDate(tx.date)}</div>
+          <div class="t-sm">${tx.qty} × ${fmtNative(tx.price,hCur)}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const header = !ql
+    ? `<div style="padding:4px 20px 6px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">30 derniers mouvements</div>`
+    : `<div style="padding:4px 20px 6px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${filtered.length} résultat${filtered.length>1?'s':''}</div>`;
+
+  return header + `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">${rows}</div>`;
 }
 
 // ── WATCHLIST CARD ──
@@ -2178,10 +2302,8 @@ function bindEvents(id, el) {
     const inp=el.querySelector('#js-srch-inp');
     const clrBtn=el.querySelector('#js-srch-clr');
     const results=el.querySelector('#js-srch-results');
-    function doSearch(q){
-      S.srchQuery=q;
-      results.innerHTML=srchResults(q);
-      // bind click on results
+
+    function bindResultClicks() {
       results.querySelectorAll('.hold-item[data-accid]').forEach(item=>{
         item.addEventListener('click',()=>{
           S.accountId=item.dataset.accid;
@@ -2189,6 +2311,12 @@ function bindEvents(id, el) {
           go('stock');
         });
       });
+    }
+
+    function doSearch(q){
+      S.srchQuery=q;
+      results.innerHTML=srchResults(q, S.srchMode);
+      bindResultClicks();
       // update clear button
       let clr=el.querySelector('#js-srch-clr');
       const box=el.querySelector('#js-srch-box');
@@ -2199,17 +2327,20 @@ function bindEvents(id, el) {
         box.appendChild(clr);
       } else if(!q&&clr){clr.remove();}
     }
+
     inp?.addEventListener('input',e=>doSearch(e.target.value));
     clrBtn?.addEventListener('click',()=>{inp.value='';doSearch('');inp.focus();});
-    // Wire existing results (rendered with initial query)
-    results?.querySelectorAll('.hold-item[data-accid]').forEach(item=>{
-      item.addEventListener('click',()=>{
-        S.accountId=item.dataset.accid;
-        S.holdingId=item.dataset.hid;
-        go('stock');
-      });
-    });
-    // Auto-focus search input only when actually on the recherche screen
+    bindResultClicks();
+
+    // Mode pills
+    el.querySelectorAll('[data-srchmode]').forEach(btn=>btn.addEventListener('click',()=>{
+      S.srchMode=btn.dataset.srchmode;
+      el.querySelectorAll('[data-srchmode]').forEach(b=>b.classList.toggle('on',b.dataset.srchmode===S.srchMode));
+      if(inp) inp.placeholder=S.srchMode==='mouvements'?'Ticker, date, compte…':'Nom, ticker, secteur…';
+      results.innerHTML=srchResults(S.srchQuery||'', S.srchMode);
+      bindResultClicks();
+    }));
+
     setTimeout(()=>{if(S.screen==='recherche')inp?.focus();},200);
   }
   if(id==='account') {
@@ -2454,46 +2585,259 @@ document.getElementById('csv-file').addEventListener('change',function(e){
 });
 
 function parseCSV(text) {
-  const lines=text.trim().split('\n'); if(lines.length<2){toast('CSV vide');return;}
-  const hdrs=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
-  let added=0;
-  lines.slice(1).forEach(line=>{
-    const cols=line.split(',').map(v=>v.trim().replace(/"/g,''));
-    const row={}; hdrs.forEach((h,i)=>row[h]=cols[i]||'');
-    const accName=row.account||row.compte;
-    const ticker=(row.ticker||row.code||'').toUpperCase();
-    const name=row.name||row.nom||ticker;
-    const date=row.date;
-    const type=(row.type||'BUY').toUpperCase();
-    const qty=parseFloat(row.quantity||row.quantite||0);
-    const price=parseFloat(row.price||row.prix||0);
-    if(!accName||!ticker||!qty||!price) return;
-    let acc=S.accounts.find(a=>a.name.toLowerCase()===accName.toLowerCase());
-    if(!acc){
-      acc={id:'csv_'+accName.replace(/\W+/g,'_').toLowerCase(),name:accName,type:'Compte importé',icon:'📊',iconBg:'rgba(245,158,11,.13)',value:0,change1d:0,holdings:[]};
-      S.accounts.push(acc);
+  const allLines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (allLines.length < 2) { toast('CSV vide ou invalide'); return; }
+
+  // ── Détection du délimiteur ──
+  const sample = allLines[0];
+  const delim = (sample.match(/;/g)||[]).length > (sample.match(/,/g)||[]).length ? ';' : ',';
+
+  // ── Parser robuste (gère les champs entre guillemets) ──
+  function parseLine(line) {
+    const cells = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === delim && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else { cur += c; }
     }
-    let h=acc.holdings.find(h=>h.ticker===ticker);
-    if(!h){
-      h={id:ticker,ticker,name,quantity:0,avgBuyPrice:price,currentPrice:price,type:'Action',country:'Inconnu',sector:'Inconnu',transactions:[],value:0,pnl:0,pnlPct:0};
-      acc.holdings.push(h);
+    cells.push(cur.trim());
+    return cells.map(c => c.replace(/^"|"$/g, '').trim());
+  }
+
+  // ── Nettoyage nombre (gère "1 234,56" et "1,234.56") ──
+  function cleanNum(s) {
+    if (!s) return 0;
+    s = String(s).replace(/\s/g, '').replace(/"/g, '');
+    const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+    if (lc > ld) s = s.replace(/\./g, '').replace(',', '.'); // French: 1.234,56
+    else if (lc !== -1 && ld > lc) s = s.replace(/,/g, '');  // English: 1,234.56
+    else if (lc !== -1) s = s.replace(',', '.');
+    return parseFloat(s) || 0;
+  }
+
+  // ── Normalisation date → YYYY-MM-DD ──
+  function parseDate(s) {
+    if (!s) return new Date().toISOString().slice(0, 10);
+    const m = s.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/); // DD-MM-YYYY
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return s;
+  }
+
+  // ── Normalisation en-têtes ──
+  const rawHdrs = parseLine(allLines[0]);
+  const hdrs = rawHdrs.map(h =>
+    h.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '')
+  );
+  const col = (...names) => hdrs.findIndex(h => names.some(n => h.includes(n)));
+
+  // ── Détection format Degiro ──
+  const isDegiro = hdrs.some(h => h.includes('isin')) && hdrs.some(h => h.includes('quantit'));
+  const format = isDegiro ? 'Degiro (auto-détecté)' : 'Générique';
+
+  const dataRows = allLines.slice(1).map(l => parseLine(l));
+  const parsedRows = [];
+  const unknownTickers = new Set();
+
+  if (isDegiro) {
+    const iDate  = col('date');
+    const iProd  = col('produit', 'product');
+    const iISIN  = col('isin');
+    const iQty   = col('quantit');
+    const iPrice = col('cours', 'price');
+
+    dataRows.forEach(cols => {
+      const dateRaw  = cols[iDate]  || '';
+      const produit  = cols[iProd]  || '';
+      const isin     = (cols[iISIN] || '').trim();
+      const qtyRaw   = cleanNum(cols[iQty]);
+      const priceRaw = cleanNum(cols[iPrice]);
+
+      if (!priceRaw || qtyRaw === 0) return; // lignes de frais ou dividende cash → skip
+
+      const type = qtyRaw > 0 ? 'BUY' : 'SELL';
+      const qty = Math.abs(qtyRaw);
+
+      // Résoudre ticker depuis l'ISIN
+      const secFromISIN = ISIN_MAP[isin];
+      let ticker = secFromISIN?.ticker || '';
+      let name   = secFromISIN?.name   || '';
+
+      if (!ticker) {
+        // Extraire un ticker depuis le nom du produit (premier mot, max 6 car.)
+        const cleanProd = produit
+          .replace(/\s*[-–]\s*(COMMON STOCK|ORD|ADS|ADR|ETF|FUND|INC|SA|NV|SE|PLC|SHARE|ACTION).*$/i, '')
+          .trim();
+        ticker = cleanProd.split(/\s+/)[0].toUpperCase().slice(0, 6);
+        name   = cleanProd;
+        unknownTickers.add(ticker);
+      }
+
+      parsedRows.push({ date: parseDate(dateRaw), type, ticker, name, qty, price: priceRaw });
+    });
+
+  } else {
+    // Format générique : account, ticker, name, date, type, quantity/qty, price
+    const iAcc   = col('account', 'compte');
+    const iTick  = col('ticker', 'code', 'symbole');
+    const iName  = col('name', 'nom', 'libelle');
+    const iDate  = col('date');
+    const iType  = col('type');
+    const iQty   = col('quantity', 'quantit', 'qty');
+    const iPrice = col('price', 'prix', 'cours');
+
+    dataRows.forEach(cols => {
+      const ticker = (iTick >= 0 ? cols[iTick] : '').toUpperCase().trim();
+      const qty    = cleanNum(iQty >= 0 ? cols[iQty] : '');
+      const price  = cleanNum(iPrice >= 0 ? cols[iPrice] : '');
+      if (!ticker || !qty || !price) { parsedRows.push({ _skip: true }); return; }
+      const sec = SECURITIES_DB[ticker];
+      if (!sec) unknownTickers.add(ticker);
+      parsedRows.push({
+        date:     parseDate(iDate >= 0 ? cols[iDate] : ''),
+        type:     ((iType >= 0 ? cols[iType] : '') || 'BUY').toUpperCase(),
+        ticker,
+        name:     (iName >= 0 ? cols[iName] : '') || sec?.name || ticker,
+        qty,
+        price,
+        _account: iAcc >= 0 ? cols[iAcc] : '',
+      });
+    });
+  }
+
+  const valid = parsedRows.filter(r => !r._skip);
+  if (!valid.length) { toast('Aucun mouvement valide détecté dans ce fichier'); return; }
+  openImportPreview(parsedRows, format, unknownTickers);
+}
+
+// ── CSV IMPORT MODAL ──
+let _csvPendingRows = [];
+
+function openImportPreview(rows, format, unknownTickers) {
+  _csvPendingRows = rows;
+  const valid = rows.filter(r => !r._skip);
+  const skipped = rows.length - valid.length;
+  const buys  = valid.filter(r => r.type === 'BUY').length;
+  const sells = valid.filter(r => r.type === 'SELL').length;
+  const divs  = valid.filter(r => r.type === 'DIV').length;
+
+  const accountOptions = S.accounts.map(a =>
+    `<option value="${a.id}">${a.icon||'🏦'} ${a.name}</option>`
+  ).join('');
+
+  const preview = valid.slice(0, 8).map(r => {
+    const isDiv = r.type==='DIV', isBuy = r.type==='BUY';
+    const dot = isDiv?'DIV':isBuy?'ACH':'VTE';
+    const cls = isDiv?'div':isBuy?'buy':'sell';
+    const unk = unknownTickers.has(r.ticker)
+      ? ' <span style="color:var(--loss);font-size:10px">⚠ inconnu</span>' : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div class="tx-dot ${cls}" style="width:32px;height:32px;font-size:10px;flex-shrink:0">${dot}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ticker}${unk} · ${r.name||r.ticker}</div>
+        <div style="font-size:11px;color:var(--text2)">${r.date} · ${r.qty} × ${r.price.toLocaleString('fr-FR')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const moreLabel = valid.length > 8
+    ? `<div style="font-size:12px;color:var(--text2);padding:8px 0;text-align:center">+${valid.length - 8} autre${valid.length-8>1?'s':''} mouvement${valid.length-8>1?'s':''}…</div>` : '';
+
+  document.getElementById('csv-modal-title').textContent =
+    `${valid.length} mouvement${valid.length>1?'s':''} détecté${valid.length>1?'s':''}`;
+
+  document.getElementById('csv-modal-body').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">${format}</span>
+      ${buys  ? `<span style="background:var(--gain-dim);color:var(--gain);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">${buys} achat${buys>1?'s':''}</span>` : ''}
+      ${sells ? `<span style="background:var(--loss-dim);color:var(--loss);border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">${sells} vente${sells>1?'s':''}</span>` : ''}
+      ${divs  ? `<span style="background:rgba(245,158,11,.12);color:#F59E0B;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">${divs} div.</span>` : ''}
+    </div>
+    ${unknownTickers.size ? `<div style="background:var(--loss-dim);border:1px solid var(--loss);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--loss)">
+      ⚠ ${unknownTickers.size} ticker${unknownTickers.size>1?'s':''} non reconnu${unknownTickers.size>1?'s':''} : ${[...unknownTickers].join(', ')}
+    </div>` : ''}
+    <div style="margin-bottom:14px;border-radius:10px;overflow:hidden;border:1px solid var(--border);padding:0 12px">
+      ${preview}${moreLabel}
+    </div>
+    <div class="form-field" style="margin-bottom:${skipped?'6px':'14px'}">
+      <div class="form-label">Compte de destination</div>
+      <select class="form-input" id="csv-acc-select" style="cursor:pointer">
+        <option value="__new__">➕ Nouveau compte importé</option>
+        ${accountOptions}
+      </select>
+    </div>
+    ${skipped ? `<div style="font-size:11px;color:var(--text3);margin-bottom:14px">${skipped} ligne${skipped>1?'s':''} ignorée${skipped>1?'s':''} (données incomplètes)</div>` : ''}
+  `;
+
+  document.getElementById('csv-modal-bg').classList.add('show');
+  document.getElementById('csv-modal-sheet').classList.add('show');
+}
+
+function closeCsvModal() {
+  document.getElementById('csv-modal-bg').classList.remove('show');
+  document.getElementById('csv-modal-sheet').classList.remove('show');
+}
+
+function confirmImport() {
+  const accIdVal = document.getElementById('csv-acc-select')?.value;
+  let targetAcc;
+
+  if (accIdVal === '__new__') {
+    targetAcc = {
+      id: 'csv_' + Date.now(),
+      name: 'Compte importé',
+      type: 'CTO',
+      icon: '📊',
+      iconBg: 'rgba(245,158,11,.13)',
+      value: 0, change1d: 0,
+      holdings: [], cashflows: [],
+    };
+    S.accounts.push(targetAcc);
+  } else {
+    targetAcc = S.accounts.find(a => a.id === accIdVal);
+  }
+
+  if (!targetAcc) { toast('Compte introuvable'); return; }
+
+  let added = 0;
+  _csvPendingRows.filter(r => !r._skip).forEach(r => {
+    if (!r.ticker || !r.qty || !r.price) return;
+    let h = targetAcc.holdings.find(h => h.ticker === r.ticker);
+    if (!h) {
+      const sec = SECURITIES_DB[r.ticker] || {};
+      h = {
+        id: r.ticker + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        ticker: r.ticker,
+        name: r.name || sec.name || r.ticker,
+        quantity: 0,
+        avgBuyPrice: r.price,
+        currentPrice: r.price,
+        type: sec.type || 'Action',
+        country: sec.country || 'Inconnu',
+        sector: sec.sector || 'Inconnu',
+        currency: sec.currency || 'EUR',
+        transactions: [],
+        value: 0, pnl: 0, pnlPct: 0,
+      };
+      targetAcc.holdings.push(h);
     }
-    h.transactions.push({date:date||new Date().toISOString().slice(0,10),type,qty,price});
-    if(type==='BUY'){
-      const newQty=h.quantity+qty;
-      h.avgBuyPrice=((h.avgBuyPrice*h.quantity)+(price*qty))/newQty;
-      h.quantity=newQty;
-    } else { h.quantity=Math.max(0,h.quantity-qty); }
-    h.currentPrice=price;
-    h.value=h.quantity*h.currentPrice;
-    h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
-    h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+    h.transactions.push({ date: r.date, type: r.type, qty: r.qty, price: r.price });
+    recalcHolding(h);
     added++;
   });
-  S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
-  refreshMain(); renderScreen('settings');
-  toast(`${added} mouvement(s) importé(s)`);
+
+  targetAcc.value = targetAcc.holdings.reduce((s, h) => s + h.value, 0);
+  if (S.isDemo) { S.isDemo = false; }
+  saveData();
+  refreshMain();
+  closeCsvModal();
+  toast(`${added} mouvement${added>1?'s':''} importé${added>1?'s':''} ✓`);
 }
+
+document.getElementById('csv-modal-bg').addEventListener('click', closeCsvModal);
+document.getElementById('csv-modal-close').addEventListener('click', closeCsvModal);
+document.getElementById('csv-cancel-btn').addEventListener('click', closeCsvModal);
+document.getElementById('csv-import-btn').addEventListener('click', confirmImport);
 
 // ═══════════════════════════════════════════════
 // CONFIRM DIALOG
@@ -3106,20 +3450,51 @@ async function fetchLivePrices() {
 
   // ── Yahoo Finance ──────────────────────────────
   if (yahooSymbols.length) {
+    let yResults = null;
+
+    // Tentative 1 : batch v7 via query1 (CORS plus permissif que query2)
     try {
-      const url = 'https://query2.finance.yahoo.com/v7/finance/quote?symbols='
-        + yahooSymbols.join(',') + '&lang=fr-FR&corsDomain=finance.yahoo.com';
-      const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
-      if (!res.ok) throw new Error('HTTP '+res.status);
-      const data = await res.json();
-      (data?.quoteResponse?.result || []).forEach(q => {
+      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols='
+        + yahooSymbols.join(',');
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000), credentials: 'omit' });
+      if (res.ok) {
+        const data = await res.json();
+        yResults = data?.quoteResponse?.result || [];
+      }
+    } catch(_) {}
+
+    // Tentative 2 : appels individuels v8/chart (endpoint chart = CORS ok sur mobile)
+    if (!yResults || !yResults.length) {
+      const settled = await Promise.allSettled(
+        yahooSymbols.map(sym =>
+          fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
+            { signal: AbortSignal.timeout(7000), credentials: 'omit' })
+            .then(r => r.ok ? r.json() : Promise.reject())
+            .then(d => {
+              const meta = d?.chart?.result?.[0]?.meta;
+              return meta?.regularMarketPrice
+                ? { symbol: sym, regularMarketPrice: meta.regularMarketPrice }
+                : null;
+            })
+            .catch(() => null)
+        )
+      );
+      yResults = settled
+        .filter(r => r.status === 'fulfilled' && r.value)
+        .map(r => r.value);
+    }
+
+    if (yResults && yResults.length) {
+      yResults.forEach(q => {
         const ticker = yahooRev[q.symbol] || q.symbol;
         const price  = q.regularMarketPrice;
         if (!price) return;
-        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        allH.filter(h => h.ticker === ticker).forEach(h => { h.currentPrice = price; recalcHolding(h); updated++; });
         prices[ticker] = price;
       });
-    } catch(e) { errors.push('Yahoo Finance'); }
+    } else {
+      errors.push('Yahoo Finance');
+    }
   }
 
   // ── CoinGecko ──────────────────────────────────
