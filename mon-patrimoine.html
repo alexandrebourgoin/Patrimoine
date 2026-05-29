@@ -3452,39 +3452,51 @@ async function fetchLivePrices() {
   if (yahooSymbols.length) {
     let yResults = null;
 
-    // Tentative 1 : batch v7 via query1 (CORS plus permissif que query2)
+    // Helper : parse une réponse v7 quote
+    const parseV7 = data => data?.quoteResponse?.result?.filter(q => q.regularMarketPrice) || [];
+
+    // Helper : parse une réponse v8/chart
+    const parseChart = (data, sym) => {
+      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      return price ? { symbol: sym, regularMarketPrice: price } : null;
+    };
+
+    // Tentative 1 : batch v7 direct (query1)
     try {
-      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols='
-        + yahooSymbols.join(',');
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000), credentials: 'omit' });
-      if (res.ok) {
-        const data = await res.json();
-        yResults = data?.quoteResponse?.result || [];
-      }
+      const r = await fetch(
+        'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(','),
+        { signal: AbortSignal.timeout(7000), credentials: 'omit' }
+      );
+      if (r.ok) yResults = parseV7(await r.json());
     } catch(_) {}
 
-    // Tentative 2 : appels individuels v8/chart (endpoint chart = CORS ok sur mobile)
-    if (!yResults || !yResults.length) {
-      const settled = await Promise.allSettled(
-        yahooSymbols.map(sym =>
-          fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
-            { signal: AbortSignal.timeout(7000), credentials: 'omit' })
-            .then(r => r.ok ? r.json() : Promise.reject())
-            .then(d => {
-              const meta = d?.chart?.result?.[0]?.meta;
-              return meta?.regularMarketPrice
-                ? { symbol: sym, regularMarketPrice: meta.regularMarketPrice }
-                : null;
-            })
-            .catch(() => null)
-        )
-      );
-      yResults = settled
-        .filter(r => r.status === 'fulfilled' && r.value)
-        .map(r => r.value);
+    // Tentative 2 : v8/chart individuels direct (pas de crumb requis)
+    if (!yResults?.length) {
+      const settled = await Promise.allSettled(yahooSymbols.map(sym =>
+        fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
+          { signal: AbortSignal.timeout(6000), credentials: 'omit' })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => parseChart(d, sym))
+          .catch(() => null)
+      ));
+      const r2 = settled.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
+      if (r2.length) yResults = r2;
     }
 
-    if (yResults && yResults.length) {
+    // Tentative 3 : batch v7 via CORS proxy (contourne les restrictions réseau)
+    if (!yResults?.length) {
+      try {
+        const target = encodeURIComponent(
+          'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',')
+        );
+        const r = await fetch('https://corsproxy.io/?' + target,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (r.ok) yResults = parseV7(await r.json());
+      } catch(_) {}
+    }
+
+    if (yResults?.length) {
       yResults.forEach(q => {
         const ticker = yahooRev[q.symbol] || q.symbol;
         const price  = q.regularMarketPrice;
