@@ -60,7 +60,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 #app{width:100%;max-width:480px;height:100vh;height:100dvh;margin:0 auto;position:relative;overflow:hidden}
 
 /* SCREENS */
-.screen{position:absolute;inset:0;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform}
+.screen{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform}
 .screen.no-nav{padding-bottom:20px}
 #s-dashboard{transform:translateX(0)}
 
@@ -1590,8 +1590,8 @@ function srchTxResults(q) {
           <div style="font-size:13px;font-weight:800;flex-shrink:0" class="t-num ${isBuy?'t-loss':'t-gain'}">${isBuy?'-':'+'}${fmtNative(total,hCur)}</div>
         </div>
         <div class="hold-item-bot">
-          <div class="t-sm">${acc.name} · ${fmtDate(tx.date)}</div>
-          <div class="t-sm">${tx.qty} × ${fmtNative(tx.price,hCur)}</div>
+          <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.name} · ${fmtDate(tx.date)}</div>
+          <div class="t-sm" style="flex-shrink:0">${tx.qty} × ${fmtNative(tx.price,hCur)}</div>
         </div>
       </div>
     </div>`;
