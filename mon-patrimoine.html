@@ -980,19 +980,38 @@ const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
 };
 
-// ─── Conversion Yahoo Finance → Twelve Data (suffixe bourse) ───
-// Yahoo: OR.PA  → Twelve Data: OR:XPAR
-const _TD_SUFFIX = {
-  '.PA':':XPAR', '.AS':':XAMS', '.DE':':XFRA', '.MI':':XMIL',
-  '.CO':':XCSE', '.MC':':XMCE', '.L': ':XLON',  '.BR':':XBRU',
-  '.HK':':XHKG', '.TO':':XTSE', '.T': ':XTKS',
+// ─── Twelve Data : liste de formats à essayer par suffixe Yahoo ───
+// Douze Data n'utilise pas les codes MIC ISO — on essaie plusieurs formats
+// en cascade jusqu'au succès, le log révèle lequel fonctionne.
+const _TD_CANDIDATES = {
+  '.PA': [':EURONEXT', ':XPAR', ''],        // Paris
+  '.AS': [':EURONEXT', ':XAMS', ''],        // Amsterdam
+  '.BR': [':EURONEXT', ':XBRU', ''],        // Bruxelles
+  '.DE': [':XETR', ':XFRA', ':EURONEXT', ''], // Frankfurt
+  '.MI': [':XMIL', ':MIL', ':EURONEXT', ''], // Milan
+  '.CO': [':XCSE', ':CPH', ''],             // Copenhague
+  '.MC': [':XMCE', ':BME', ''],             // Madrid
+  '.L':  [':XLON', ':LSE', ''],             // Londres
+  '.TO': [':XTSE', ':TSX', ''],             // Toronto
+  '.HK': [':XHKG', ''],                     // Hong Kong
 };
-function toTdSym(yhSym) {
-  if (!yhSym) return yhSym;
-  for (const [yh, td] of Object.entries(_TD_SUFFIX)) {
-    if (yhSym.endsWith(yh)) return yhSym.slice(0, -yh.length) + td;
+
+// Retourne le ticker de base sans suffixe bourse
+function tdBase(yhSym) {
+  for (const suf of Object.keys(_TD_CANDIDATES))
+    if (yhSym.endsWith(suf)) return yhSym.slice(0, -suf.length);
+  return yhSym;
+}
+
+// Retourne la liste ordonnée de symboles à essayer pour Twelve Data
+function tdTryList(yhSym) {
+  for (const [suf, candidates] of Object.entries(_TD_CANDIDATES)) {
+    if (yhSym.endsWith(suf)) {
+      const base = yhSym.slice(0, -suf.length);
+      return [...new Set(candidates.map(c => base + c).concat([yhSym]))];
+    }
   }
-  return yhSym; // pas de suffixe = titre US, format identique
+  return [yhSym]; // titre US : format identique
 }
 
 // ─── ISIN → ticker (pour import Degiro) ───
@@ -3658,31 +3677,33 @@ async function _fetchSinglePrice(yhSym, cgId) {
       toast(`Limite Twelve Data · réessayer dans ${s}s`);
       return { price: null, change1d: null };
     }
-    try {
-      const tdSym = toTdSym(yhSym); // OR.PA → OR:XPAR
-      dbgLog('[INF]', `Twelve Data /quote → ${tdSym} (depuis ${yhSym})`);
-      const r = await fetch(
-        `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(tdSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      dbgLog(r.ok?'[OK]':'[WRN]', `TD status=${r.status}`);
-      if (r.status === 429) {
-        _tdRateLimited = Date.now();
-        dbgLog('[WRN]', 'TD 429 → rate limit mis à jour');
-        toast('Limite Twelve Data · réessayer dans 1 min');
-        return { price: null, change1d: null };
-      }
-      if (r.ok) {
-        const d = await r.json();
-        if (d.close && !d.code) {
-          price    = parseFloat(d.close);
-          change1d = parseFloat(d.percent_change) || 0;
-          dbgLog('[OK]', `TD prix=${price} change=${change1d}%`);
-        } else {
-          dbgLog('[WRN]', `TD réponse invalide: ${JSON.stringify(d).slice(0,120)}`);
+    // Essayer les formats de symbole en cascade jusqu'au succès
+    const tryList = tdTryList(yhSym);
+    dbgLog('[INF]', `TD /price → essai cascade: ${tryList.join(' | ')}`);
+    for (const tdSym of tryList) {
+      try {
+        const r = await fetch(
+          `https://api.twelvedata.com/price?symbol=${encodeURIComponent(tdSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        dbgLog(r.ok?'[OK]':'[WRN]', `TD ${tdSym} → status=${r.status}`);
+        if (r.status === 429) {
+          _tdRateLimited = Date.now();
+          dbgLog('[WRN]', 'TD 429 → rate limit mis à jour');
+          toast('Limite Twelve Data · réessayer dans 1 min');
+          return { price: null, change1d: null };
         }
-      }
-    } catch(e) { dbgLog('[ERR]', `TD exception: ${e?.message||e}`); }
+        if (r.ok) {
+          const d = await r.json();
+          if (d.price && !d.code) {
+            price = parseFloat(d.price);
+            dbgLog('[OK]', `TD ${tdSym} prix=${price} ✓`);
+            break; // succès → arrêter la cascade
+          }
+          dbgLog('[WRN]', `TD ${tdSym} réponse: ${JSON.stringify(d).slice(0,100)}`);
+        }
+      } catch(e) { dbgLog('[ERR]', `TD ${tdSym}: ${e?.message||e}`); }
+    }
   } else {
     dbgLog('[INF]', 'Pas de clé API → Yahoo Finance direct');
   }
@@ -3859,30 +3880,53 @@ async function fetchLivePrices() {
         const batch = rotated.slice(0, TD_LIMIT);
         S._tdOffset = (S._tdOffset + TD_LIMIT) % yahooSymbols.length;
 
-        // Convertir Yahoo symbols → Twelve Data symbols (OR.PA → OR:XPAR)
-        const tdSymbols = batch.map(toTdSym);
-        // Table inverse TD symbol → app ticker (pour retrouver MC depuis MC:XPAR)
-        const tdRev = {};
-        batch.forEach((yhSym, i) => { tdRev[tdSymbols[i]] = yahooRev[yhSym]; });
+        // Découvrir le bon format TD via le 1er symbole (sonde), puis appliquer au batch
+        const firstYh = batch[0];
+        const formats = tdTryList(firstYh);
+        let workingFmt = null; // suffixe TD qui fonctionne (ex: ':EURONEXT')
 
-        const url = 'https://api.twelvedata.com/price?symbol='
-          + tdSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
-        dbg('[INF]', `T3 → Twelve Data batch ${batch.length}/${yahooSymbols.length}: ${tdSymbols.join(',')}`);
-        const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite 8 crédits/min — attendre 1 min)':''}`);
-        if (r.status === 429) { _tdRateLimited = Date.now(); }
-        if (r.ok) {
-          const td = await r.json();
-          // Réponse single symbol: {"price":"750"} | multi: {"OR:XPAR":{"price":"750"},...}
-          const tdArr = td.price && !td.code
-            ? [{ symbol: tdSymbols[0], regularMarketPrice: parseFloat(td.price) }]
-            : Object.entries(td)
-                .filter(([,v]) => v?.price && !v?.code)
-                .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
-          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,120):''}`);
-          if (tdArr.length) {
-            // Remapper les TD symbols vers app tickers pour la suite
-            yResults = tdArr.map(q => ({ ...q, symbol: tdRev[q.symbol] || q.symbol }));
+        for (const probe of formats) {
+          try {
+            const pr = await fetch(
+              `https://api.twelvedata.com/price?symbol=${encodeURIComponent(probe)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (pr.status === 429) { _tdRateLimited = Date.now(); break; }
+            if (pr.ok) { const d = await pr.json(); if (d.price && !d.code) { workingFmt = probe; break; } }
+            dbg('[WRN]', `T3 sonde ${probe} → ${pr.status}`);
+          } catch(_) {}
+        }
+
+        if (_tdRateLimited && (Date.now() - _tdRateLimited < 61000)) {
+          dbg('[WRN]', 'T3 rate limit → abandon'); break;
+        }
+
+        if (!workingFmt) {
+          dbg('[WRN]', `T3 aucun format TD valide pour ${firstYh} (essayés: ${formats.join(', ')})`);
+        } else {
+          // Appliquer le format découvert à tout le batch
+          const suffix = workingFmt.slice(tdBase(firstYh).length); // ex: ':EURONEXT'
+          const tdSymbols = batch.map(yh => tdBase(yh) + suffix);
+          const tdRev = {};
+          batch.forEach((yhSym, i) => { tdRev[tdSymbols[i]] = yahooRev[yhSym]; });
+
+          const url = 'https://api.twelvedata.com/price?symbol='
+            + tdSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
+          dbg('[INF]', `T3 batch (fmt:${suffix}) ${batch.length}/${yahooSymbols.length}: ${tdSymbols.join(',')}`);
+          const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+          dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite — attendre 1 min)':''}`);
+          if (r.status === 429) { _tdRateLimited = Date.now(); }
+          if (r.ok) {
+            const td = await r.json();
+            const tdArr = td.price && !td.code
+              ? [{ symbol: tdSymbols[0], regularMarketPrice: parseFloat(td.price) }]
+              : Object.entries(td)
+                  .filter(([,v]) => v?.price && !v?.code)
+                  .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
+            dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,120):''}`);
+            if (tdArr.length) {
+              yResults = tdArr.map(q => ({ ...q, symbol: tdRev[q.symbol] || q.symbol }));
+            }
           }
         }
       } catch(e) { dbg('[ERR]', `T3 Twelve Data: ${e?.message||e}`); }
