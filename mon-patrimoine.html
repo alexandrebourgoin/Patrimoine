@@ -2145,7 +2145,10 @@ function renderSettings() {
                  :'var(--text2)';
         return `<span style="color:${col}">${l.replace(/</g,'&lt;')}</span>`;
       }).join('\n')}</div>
-      <div class="tap" id="js-debug-clear" style="margin-top:8px;font-size:12px;color:var(--text3);text-align:right">Effacer le log ↺</div>
+      <div style="display:flex;justify-content:flex-end;gap:14px;margin-top:8px">
+        <div class="tap" id="js-debug-copy" style="font-size:12px;color:var(--accent);font-weight:600">Copier 📋</div>
+        <div class="tap" id="js-debug-clear" style="font-size:12px;color:var(--text3)">Effacer ↺</div>
+      </div>
     </div>` : ''}
   </div>
 
@@ -2566,6 +2569,20 @@ function bindEvents(id, el) {
       saveData();
       toast('Mode débogage ' + (S.debug ? 'activé' : 'désactivé'));
       if (S.debug) renderScreen('settings'); // rafraîchit pour afficher le log
+    });
+    el.querySelector('#js-debug-copy')?.addEventListener('click',()=>{
+      const txt = S._debugLog.slice().reverse().join('\n');
+      navigator.clipboard?.writeText(txt)
+        .then(()=>toast('Log copié ✓'))
+        .catch(()=>{
+          // Fallback si clipboard API indisponible
+          const ta=document.createElement('textarea');
+          ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          toast('Log copié ✓');
+        });
     });
     el.querySelector('#js-debug-clear')?.addEventListener('click',()=>{
       S._debugLog = [];
@@ -3530,17 +3547,24 @@ async function fetchLivePrices() {
       return price ? { symbol: sym, regularMarketPrice: price } : null;
     };
 
-    // Tentative 1 : batch v7 direct (query1)
-    try {
-      const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',');
-      dbg('[INF]', `T1 → ${url}`);
-      const r = await fetch(url, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
-      dbg(r.ok ? '[OK]' : '[WRN]', `T1 status=${r.status} ${r.statusText}`);
-      if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T1 résultats=${yResults.length}`); }
-    } catch(e) { dbg('[ERR]', `T1 exception: ${e?.message||e}`); }
+    // Si une clé API est configurée, aller directement à T3 (Twelve Data)
+    if (S.priceApiKey) {
+      dbg('[INF]', 'Clé API présente → T3 directement (Yahoo Finance ignoré)');
+    }
 
-    // Tentative 2 : v8/chart individuels direct (pas de crumb requis)
-    if (!yResults?.length) {
+    // Tentative 1 : batch v7 direct (query1) — ignoré si clé API configurée
+    if (!S.priceApiKey) {
+      try {
+        const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',');
+        dbg('[INF]', `T1 → ${url}`);
+        const r = await fetch(url, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
+        dbg(r.ok ? '[OK]' : '[WRN]', `T1 status=${r.status} ${r.statusText}`);
+        if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T1 résultats=${yResults.length}`); }
+      } catch(e) { dbg('[ERR]', `T1 exception: ${e?.message||e}`); }
+    }
+
+    // Tentative 2 : v8/chart individuels direct — ignoré si clé API configurée
+    if (!yResults?.length && !S.priceApiKey) {
       dbg('[INF]', `T2 → v8/chart individuel × ${yahooSymbols.length}`);
       const settled = await Promise.allSettled(yahooSymbols.map(sym =>
         fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
