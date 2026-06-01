@@ -55,9 +55,9 @@
   --loss-dim: rgba(220,38,38,0.08);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
-html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+html,body{height:100%;overflow:hidden;max-width:100vw;overscroll-behavior:none;touch-action:pan-y}
 body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-#app{width:100%;max-width:480px;height:100vh;height:100dvh;margin:0 auto;position:relative;overflow:hidden}
+#app{width:100%;max-width:480px;height:100vh;height:100dvh;margin:0 auto;position:relative;overflow:hidden;overflow:clip}
 
 /* SCREENS */
 .screen{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform;scrollbar-width:none}
@@ -980,6 +980,21 @@ const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
 };
 
+// ─── Conversion Yahoo Finance → Twelve Data (suffixe bourse) ───
+// Yahoo: OR.PA  → Twelve Data: OR:XPAR
+const _TD_SUFFIX = {
+  '.PA':':XPAR', '.AS':':XAMS', '.DE':':XFRA', '.MI':':XMIL',
+  '.CO':':XCSE', '.MC':':XMCE', '.L': ':XLON',  '.BR':':XBRU',
+  '.HK':':XHKG', '.TO':':XTSE', '.T': ':XTKS',
+};
+function toTdSym(yhSym) {
+  if (!yhSym) return yhSym;
+  for (const [yh, td] of Object.entries(_TD_SUFFIX)) {
+    if (yhSym.endsWith(yh)) return yhSym.slice(0, -yh.length) + td;
+  }
+  return yhSym; // pas de suffixe = titre US, format identique
+}
+
 // ─── ISIN → ticker (pour import Degiro) ───
 const ISIN_MAP = {
   'US0378331005':{ ticker:'AAPL', name:'Apple' },
@@ -1097,7 +1112,7 @@ function histSvg(pts, w, h) {
   const line = 'M' + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line + `L${xs[xs.length-1].toFixed(1)},${h}L${xs[0].toFixed(1)},${h}Z`;
   const gid = 'hg' + Math.random().toString(36).slice(2, 7);
-  return `<svg id="hist-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:visible;cursor:crosshair">
+  return `<svg id="hist-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:hidden;cursor:crosshair">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".2"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
@@ -1192,7 +1207,7 @@ function stockChartSvg(h, w, ch) {
   }).join('');
   // Period label
   const periodLabel = days>=365 ? Math.round(days/365)+'a' : days>=30 ? Math.round(days/30)+'m' : days+'j';
-  return `<svg id="stock-svg" width="${w}" height="${ch}" viewBox="0 0 ${w} ${ch}" style="display:block;overflow:visible;cursor:crosshair" data-startdate="${startDate.toISOString().slice(0,10)}" data-days="${days}">
+  return `<svg id="stock-svg" width="${w}" height="${ch}" viewBox="0 0 ${w} ${ch}" style="display:block;overflow:hidden;cursor:crosshair" data-startdate="${startDate.toISOString().slice(0,10)}" data-days="${days}">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".15"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
@@ -1282,7 +1297,7 @@ function watchChartSvg(pts, w, h) {
   const line = 'M' + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line + `L${xs[xs.length-1].toFixed(1)},${h}L${xs[0].toFixed(1)},${h}Z`;
   const gid = 'wg' + Math.random().toString(36).slice(2, 7);
-  return `<svg id="watch-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:visible;cursor:crosshair">
+  return `<svg id="watch-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:hidden;cursor:crosshair">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".22"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
@@ -3644,9 +3659,10 @@ async function _fetchSinglePrice(yhSym, cgId) {
       return { price: null, change1d: null };
     }
     try {
-      dbgLog('[INF]', `Twelve Data /quote → ${yhSym}`);
+      const tdSym = toTdSym(yhSym); // OR.PA → OR:XPAR
+      dbgLog('[INF]', `Twelve Data /quote → ${tdSym} (depuis ${yhSym})`);
       const r = await fetch(
-        `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(yhSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
+        `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(tdSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
         { signal: AbortSignal.timeout(8000) }
       );
       dbgLog(r.ok?'[OK]':'[WRN]', `TD status=${r.status}`);
@@ -3833,7 +3849,7 @@ async function fetchLivePrices() {
       if (r2.length) yResults = r2;
     }
 
-    // Tentative 3 : Twelve Data (limite: 8 crédits/min → rotation par batch de 8)
+    // Tentative 3 : Twelve Data (symboles convertis au format TD, batch de 8 max)
     if (!yResults?.length && S.priceApiKey) {
       try {
         const TD_LIMIT = 8;
@@ -3843,21 +3859,31 @@ async function fetchLivePrices() {
         const batch = rotated.slice(0, TD_LIMIT);
         S._tdOffset = (S._tdOffset + TD_LIMIT) % yahooSymbols.length;
 
+        // Convertir Yahoo symbols → Twelve Data symbols (OR.PA → OR:XPAR)
+        const tdSymbols = batch.map(toTdSym);
+        // Table inverse TD symbol → app ticker (pour retrouver MC depuis MC:XPAR)
+        const tdRev = {};
+        batch.forEach((yhSym, i) => { tdRev[tdSymbols[i]] = yahooRev[yhSym]; });
+
         const url = 'https://api.twelvedata.com/price?symbol='
-          + batch.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
-        dbg('[INF]', `T3 → Twelve Data batch ${batch.length}/${yahooSymbols.length}: ${batch.join(',')}`);
+          + tdSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
+        dbg('[INF]', `T3 → Twelve Data batch ${batch.length}/${yahooSymbols.length}: ${tdSymbols.join(',')}`);
         const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite 8 crédits/min dépassée — attendre 1 min)':''}`);
+        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite 8 crédits/min — attendre 1 min)':''}`);
         if (r.status === 429) { _tdRateLimited = Date.now(); }
         if (r.ok) {
           const td = await r.json();
+          // Réponse single symbol: {"price":"750"} | multi: {"OR:XPAR":{"price":"750"},...}
           const tdArr = td.price && !td.code
-            ? [{ symbol: batch[0], regularMarketPrice: parseFloat(td.price) }]
+            ? [{ symbol: tdSymbols[0], regularMarketPrice: parseFloat(td.price) }]
             : Object.entries(td)
                 .filter(([,v]) => v?.price && !v?.code)
                 .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
-          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,100):''}`);
-          if (tdArr.length) yResults = tdArr;
+          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,120):''}`);
+          if (tdArr.length) {
+            // Remapper les TD symbols vers app tickers pour la suite
+            yResults = tdArr.map(q => ({ ...q, symbol: tdRev[q.symbol] || q.symbol }));
+          }
         }
       } catch(e) { dbg('[ERR]', `T3 Twelve Data: ${e?.message||e}`); }
     }
