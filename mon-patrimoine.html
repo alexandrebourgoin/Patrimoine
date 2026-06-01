@@ -3897,11 +3897,10 @@ async function fetchLivePrices() {
           } catch(_) {}
         }
 
-        if (_tdRateLimited && (Date.now() - _tdRateLimited < 61000)) {
-          dbg('[WRN]', 'T3 rate limit → abandon'); break;
-        }
-
-        if (!workingFmt) {
+        const rateLimited = _tdRateLimited && (Date.now() - _tdRateLimited < 61000);
+        if (rateLimited) {
+          dbg('[WRN]', 'T3 rate limit → abandon batch');
+        } else if (!workingFmt) {
           dbg('[WRN]', `T3 aucun format TD valide pour ${firstYh} (essayés: ${formats.join(', ')})`);
         } else {
           // Appliquer le format découvert à tout le batch
