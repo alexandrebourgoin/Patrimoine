@@ -2274,7 +2274,12 @@ function renderWatchStock() {
   <div class="stock-hero" style="padding-bottom:10px;border-bottom:none">
     <div class="stock-ticker-badge">${watch.ticker}</div>
     <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${watch.name}</div>
-    <div class="stock-price t-num">${fmtCur(watch.price)}</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="stock-price t-num" style="margin:0">${fmtCur(watch.price)}</div>
+      <div id="js-watch-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </div>
+    </div>
     <div class="row gap8" style="align-items:center;flex-wrap:wrap">
       <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(watch.change1d).toFixed(2)}%</div>
       <span style="font-size:13px;font-weight:700;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${delta.toFixed(2)} ${S.currency==='EUR'?'€':'$'}</span>
@@ -2621,6 +2626,9 @@ function bindEvents(id, el) {
   }
   if (id === 'watchstock') {
     el.querySelector('#js-back')?.addEventListener('click', back);
+    el.querySelector('#js-watch-ticker-refresh')?.addEventListener('click', () => {
+      if (S.watchTicker) fetchWatchPrice(S.watchTicker);
+    });
 
     // Period selector: swap chart + labels in-place
     el.querySelectorAll('[data-wperiod]').forEach(btn => btn.addEventListener('click', () => {
@@ -3580,47 +3588,92 @@ function applyTheme(theme) {
 // LIVE PRICES  (PWA / HTTPS uniquement)
 // ═══════════════════════════════════════════════
 let _fetching = false;
+let _tdRateLimited = 0; // timestamp du dernier 429 Twelve Data
 
-// Rafraîchit le cours d'un seul titre (1 crédit Twelve Data)
+// Helper partagé : fetch un cours unique via Twelve Data ou Yahoo
+async function _fetchSinglePrice(yhSym, cgId) {
+  let price = null, change1d = null;
+
+  if (cgId) {
+    try {
+      const vs = S.currency.toLowerCase();
+      const r  = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=${vs}&include_24hr_change=true`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (r.ok) {
+        const d = await r.json();
+        price    = d[cgId]?.[vs]                  || null;
+        change1d = d[cgId]?.[`${vs}_24h_change`] ?? null;
+      }
+    } catch(_) {}
+    return { price, change1d };
+  }
+
+  // Vérifier rate limit Twelve Data (60 s)
+  if (S.priceApiKey) {
+    const wait = 61000 - (Date.now() - _tdRateLimited);
+    if (_tdRateLimited && wait > 0) {
+      toast(`Limite Twelve Data · réessayer dans ${Math.ceil(wait/1000)}s`);
+      return { price: null, change1d: null };
+    }
+    try {
+      // /quote pour avoir le cours ET la variation journalière
+      const r = await fetch(
+        `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(yhSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (r.status === 429) {
+        _tdRateLimited = Date.now();
+        toast('Limite Twelve Data · réessayer dans 1 min');
+        return { price: null, change1d: null };
+      }
+      if (r.ok) {
+        const d = await r.json();
+        if (d.close && !d.code) {
+          price    = parseFloat(d.close);
+          change1d = parseFloat(d.percent_change) || 0;
+        }
+      }
+    } catch(_) {}
+  }
+
+  // Fallback Yahoo Finance direct
+  if (!price) {
+    try {
+      const r = await fetch(
+        `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSym)}?range=1d&interval=1d`,
+        { signal: AbortSignal.timeout(7000), credentials: 'omit' }
+      );
+      if (r.ok) {
+        const d = await r.json();
+        price = d?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+      }
+    } catch(_) {}
+  }
+
+  return { price, change1d };
+}
+
+// Rafraîchit le cours d'un holding (écran stock)
+let _tickerFetching = false;
 async function fetchTickerPrice(ticker, accId, holdingId) {
+  if (_tickerFetching) return;
+  _tickerFetching = true;
   const yhSym = YAHOO_MAP[ticker];
   const cgId  = CG_IDS[ticker];
-  if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
+  if (!yhSym && !cgId) { toast('Ticker non reconnu'); _tickerFetching=false; return; }
 
   const btn = document.querySelector('#js-ticker-refresh svg');
   if (btn) btn.classList.add('spin');
 
-  let price = null;
-
-  if (cgId) {
-    // Crypto → CoinGecko
-    try {
-      const vs  = S.currency.toLowerCase();
-      const r   = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=${vs}`, { signal: AbortSignal.timeout(8000) });
-      if (r.ok) { const d = await r.json(); price = d[cgId]?.[vs] || null; }
-    } catch(_) {}
-  } else {
-    // Stock/ETF → Twelve Data d'abord si clé présente
-    if (S.priceApiKey) {
-      try {
-        const r = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(yhSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`, { signal: AbortSignal.timeout(8000) });
-        if (r.ok) { const d = await r.json(); if (d.price && !d.code) price = parseFloat(d.price); }
-      } catch(_) {}
-    }
-    // Sinon Yahoo Finance direct
-    if (!price) {
-      try {
-        const r = await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSym)}?range=1d&interval=1d`, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
-        if (r.ok) { const d = await r.json(); price = d?.chart?.result?.[0]?.meta?.regularMarketPrice || null; }
-      } catch(_) {}
-    }
-  }
+  const { price } = await _fetchSinglePrice(yhSym, cgId);
 
   if (btn) btn.classList.remove('spin');
+  _tickerFetching = false;
 
-  if (!price) { toast('Cours introuvable'); return; }
+  if (!price) { if (!_tdRateLimited || Date.now()-_tdRateLimited>61000) toast('Cours introuvable'); return; }
 
-  // Mettre à jour le holding
   const acc = S.accounts.find(a => a.id === accId);
   const h   = acc?.holdings.find(h => h.id === holdingId);
   if (h) {
@@ -3632,6 +3685,36 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
     savePrices(cached.prices);
     S.lastPriceUpdate = Date.now();
     renderScreen('stock');
+    refreshMain();
+    toast(`${ticker} · ${fmtCur(price)} ✓`);
+  }
+}
+
+// Rafraîchit le cours d'un titre suivi (écran watchstock)
+let _watchFetching = false;
+async function fetchWatchPrice(ticker) {
+  if (_watchFetching) return;
+  _watchFetching = true;
+  const yhSym = YAHOO_MAP[ticker];
+  const cgId  = CG_IDS[ticker];
+  if (!yhSym && !cgId) { toast('Ticker non reconnu'); _watchFetching=false; return; }
+
+  const btn = document.querySelector('#js-watch-ticker-refresh svg');
+  if (btn) btn.classList.add('spin');
+
+  const { price, change1d } = await _fetchSinglePrice(yhSym, cgId);
+
+  if (btn) btn.classList.remove('spin');
+  _watchFetching = false;
+
+  if (!price) { if (!_tdRateLimited || Date.now()-_tdRateLimited>61000) toast('Cours introuvable'); return; }
+
+  const w = S.watchlist.find(w => w.ticker === ticker);
+  if (w) {
+    w.price = price;
+    if (change1d !== null) w.change1d = change1d;
+    saveAccounts();
+    renderScreen('watchstock');
     refreshMain();
     toast(`${ticker} · ${fmtCur(price)} ✓`);
   }
@@ -3732,6 +3815,7 @@ async function fetchLivePrices() {
         dbg('[INF]', `T3 → Twelve Data batch ${batch.length}/${yahooSymbols.length}: ${batch.join(',')}`);
         const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
         dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite 8 crédits/min dépassée — attendre 1 min)':''}`);
+        if (r.status === 429) { _tdRateLimited = Date.now(); }
         if (r.ok) {
           const td = await r.json();
           const tdArr = td.price && !td.code
