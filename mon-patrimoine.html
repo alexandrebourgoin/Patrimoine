@@ -803,15 +803,19 @@ const S = {
   watchTicker: null,
   watchPeriod: '3M',
   debug: false,
-  priceApiKey: '',  // clé Twelve Data (optionnelle)
-  _debugLog: [],    // non persisté, en mémoire seulement
+  autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
+  priceApiKey: '',    // clé Twelve Data (optionnelle)
+  _debugLog: [],      // non persisté
+  _tdOffset:  0,      // rotation Twelve Data (non persisté)
 };
 
 // ═══════════════════════════════════════════════
 // STORAGE KEYS
 // ═══════════════════════════════════════════════
-const STORE_DATA   = 'patrimoine-data';
-const STORE_PRICES = 'patrimoine-prices';
+const STORE_ACCOUNTS = 'patrimoine-accounts'; // comptes, transactions, watchlist, cibles
+const STORE_SETTINGS = 'patrimoine-settings'; // thème, devise, clé API, préférences
+const STORE_PRICES   = 'patrimoine-prices';   // cache cours (inchangé)
+const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 
 // ═══════════════════════════════════════════════
 // DEMO DATA
@@ -1898,7 +1902,12 @@ function renderStock() {
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
     <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
     <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
-    <div class="stock-price t-num">${fmtNative(h.currentPrice,hCur)}</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="stock-price t-num" style="margin:0">${fmtNative(h.currentPrice,hCur)}</div>
+      <div id="js-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </div>
+    </div>
     <div class="row gap8">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
       <span class="t-sm">${h.type} · ${h.country} · ${h.sector}</span>
@@ -2103,21 +2112,31 @@ function renderSettings() {
         <svg viewBox="0 0 24 24" fill="var(--loss)"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name" style="color:var(--loss)">Réinitialiser toutes les données</div>
-        <div class="s-sub">Supprime comptes, transactions et réglages</div>
+        <div class="s-name" style="color:var(--loss)">Réinitialiser les données</div>
+        <div class="s-sub">Supprime comptes et transactions · réglages conservés</div>
       </div>
     </div>
   </div>
 
   <div class="s-section">Cours en direct</div>
   <div class="s-group">
+    <div class="s-item tap" id="js-autorefresh-tog">
+      <div class="s-ico" style="background:rgba(0,194,203,.12)">
+        <svg viewBox="0 0 24 24" fill="#00C2CB"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Actualisation auto</div>
+        <div class="s-sub">Rafraîchit les cours au démarrage</div>
+      </div>
+      <div class="toggle ${S.autoRefresh?'on':''}" id="js-autorefresh-inner"><div class="toggle-thumb"></div></div>
+    </div>
     <div class="s-item">
       <div class="s-ico" style="background:rgba(0,214,143,.12)">
         <svg viewBox="0 0 24 24" fill="#00D68F"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
       </div>
       <div class="flex1 col gap4">
         <div class="s-name">Clé Twelve Data</div>
-        <div class="s-sub">Gratuite sur twelvedata.com · 800 req/jour</div>
+        <div class="s-sub">Gratuite sur twelvedata.com · 8 crédits/min</div>
       </div>
       <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Coller la clé ici" style="max-width:130px;font-size:12px">
     </div>
@@ -2441,6 +2460,11 @@ function bindEvents(id, el) {
   }
   if(id==='stock') {
     el.querySelector('#js-back')?.addEventListener('click',back);
+    el.querySelector('#js-ticker-refresh')?.addEventListener('click', () => {
+      const acc = S.accounts.find(a => a.id === S.accountId);
+      const h   = acc?.holdings.find(h => h.id === S.holdingId);
+      if (h) fetchTickerPrice(h.ticker, S.accountId, S.holdingId);
+    });
     // Interactive stock chart with overlays
     const chartWrap=el.querySelector('#js-stock-chart-wrap');
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -2518,7 +2542,7 @@ function bindEvents(id, el) {
       if(S.isDemo){
         // Démo → mode réel : restaurer les vrais comptes depuis le storage
         S.isDemo=false;
-        try { S.accounts=JSON.parse(localStorage.getItem(STORE_DATA)||'{}').accounts||[]; } catch(e){ S.accounts=[]; }
+        try { S.accounts=JSON.parse(localStorage.getItem(STORE_ACCOUNTS)||'{}').accounts||[]; } catch(e){ S.accounts=[]; }
         toast('Mode démo désactivé');
       } else {
         // Mode réel → démo
@@ -2552,11 +2576,17 @@ function bindEvents(id, el) {
       toast('Cache des prix effacé');
     });
     el.querySelector('#js-reset-all')?.addEventListener('click',()=>{
-      openConfirm('Réinitialiser toutes les données ? Cette action est irréversible.', ()=>{
-        localStorage.removeItem(STORE_DATA);
+      openConfirm('Supprimer tous les comptes et transactions ? Les réglages sont conservés.', ()=>{
+        localStorage.removeItem(STORE_ACCOUNTS);
         localStorage.removeItem(STORE_PRICES);
         location.reload();
       });
+    });
+    el.querySelector('#js-autorefresh-tog')?.addEventListener('click', () => {
+      S.autoRefresh = !S.autoRefresh;
+      el.querySelector('#js-autorefresh-inner')?.classList.toggle('on', S.autoRefresh);
+      saveData();
+      toast('Actualisation auto ' + (S.autoRefresh ? 'activée' : 'désactivée'));
     });
     el.querySelector('#js-price-key')?.addEventListener('change', e => {
       S.priceApiKey = e.target.value.trim();
@@ -3413,49 +3443,102 @@ function timeSince(ts) {
   return `il y a ${Math.floor(h/24)}j`;
 }
 
-function saveData() {
+// ── Sauvegarde données financières ──
+function saveAccounts() {
   try {
-    // En mode démo, on préserve les vrais comptes déjà stockés (on ne les écrase pas)
+    // En mode démo, on préserve les vrais comptes déjà stockés (jamais écrasés)
     let realAccounts = S.accounts;
     if (S.isDemo) {
-      try { realAccounts = JSON.parse(localStorage.getItem(STORE_DATA)||'{}').accounts || []; } catch(e) { realAccounts = []; }
+      try { realAccounts = JSON.parse(localStorage.getItem(STORE_ACCOUNTS)||'{}').accounts || []; } catch(e) { realAccounts = []; }
     }
-    localStorage.setItem(STORE_DATA, JSON.stringify({
-      accounts:   realAccounts,
-      isDemo:     S.isDemo,
-      watchlist:  S.watchlist,
-      targets:    S.targets,
-      user:       S.user,
-      theme:      S.theme,
-      currency:   S.currency,
-      privacy:    S.privacy,
-      histPeriod: S.histPeriod,
-      sort:       S.sort,
-      sortDir:    S.sortDir,
-      debug:      S.debug,
-      priceApiKey:S.priceApiKey,
+    localStorage.setItem(STORE_ACCOUNTS, JSON.stringify({
+      accounts:  realAccounts,
+      isDemo:    S.isDemo,
+      watchlist: S.watchlist,
+      targets:   S.targets,
+      user:      S.user,
     }));
   } catch(e) {}
 }
 
+// ── Sauvegarde préférences ──
+function saveSettings() {
+  try {
+    localStorage.setItem(STORE_SETTINGS, JSON.stringify({
+      theme:       S.theme,
+      currency:    S.currency,
+      privacy:     S.privacy,
+      histPeriod:  S.histPeriod,
+      sort:        S.sort,
+      sortDir:     S.sortDir,
+      debug:       S.debug,
+      autoRefresh: S.autoRefresh,
+      priceApiKey: S.priceApiKey,
+    }));
+  } catch(e) {}
+}
+
+// ── Sauvegarde tout ──
+function saveData() { saveAccounts(); saveSettings(); }
+
+// ── Chargement avec migration automatique depuis l'ancien format ──
 function loadData() {
   try {
-    const raw=localStorage.getItem(STORE_DATA);
-    if(!raw) return false;
-    const d=JSON.parse(raw);
-    if(d.accounts)              S.accounts   = d.accounts;
-    if(d.isDemo!==undefined)    S.isDemo     = d.isDemo;
-    if(d.watchlist)             S.watchlist  = d.watchlist;
-    if(d.targets)               S.targets    = d.targets;
-    if(d.user)                  S.user       = d.user;
-    if(d.theme)                 S.theme      = d.theme;
-    if(d.currency)              S.currency   = d.currency;
-    if(d.privacy!==undefined)   S.privacy    = d.privacy;
-    if(d.histPeriod)            S.histPeriod = d.histPeriod;
-    if(d.sort)                  S.sort       = d.sort;
-    if(d.sortDir!==undefined)   S.sortDir    = d.sortDir;
-    if(d.debug!==undefined)     S.debug      = d.debug;
-    if(d.priceApiKey)           S.priceApiKey= d.priceApiKey;
+    // Migration : si l'ancienne clé existe, ventiler dans les deux nouvelles
+    const legacy = localStorage.getItem(STORE_LEGACY);
+    if (legacy) {
+      const d = JSON.parse(legacy);
+      if (!localStorage.getItem(STORE_ACCOUNTS)) {
+        localStorage.setItem(STORE_ACCOUNTS, JSON.stringify({
+          accounts:  d.accounts  || [],
+          isDemo:    d.isDemo    !== undefined ? d.isDemo : true,
+          watchlist: d.watchlist || [],
+          targets:   d.targets   || {},
+          user:      d.user      || { name: 'Moi' },
+        }));
+      }
+      if (!localStorage.getItem(STORE_SETTINGS)) {
+        localStorage.setItem(STORE_SETTINGS, JSON.stringify({
+          theme:       d.theme       || 'auto',
+          currency:    d.currency    || 'EUR',
+          privacy:     d.privacy     !== undefined ? d.privacy : false,
+          histPeriod:  d.histPeriod  || '1M',
+          sort:        d.sort        || 'value',
+          sortDir:     d.sortDir     !== undefined ? d.sortDir : -1,
+          debug:       d.debug       !== undefined ? d.debug : false,
+          autoRefresh: d.autoRefresh !== undefined ? d.autoRefresh : false,
+          priceApiKey: d.priceApiKey || '',
+        }));
+      }
+      localStorage.removeItem(STORE_LEGACY); // supprimer l'ancienne clé
+    }
+
+    const rawA = localStorage.getItem(STORE_ACCOUNTS);
+    const rawS = localStorage.getItem(STORE_SETTINGS);
+    if (!rawA && !rawS) return false;
+
+    // Charger les données financières
+    if (rawA) {
+      const a = JSON.parse(rawA);
+      if (a.accounts)             S.accounts  = a.accounts;
+      if (a.isDemo !== undefined) S.isDemo    = a.isDemo;
+      if (a.watchlist)            S.watchlist = a.watchlist;
+      if (a.targets)              S.targets   = a.targets;
+      if (a.user)                 S.user      = a.user;
+    }
+    // Charger les préférences
+    if (rawS) {
+      const s = JSON.parse(rawS);
+      if (s.theme)                  S.theme       = s.theme;
+      if (s.currency)               S.currency    = s.currency;
+      if (s.privacy !== undefined)  S.privacy     = s.privacy;
+      if (s.histPeriod)             S.histPeriod  = s.histPeriod;
+      if (s.sort)                   S.sort        = s.sort;
+      if (s.sortDir !== undefined)  S.sortDir     = s.sortDir;
+      if (s.debug !== undefined)    S.debug       = s.debug;
+      if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
+      if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
+    }
     return true;
   } catch(e) { return false; }
 }
@@ -3497,6 +3580,62 @@ function applyTheme(theme) {
 // LIVE PRICES  (PWA / HTTPS uniquement)
 // ═══════════════════════════════════════════════
 let _fetching = false;
+
+// Rafraîchit le cours d'un seul titre (1 crédit Twelve Data)
+async function fetchTickerPrice(ticker, accId, holdingId) {
+  const yhSym = YAHOO_MAP[ticker];
+  const cgId  = CG_IDS[ticker];
+  if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
+
+  const btn = document.querySelector('#js-ticker-refresh svg');
+  if (btn) btn.classList.add('spin');
+
+  let price = null;
+
+  if (cgId) {
+    // Crypto → CoinGecko
+    try {
+      const vs  = S.currency.toLowerCase();
+      const r   = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=${vs}`, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) { const d = await r.json(); price = d[cgId]?.[vs] || null; }
+    } catch(_) {}
+  } else {
+    // Stock/ETF → Twelve Data d'abord si clé présente
+    if (S.priceApiKey) {
+      try {
+        const r = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(yhSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) { const d = await r.json(); if (d.price && !d.code) price = parseFloat(d.price); }
+      } catch(_) {}
+    }
+    // Sinon Yahoo Finance direct
+    if (!price) {
+      try {
+        const r = await fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSym)}?range=1d&interval=1d`, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
+        if (r.ok) { const d = await r.json(); price = d?.chart?.result?.[0]?.meta?.regularMarketPrice || null; }
+      } catch(_) {}
+    }
+  }
+
+  if (btn) btn.classList.remove('spin');
+
+  if (!price) { toast('Cours introuvable'); return; }
+
+  // Mettre à jour le holding
+  const acc = S.accounts.find(a => a.id === accId);
+  const h   = acc?.holdings.find(h => h.id === holdingId);
+  if (h) {
+    h.currentPrice = price;
+    recalcHolding(h);
+    acc.value = acc.holdings.reduce((s, hh) => s + hh.value, 0);
+    const cached = loadPrices() || { prices: {} };
+    cached.prices[ticker] = price;
+    savePrices(cached.prices);
+    S.lastPriceUpdate = Date.now();
+    renderScreen('stock');
+    refreshMain();
+    toast(`${ticker} · ${fmtCur(price)} ✓`);
+  }
+}
 
 async function fetchLivePrices() {
   if (_fetching) return;
@@ -3578,23 +3717,29 @@ async function fetchLivePrices() {
       if (r2.length) yResults = r2;
     }
 
-    // Tentative 3 : Twelve Data (API gratuite, clé optionnelle)
+    // Tentative 3 : Twelve Data (limite: 8 crédits/min → rotation par batch de 8)
     if (!yResults?.length && S.priceApiKey) {
       try {
+        const TD_LIMIT = 8;
+        // Rotation : chaque refresh couvre 8 symboles différents
+        S._tdOffset = (S._tdOffset || 0) % yahooSymbols.length;
+        const rotated = [...yahooSymbols.slice(S._tdOffset), ...yahooSymbols.slice(0, S._tdOffset)];
+        const batch = rotated.slice(0, TD_LIMIT);
+        S._tdOffset = (S._tdOffset + TD_LIMIT) % yahooSymbols.length;
+
         const url = 'https://api.twelvedata.com/price?symbol='
-          + yahooSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
-        dbg('[INF]', `T3 → Twelve Data (${yahooSymbols.length} symboles)`);
+          + batch.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
+        dbg('[INF]', `T3 → Twelve Data batch ${batch.length}/${yahooSymbols.length}: ${batch.join(',')}`);
         const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}`);
+        dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite 8 crédits/min dépassée — attendre 1 min)':''}`);
         if (r.ok) {
           const td = await r.json();
-          // Réponse multiple: {"MC.PA":{"price":"750"},...} | unique: {"price":"750"}
           const tdArr = td.price && !td.code
-            ? [{ symbol: yahooSymbols[0], regularMarketPrice: parseFloat(td.price) }]
+            ? [{ symbol: batch[0], regularMarketPrice: parseFloat(td.price) }]
             : Object.entries(td)
                 .filter(([,v]) => v?.price && !v?.code)
                 .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
-          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,80):''}`);
+          dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,100):''}`);
           if (tdArr.length) yResults = tdArr;
         }
       } catch(e) { dbg('[ERR]', `T3 Twelve Data: ${e?.message||e}`); }
@@ -3662,9 +3807,12 @@ async function fetchLivePrices() {
     S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
     savePrices(prices);
     refreshMain();
+    const total = allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean).length
+                + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
+    const partial = updated < total ? ` (${updated}/${total})` : '';
     toast(errors.length
       ? `${updated} cours mis à jour · ⚠ ${errors.join(', ')}`
-      : `${updated} cours mis à jour ✓`);
+      : `${updated} cours mis à jour ✓${partial}${partial?' · rafraîchir pour la suite':''}`);
   } else {
     toast(errors.length ? `Erreur : ${errors.join(', ')}` : 'Aucun cours trouvé');
   }
@@ -3692,10 +3840,10 @@ document.getElementById('nav').classList.remove('hidden');
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
   if(S.theme==='auto') applyTheme('auto');
 });
-// Auto-refresh si pas de cache ou cache > 15 min (PWA uniquement)
-if (location.protocol === 'https:' || location.hostname === 'localhost') {
+// Auto-refresh au démarrage (uniquement si activé dans les réglages)
+if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000);
-  if (_stale) setTimeout(fetchLivePrices, 800); // léger délai pour laisser le rendu finir
+  if (_stale) setTimeout(fetchLivePrices, 800);
 }
 
 // ═══════════════════════════════════════════════

@@ -173,6 +173,93 @@ function simResults(price, qty, pru) {
   return { gross, netPfu };
 }
 
+// ── parseCSV helpers (extraits de parseCSV, ~ligne 2660) ──────
+function makeParseLine(delim) {
+  return function parseLine(line) {
+    const cells = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQ = !inQ; }
+      else if (c === delim && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else { cur += c; }
+    }
+    cells.push(cur.trim());
+    return cells.map(c => c.replace(/^"|"$/g, '').trim());
+  };
+}
+
+function cleanNum(s) {
+  if (!s) return 0;
+  s = String(s).replace(/\s/g, '').replace(/"/g, '');
+  const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.');
+  if (lc > ld) s = s.replace(/\./g, '').replace(',', '.');
+  else if (lc !== -1 && ld > lc) s = s.replace(/,/g, '');
+  else if (lc !== -1) s = s.replace(',', '.');
+  return parseFloat(s) || 0;
+}
+
+function parseDate(s) {
+  if (!s) return new Date().toISOString().slice(0, 10);
+  const m = s.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return s;
+}
+
+// ── genWatchHistory (~ligne 1188) ─────────────────────────────
+function genWatchHistory(ticker, price, period) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let days;
+  if (period === 'YTD') {
+    days = Math.max(2, Math.round((today - new Date(today.getFullYear(), 0, 1)) / 86400000) + 1);
+  } else {
+    const map = {'1S':7,'1M':30,'3M':90,'6M':182,'1A':365};
+    days = map[period] || 90;
+  }
+  let seed = 0;
+  for (let i = 0; i < ticker.length; i++) seed = (Math.imul(31, seed) + ticker.charCodeAt(i)) | 0;
+  seed = Math.abs(seed) || 42;
+  const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
+  const pts = new Array(days);
+  pts[days - 1] = price;
+  for (let i = days - 2; i >= 0; i--) pts[i] = pts[i + 1] / (1 + 0.0002 + (lcg() * 0.032 - 0.015));
+  const startDate = new Date(today.getTime() - (days - 1) * 86400000);
+  return { pts, startDate, days };
+}
+
+// ── Migration helper (logique extraite de loadData) ───────────
+function migrateData(legacyObj) {
+  const store = { 'patrimoine-data': JSON.stringify(legacyObj) };
+  const legacy = store['patrimoine-data'];
+  if (legacy) {
+    const d = JSON.parse(legacy);
+    if (!store['patrimoine-accounts']) {
+      store['patrimoine-accounts'] = JSON.stringify({
+        accounts:  d.accounts  || [],
+        isDemo:    d.isDemo    !== undefined ? d.isDemo : true,
+        watchlist: d.watchlist || [],
+        targets:   d.targets   || {},
+        user:      d.user      || { name: 'Moi' },
+      });
+    }
+    if (!store['patrimoine-settings']) {
+      store['patrimoine-settings'] = JSON.stringify({
+        theme:       d.theme       || 'auto',
+        currency:    d.currency    || 'EUR',
+        privacy:     d.privacy     !== undefined ? d.privacy : false,
+        histPeriod:  d.histPeriod  || '1M',
+        sort:        d.sort        || 'value',
+        sortDir:     d.sortDir     !== undefined ? d.sortDir : -1,
+        debug:       d.debug       !== undefined ? d.debug : false,
+        autoRefresh: d.autoRefresh !== undefined ? d.autoRefresh : false,
+        priceApiKey: d.priceApiKey || '',
+      });
+    }
+    delete store['patrimoine-data'];
+  }
+  return store;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // TEST RUNNER MINIMAL
 // ═══════════════════════════════════════════════════════════════
@@ -216,6 +303,14 @@ function expect(val) {
     toContain(exp) {
       if (!val.includes(exp))
         throw new Error(`"${val}" ne contient pas "${exp}"`);
+    },
+    get not() {
+      return {
+        toBe(exp) {
+          if (val === exp)
+            throw new Error(`Attendu ≠ ${JSON.stringify(exp)}, mais les deux sont identiques`);
+        }
+      };
     }
   };
 }
@@ -491,6 +586,121 @@ describe('simResults', () => {
     expect(r.gross).toBe(0);
     expect(r.netPfu).toBe(0);
   });
+});
+
+// ── SUITE 10 : CSV › parseLine (virgule) ────────────────────
+describe('CSV › parseLine (délimiteur virgule)', () => {
+  const parse = makeParseLine(',');
+  it('3 colonnes simples',                    () => { const r=parse('a,b,c'); expect(r[0]).toBe('a'); expect(r[1]).toBe('b'); expect(r[2]).toBe('c'); });
+  it('champ entre guillemets avec virgule',   () => { const r=parse('"hello, world",foo'); expect(r[0]).toBe('hello, world'); expect(r[1]).toBe('foo'); });
+  it('espaces autour des valeurs → trimés',   () => { const r=parse(' a , b , c '); expect(r[0]).toBe('a'); expect(r[1]).toBe('b'); });
+  it('champ vide au milieu',                  () => { const r=parse('a,,c'); expect(r[1]).toBe(''); });
+  it('guillemets seuls → valeur vide',        () => { const r=parse('""'); expect(r[0]).toBe(''); });
+  it('guillemets autour → retirés',           () => { const r=parse('"valeur"'); expect(r[0]).toBe('valeur'); });
+  it('5 colonnes',                            () => expect(parse('a,b,c,d,e')).toHaveLength(5));
+});
+
+describe('CSV › parseLine (délimiteur point-virgule)', () => {
+  const parse = makeParseLine(';');
+  it('3 colonnes',                             () => { const r=parse('a;b;c'); expect(r[0]).toBe('a'); expect(r[1]).toBe('b'); });
+  it('virgule dans un champ → pas de split',   () => { const r=parse('1,234;hello;world'); expect(r[0]).toBe('1,234'); });
+  it('guillemets respectés',                   () => { const r=parse('"a;b";c'); expect(r[0]).toBe('a;b'); expect(r[1]).toBe('c'); });
+});
+
+// ── SUITE 11 : CSV › cleanNum ────────────────────────────────
+describe('CSV › cleanNum', () => {
+  it('entier simple',                        () => expect(cleanNum('100')).toBe(100));
+  it('décimal français 185,50',              () => expect(cleanNum('185,50')).toBeCloseTo(185.5, 4));
+  it('milliers français 1 234,56',           () => expect(cleanNum('1 234,56')).toBeCloseTo(1234.56, 4));
+  it('décimal anglais 185.50',               () => expect(cleanNum('185.50')).toBeCloseTo(185.5, 4));
+  it('milliers anglais 1,234.56',            () => expect(cleanNum('1,234.56')).toBeCloseTo(1234.56, 4));
+  it('négatif -100',                         () => expect(cleanNum('-100')).toBe(-100));
+  it('chaîne vide → 0',                      () => expect(cleanNum('')).toBe(0));
+  it('null/undefined → 0',                   () => expect(cleanNum(null)).toBe(0));
+  it('guillemets autour → retirés',          () => expect(cleanNum('"185.50"')).toBeCloseTo(185.5, 4));
+  it('espaces internes → ignorés  1 000',    () => expect(cleanNum('1 000')).toBe(1000));
+  it('entier avec virgule décimale 42,0',    () => expect(cleanNum('42,0')).toBeCloseTo(42, 4));
+});
+
+// ── SUITE 12 : CSV › parseDate ───────────────────────────────
+describe('CSV › parseDate', () => {
+  it('DD-MM-YYYY → YYYY-MM-DD',              () => expect(parseDate('22-01-2024')).toBe('2024-01-22'));
+  it('DD/MM/YYYY → YYYY-MM-DD',              () => expect(parseDate('22/01/2024')).toBe('2024-01-22'));
+  it('YYYY-MM-DD → inchangé',                () => expect(parseDate('2024-01-22')).toBe('2024-01-22'));
+  it('YYYY-MM-DDThh:mm:ss → troncature',     () => expect(parseDate('2024-01-22T10:30:00')).toBe('2024-01-22'));
+  it('01-12-2023 → 2023-12-01',              () => expect(parseDate('01-12-2023')).toBe('2023-12-01'));
+  it('fin d\'année 31-12-2023',              () => expect(parseDate('31-12-2023')).toBe('2023-12-31'));
+});
+
+// ── SUITE 13 : Migration patrimoine-data → accounts + settings
+describe('Migration › ventilation des clés', () => {
+  const legacy = {
+    accounts:  [{ id:'a1', name:'PEA', value:5000 }],
+    isDemo:    false,
+    watchlist: [{ ticker:'AAPL', price:185 }],
+    targets:   { Action:60 },
+    user:      { name:'Alice' },
+    theme:     'dark',
+    currency:  'USD',
+    privacy:   true,
+    histPeriod:'3M',
+    sort:      'pnl',
+    sortDir:   1,
+    debug:     false,
+    autoRefresh: true,
+    priceApiKey: 'abc123',
+  };
+
+  it('clé legacy supprimée après migration',              () => expect(migrateData(legacy)['patrimoine-data']).toBe(undefined));
+  it('patrimoine-accounts créé',                          () => expect(migrateData(legacy)['patrimoine-accounts']).not.toBe(undefined));
+  it('patrimoine-settings créé',                          () => expect(migrateData(legacy)['patrimoine-settings']).not.toBe(undefined));
+  it('accounts[0].name = PEA',                            () => expect(JSON.parse(migrateData(legacy)['patrimoine-accounts']).accounts[0].name).toBe('PEA'));
+  it('isDemo = false conservé',                           () => expect(JSON.parse(migrateData(legacy)['patrimoine-accounts']).isDemo).toBe(false));
+  it('watchlist[0].ticker = AAPL',                        () => expect(JSON.parse(migrateData(legacy)['patrimoine-accounts']).watchlist[0].ticker).toBe('AAPL'));
+  it('theme = dark dans settings',                        () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).theme).toBe('dark'));
+  it('currency = USD dans settings',                      () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).currency).toBe('USD'));
+  it('priceApiKey dans settings',                         () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).priceApiKey).toBe('abc123'));
+  it('autoRefresh dans settings',                         () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).autoRefresh).toBe(true));
+  it('accounts ne contient pas theme',                    () => expect(JSON.parse(migrateData(legacy)['patrimoine-accounts']).theme).toBe(undefined));
+  it('accounts ne contient pas priceApiKey',              () => expect(JSON.parse(migrateData(legacy)['patrimoine-accounts']).priceApiKey).toBe(undefined));
+  it('settings ne contient pas accounts',                 () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).accounts).toBe(undefined));
+  it('settings ne contient pas watchlist',                () => expect(JSON.parse(migrateData(legacy)['patrimoine-settings']).watchlist).toBe(undefined));
+  it('données manquantes → isDemo=true par défaut',       () => expect(JSON.parse(migrateData({})['patrimoine-accounts']).isDemo).toBe(true));
+  it('données manquantes → theme=auto par défaut',        () => expect(JSON.parse(migrateData({})['patrimoine-settings']).theme).toBe('auto'));
+  it('données manquantes → currency=EUR par défaut',      () => expect(JSON.parse(migrateData({})['patrimoine-settings']).currency).toBe('EUR'));
+  it('données manquantes → autoRefresh=false par défaut', () => expect(JSON.parse(migrateData({})['patrimoine-settings']).autoRefresh).toBe(false));
+});
+
+// ── SUITE 14 : genWatchHistory ───────────────────────────────
+describe('genWatchHistory', () => {
+  it('1S → 7 points',                () => expect(genWatchHistory('AAPL',100,'1S').pts).toHaveLength(7));
+  it('1M → 30 points',               () => expect(genWatchHistory('AAPL',100,'1M').pts).toHaveLength(30));
+  it('3M → 90 points',               () => expect(genWatchHistory('AAPL',100,'3M').pts).toHaveLength(90));
+  it('6M → 182 points',              () => expect(genWatchHistory('AAPL',100,'6M').pts).toHaveLength(182));
+  it('1A → 365 points',              () => expect(genWatchHistory('AAPL',100,'1A').pts).toHaveLength(365));
+  it('days = longueur de pts',       () => { const {pts,days}=genWatchHistory('MC',750,'3M'); expect(pts.length).toBe(days); });
+  it('dernier point = prix ancré',   () => { const {pts}=genWatchHistory('MC',750,'3M'); expect(pts[pts.length-1]).toBe(750); });
+  it('déterministe (même input = même output)', () => {
+    const r1=genWatchHistory('AAPL',185,'1M');
+    const r2=genWatchHistory('AAPL',185,'1M');
+    expect(r1.pts[0]).toBe(r2.pts[0]);
+    expect(r1.pts[15]).toBe(r2.pts[15]);
+  });
+  it('seeds différents → historiques différents', () => {
+    const r1=genWatchHistory('AAPL',185,'1M');
+    const r2=genWatchHistory('MSFT',185,'1M');
+    expect(Math.abs(r1.pts[0]-r2.pts[0])).toBeGreaterThan(0);
+  });
+  it('tous les points sont positifs', () => {
+    genWatchHistory('BNP',45,'1A').pts.forEach(p => expect(p).toBeGreaterThan(0));
+  });
+  it('startDate = aujourd\'hui − (days−1)', () => {
+    const today=new Date(); today.setHours(0,0,0,0);
+    const {startDate,days}=genWatchHistory('AAPL',100,'1M');
+    const expected=new Date(today.getTime()-(days-1)*86400000);
+    expect(startDate.toISOString().slice(0,10)).toBe(expected.toISOString().slice(0,10));
+  });
+  it('période inconnue → 90 points (défaut)', () => expect(genWatchHistory('X',100,'5Y').pts).toHaveLength(90));
 });
 
 // ═══════════════════════════════════════════════════════════════
