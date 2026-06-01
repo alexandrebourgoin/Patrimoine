@@ -60,7 +60,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 #app{width:100%;max-width:480px;height:100vh;height:100dvh;margin:0 auto;position:relative;overflow:hidden}
 
 /* SCREENS */
-.screen{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform}
+.screen{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
 .screen.no-nav{padding-bottom:20px}
 #s-dashboard{transform:translateX(0)}
 
@@ -3577,6 +3578,24 @@ function applyPrices(priceData) {
 
 // ═══════════════════════════════════════════════
 // THÈME
+// ── Log debug global (utilisé par fetch global ET refreshs individuels) ──
+function dbgLog(tag, msg) {
+  if (!S.debug) return;
+  S._debugLog.unshift(`${tag} ${msg}`);
+  if (S._debugLog.length > 80) S._debugLog.length = 80;
+  // Mise à jour live du bloc log si la page settings est ouverte
+  const logEl = document.getElementById('js-debug-log');
+  if (logEl) {
+    logEl.innerHTML = S._debugLog.map(l => {
+      const col = l.startsWith('[OK')  ? 'var(--gain)'
+                : l.startsWith('[ERR') ? 'var(--loss)'
+                : l.startsWith('[WRN') ? '#F59E0B'
+                : 'var(--text2)';
+      return `<span style="color:${col}">${l.replace(/</g,'&lt;')}</span>`;
+    }).join('\n');
+  }
+}
+
 // ═══════════════════════════════════════════════
 function applyTheme(theme) {
   const dark = theme === 'dark' ||
@@ -3593,20 +3612,25 @@ let _tdRateLimited = 0; // timestamp du dernier 429 Twelve Data
 // Helper partagé : fetch un cours unique via Twelve Data ou Yahoo
 async function _fetchSinglePrice(yhSym, cgId) {
   let price = null, change1d = null;
+  const sym = yhSym || cgId;
+  dbgLog('[INF]', `─── Refresh individuel: ${sym} ───`);
 
   if (cgId) {
     try {
       const vs = S.currency.toLowerCase();
+      dbgLog('[INF]', `CoinGecko → ${cgId}`);
       const r  = await fetch(
         `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=${vs}&include_24hr_change=true`,
         { signal: AbortSignal.timeout(8000) }
       );
+      dbgLog(r.ok?'[OK]':'[WRN]', `CoinGecko status=${r.status}`);
       if (r.ok) {
         const d = await r.json();
-        price    = d[cgId]?.[vs]                  || null;
+        price    = d[cgId]?.[vs]                 || null;
         change1d = d[cgId]?.[`${vs}_24h_change`] ?? null;
+        dbgLog(price?'[OK]':'[WRN]', `CoinGecko prix=${price} change=${change1d}`);
       }
-    } catch(_) {}
+    } catch(e) { dbgLog('[ERR]', `CoinGecko: ${e?.message||e}`); }
     return { price, change1d };
   }
 
@@ -3614,17 +3638,21 @@ async function _fetchSinglePrice(yhSym, cgId) {
   if (S.priceApiKey) {
     const wait = 61000 - (Date.now() - _tdRateLimited);
     if (_tdRateLimited && wait > 0) {
-      toast(`Limite Twelve Data · réessayer dans ${Math.ceil(wait/1000)}s`);
+      const s = Math.ceil(wait/1000);
+      dbgLog('[WRN]', `Rate limit actif · encore ${s}s`);
+      toast(`Limite Twelve Data · réessayer dans ${s}s`);
       return { price: null, change1d: null };
     }
     try {
-      // /quote pour avoir le cours ET la variation journalière
+      dbgLog('[INF]', `Twelve Data /quote → ${yhSym}`);
       const r = await fetch(
         `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(yhSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
         { signal: AbortSignal.timeout(8000) }
       );
+      dbgLog(r.ok?'[OK]':'[WRN]', `TD status=${r.status}`);
       if (r.status === 429) {
         _tdRateLimited = Date.now();
+        dbgLog('[WRN]', 'TD 429 → rate limit mis à jour');
         toast('Limite Twelve Data · réessayer dans 1 min');
         return { price: null, change1d: null };
       }
@@ -3633,25 +3661,34 @@ async function _fetchSinglePrice(yhSym, cgId) {
         if (d.close && !d.code) {
           price    = parseFloat(d.close);
           change1d = parseFloat(d.percent_change) || 0;
+          dbgLog('[OK]', `TD prix=${price} change=${change1d}%`);
+        } else {
+          dbgLog('[WRN]', `TD réponse invalide: ${JSON.stringify(d).slice(0,120)}`);
         }
       }
-    } catch(_) {}
+    } catch(e) { dbgLog('[ERR]', `TD exception: ${e?.message||e}`); }
+  } else {
+    dbgLog('[INF]', 'Pas de clé API → Yahoo Finance direct');
   }
 
   // Fallback Yahoo Finance direct
   if (!price) {
     try {
+      dbgLog('[INF]', `Yahoo /chart → ${yhSym}`);
       const r = await fetch(
         `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSym)}?range=1d&interval=1d`,
         { signal: AbortSignal.timeout(7000), credentials: 'omit' }
       );
+      dbgLog(r.ok?'[OK]':'[WRN]', `Yahoo status=${r.status}`);
       if (r.ok) {
         const d = await r.json();
         price = d?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+        dbgLog(price?'[OK]':'[WRN]', `Yahoo prix=${price}`);
       }
-    } catch(_) {}
+    } catch(e) { dbgLog('[ERR]', `Yahoo: ${e?.message||e}`); }
   }
 
+  if (!price) dbgLog('[ERR]', `Aucun cours trouvé pour ${sym}`);
   return { price, change1d };
 }
 
@@ -3753,11 +3790,7 @@ async function fetchLivePrices() {
   // ── Yahoo Finance ──────────────────────────────
   if (yahooSymbols.length) {
     let yResults = null;
-    const dbg = (tag, msg) => {
-      if (!S.debug) return;
-      S._debugLog.unshift(`${tag} ${msg}`);
-      if (S._debugLog.length > 60) S._debugLog.length = 60;
-    };
+    const dbg = dbgLog; // alias local → même fonction globale
     dbg('[INF]', `Symboles: ${yahooSymbols.join(', ')}`);
 
     // Helper : parse une réponse v7 quote
@@ -3881,12 +3914,12 @@ async function fetchLivePrices() {
       });
     } catch(e) {
       errors.push('CoinGecko');
-      if(S.debug){ S._debugLog.unshift(`[ERR] CoinGecko: ${e?.message||e}`); }
+      dbgLog('[ERR]', `CoinGecko: ${e?.message||e}`);
     }
   }
 
   // ── Finalisation ───────────────────────────────
-  if (S.debug && S.screen === 'settings') renderScreen('settings'); // rafraîchit le log
+  // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
   if (updated > 0) {
     S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
     savePrices(prices);
