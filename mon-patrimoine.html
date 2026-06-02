@@ -980,23 +980,31 @@ const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
 };
 
-// ─── Twelve Data : liste de formats à essayer par suffixe Yahoo ───
-// Douze Data n'utilise pas les codes MIC ISO — on essaie plusieurs formats
-// en cascade jusqu'au succès, le log révèle lequel fonctionne.
+// ─── Twelve Data : formats à essayer par suffixe Yahoo ───
+// Pas de ticker seul pour les titres européens (ambiguïté avec les tickers US)
+// L'ISIN est ajouté automatiquement quand disponible (globalement unique)
 const _TD_CANDIDATES = {
-  '.PA': [':EURONEXT', ':XPAR', ''],        // Paris
-  '.AS': [':EURONEXT', ':XAMS', ''],        // Amsterdam
-  '.BR': [':EURONEXT', ':XBRU', ''],        // Bruxelles
-  '.DE': [':XETR', ':XFRA', ':EURONEXT', ''], // Frankfurt
-  '.MI': [':XMIL', ':MIL', ':EURONEXT', ''], // Milan
-  '.CO': [':XCSE', ':CPH', ''],             // Copenhague
-  '.MC': [':XMCE', ':BME', ''],             // Madrid
-  '.L':  [':XLON', ':LSE', ''],             // Londres
-  '.TO': [':XTSE', ':TSX', ''],             // Toronto
-  '.HK': [':XHKG', ''],                     // Hong Kong
+  '.PA': [':EPA', ':PAR', ':XPAR', ':EURONEXT'],   // Euronext Paris
+  '.AS': [':AMS', ':XAMS', ':EURONEXT'],            // Euronext Amsterdam
+  '.BR': [':EBR', ':XBRU', ':EURONEXT'],            // Euronext Bruxelles
+  '.DE': [':XETR', ':XFRA'],                        // Frankfurt/Xetra
+  '.MI': [':MIL', ':XMIL'],                         // Milan
+  '.CO': [':CPH', ':XCSE'],                         // Copenhague
+  '.MC': [':BME', ':XMCE'],                         // Madrid
+  '.L':  [':LSE', ':XLON'],                         // Londres
+  '.TO': [':TSX', ':XTSE'],                         // Toronto
+  '.HK': [':XHKG'],                                 // Hong Kong
 };
 
-// Retourne le ticker de base sans suffixe bourse
+// Reverse map Yahoo symbol → app ticker (pour lookup ISIN)
+const YAHOO_REV_MAP = Object.fromEntries(
+  Object.entries(YAHOO_MAP).map(([k, v]) => [v, k])
+);
+// Reverse map ISIN_MAP → ticker→ISIN (pour unicité garantie)
+const TICKER_TO_ISIN = Object.fromEntries(
+  Object.entries(ISIN_MAP).map(([isin, {ticker}]) => [ticker, isin])
+);
+
 function tdBase(yhSym) {
   for (const suf of Object.keys(_TD_CANDIDATES))
     if (yhSym.endsWith(suf)) return yhSym.slice(0, -suf.length);
@@ -1008,7 +1016,12 @@ function tdTryList(yhSym) {
   for (const [suf, candidates] of Object.entries(_TD_CANDIDATES)) {
     if (yhSym.endsWith(suf)) {
       const base = yhSym.slice(0, -suf.length);
-      return [...new Set(candidates.map(c => base + c).concat([yhSym]))];
+      const list = candidates.map(c => base + c);
+      // Ajouter l'ISIN si disponible (identifiant unique, pas d'ambiguïté)
+      const appTicker = YAHOO_REV_MAP[yhSym];
+      const isin = appTicker ? TICKER_TO_ISIN[appTicker] : null;
+      if (isin) list.push(isin);
+      return [...new Set(list)]; // pas de ticker seul pour éviter les faux positifs
     }
   }
   return [yhSym]; // titre US : format identique
