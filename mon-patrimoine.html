@@ -996,15 +996,6 @@ const _TD_CANDIDATES = {
   '.HK': [':XHKG'],                                 // Hong Kong
 };
 
-// Reverse map Yahoo symbol → app ticker (pour lookup ISIN)
-const YAHOO_REV_MAP = Object.fromEntries(
-  Object.entries(YAHOO_MAP).map(([k, v]) => [v, k])
-);
-// Reverse map ISIN_MAP → ticker→ISIN (pour unicité garantie)
-const TICKER_TO_ISIN = Object.fromEntries(
-  Object.entries(ISIN_MAP).map(([isin, {ticker}]) => [ticker, isin])
-);
-
 function tdBase(yhSym) {
   for (const suf of Object.keys(_TD_CANDIDATES))
     if (yhSym.endsWith(suf)) return yhSym.slice(0, -suf.length);
@@ -1067,6 +1058,14 @@ const ISIN_MAP = {
   'FR0013412285':{ ticker:'EWLD', name:'Lyxor MSCI World' },
   'FR0010429068':{ ticker:'PAEEM',name:'Amundi MSCI Emerging' },
 };
+
+// Reverse maps (définis après ISIN_MAP et YAHOO_MAP)
+const YAHOO_REV_MAP = Object.fromEntries(
+  Object.entries(YAHOO_MAP).map(([k, v]) => [v, k])
+);
+const TICKER_TO_ISIN = Object.fromEntries(
+  Object.entries(ISIN_MAP).map(([isin, {ticker}]) => [ticker, isin])
+);
 
 // ═══════════════════════════════════════════════
 // CHARTS
