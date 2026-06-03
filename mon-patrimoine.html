@@ -213,6 +213,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .cur-opt.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .chev{color:var(--text3);flex-shrink:0}
 .csv-hint{font-size:11px;color:var(--text3);padding:6px 16px 12px 64px;line-height:1.6}
+.api-link{color:var(--accent);font-size:11px;font-weight:700;text-decoration:none;margin-left:5px;opacity:.8}
 #csv-file{display:none}
 
 /* ─── SEARCH ─── */
@@ -805,7 +806,8 @@ const S = {
   watchPeriod: '3M',
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
-  priceApiKey: '',    // clé Twelve Data (optionnelle)
+  priceApiKey: '',    // clé Twelve Data (US stocks)
+  fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
   _debugLog: [],      // non persisté
   _tdOffset:  0,      // rotation Twelve Data (non persisté)
 };
@@ -980,43 +982,7 @@ const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
 };
 
-// ─── Twelve Data : formats à essayer par suffixe Yahoo ───
-// Pas de ticker seul pour les titres européens (ambiguïté avec les tickers US)
-// L'ISIN est ajouté automatiquement quand disponible (globalement unique)
-const _TD_CANDIDATES = {
-  '.PA': [':EPA', ':PAR', ':XPAR', ':EURONEXT'],   // Euronext Paris
-  '.AS': [':AMS', ':XAMS', ':EURONEXT'],            // Euronext Amsterdam
-  '.BR': [':EBR', ':XBRU', ':EURONEXT'],            // Euronext Bruxelles
-  '.DE': [':XETR', ':XFRA'],                        // Frankfurt/Xetra
-  '.MI': [':MIL', ':XMIL'],                         // Milan
-  '.CO': [':CPH', ':XCSE'],                         // Copenhague
-  '.MC': [':BME', ':XMCE'],                         // Madrid
-  '.L':  [':LSE', ':XLON'],                         // Londres
-  '.TO': [':TSX', ':XTSE'],                         // Toronto
-  '.HK': [':XHKG'],                                 // Hong Kong
-};
-
-function tdBase(yhSym) {
-  for (const suf of Object.keys(_TD_CANDIDATES))
-    if (yhSym.endsWith(suf)) return yhSym.slice(0, -suf.length);
-  return yhSym;
-}
-
-// Retourne la liste ordonnée de symboles à essayer pour Twelve Data
-function tdTryList(yhSym) {
-  for (const [suf, candidates] of Object.entries(_TD_CANDIDATES)) {
-    if (yhSym.endsWith(suf)) {
-      const base = yhSym.slice(0, -suf.length);
-      const list = candidates.map(c => base + c);
-      // Ajouter l'ISIN si disponible (identifiant unique, pas d'ambiguïté)
-      const appTicker = YAHOO_REV_MAP[yhSym];
-      const isin = appTicker ? TICKER_TO_ISIN[appTicker] : null;
-      if (isin) list.push(isin);
-      return [...new Set(list)]; // pas de ticker seul pour éviter les faux positifs
-    }
-  }
-  return [yhSym]; // titre US : format identique
-}
+// (Twelve Data cascade supprimée — proxy Cloudflare utilisé directement)
 
 // ─── ISIN → ticker (pour import Degiro) ───
 const ISIN_MAP = {
@@ -1059,13 +1025,6 @@ const ISIN_MAP = {
   'FR0010429068':{ ticker:'PAEEM',name:'Amundi MSCI Emerging' },
 };
 
-// Reverse maps (définis après ISIN_MAP et YAHOO_MAP)
-const YAHOO_REV_MAP = Object.fromEntries(
-  Object.entries(YAHOO_MAP).map(([k, v]) => [v, k])
-);
-const TICKER_TO_ISIN = Object.fromEntries(
-  Object.entries(ISIN_MAP).map(([isin, {ticker}]) => [ticker, isin])
-);
 
 // ═══════════════════════════════════════════════
 // CHARTS
@@ -2182,10 +2141,20 @@ function renderSettings() {
         <svg viewBox="0 0 24 24" fill="#00D68F"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name">Clé Twelve Data</div>
-        <div class="s-sub">Gratuite sur twelvedata.com · 8 crédits/min</div>
+        <div class="s-name">Twelve Data <a class="api-link" href="https://twelvedata.com" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ twelvedata.com</a></div>
+        <div class="s-sub">Gratuit · 800 req/jour · actions US</div>
       </div>
-      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Coller la clé ici" style="max-width:130px;font-size:12px">
+      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px">
+    </div>
+    <div class="s-item">
+      <div class="s-ico" style="background:rgba(99,102,241,.12)">
+        <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm1 14.5h-2v-4.5H9l3-5.5 3 5.5h-2v4.5z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Financial Modeling Prep <a class="api-link" href="https://financialmodelingprep.com/developer/docs" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ fmp</a></div>
+        <div class="s-sub">Gratuit · 250 req/jour · actions EU + US</div>
+      </div>
+      <input class="s-input" id="js-fmp-key" value="${S.fmpApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px">
     </div>
   </div>
 
@@ -2642,8 +2611,13 @@ function bindEvents(id, el) {
     });
     el.querySelector('#js-price-key')?.addEventListener('change', e => {
       S.priceApiKey = e.target.value.trim();
-      saveData();
-      toast(S.priceApiKey ? 'Clé Twelve Data enregistrée ✓' : 'Clé supprimée');
+      saveSettings();
+      toast(S.priceApiKey ? 'Clé Twelve Data enregistrée ✓' : 'Clé Twelve Data supprimée');
+    });
+    el.querySelector('#js-fmp-key')?.addEventListener('change', e => {
+      S.fmpApiKey = e.target.value.trim();
+      saveSettings();
+      toast(S.fmpApiKey ? 'Clé FMP enregistrée ✓' : 'Clé FMP supprimée');
     });
     el.querySelector('#js-debug-tog')?.addEventListener('click',()=>{
       S.debug = !S.debug;
@@ -3529,6 +3503,7 @@ function saveSettings() {
       debug:       S.debug,
       autoRefresh: S.autoRefresh,
       priceApiKey: S.priceApiKey,
+      fmpApiKey:   S.fmpApiKey,
     }));
   } catch(e) {}
 }
@@ -3593,6 +3568,7 @@ function loadData() {
       if (s.debug !== undefined)    S.debug       = s.debug;
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
+      if (s.fmpApiKey)              S.fmpApiKey   = s.fmpApiKey;
     }
     return true;
   } catch(e) { return false; }
@@ -3652,8 +3628,10 @@ function applyTheme(theme) {
 // ═══════════════════════════════════════════════
 // LIVE PRICES  (PWA / HTTPS uniquement)
 // ═══════════════════════════════════════════════
+const PROXY_URL = 'https://patrimoine-prices.al-the-best.workers.dev';
+
 let _fetching = false;
-let _tdRateLimited = 0; // timestamp du dernier 429 Twelve Data
+let _tdRateLimited = 0;
 
 // Helper partagé : fetch un cours unique via Twelve Data ou Yahoo
 async function _fetchSinglePrice(yhSym, cgId) {
@@ -3680,61 +3658,42 @@ async function _fetchSinglePrice(yhSym, cgId) {
     return { price, change1d };
   }
 
-  // Vérifier rate limit Twelve Data (60 s)
-  if (S.priceApiKey) {
-    const wait = 61000 - (Date.now() - _tdRateLimited);
-    if (_tdRateLimited && wait > 0) {
-      const s = Math.ceil(wait/1000);
-      dbgLog('[WRN]', `Rate limit actif · encore ${s}s`);
-      toast(`Limite Twelve Data · réessayer dans ${s}s`);
-      return { price: null, change1d: null };
+  // Proxy Cloudflare (Yahoo Finance sans CORS)
+  try {
+    dbgLog('[INF]', `Proxy → ${yhSym}`);
+    const r = await fetch(`${PROXY_URL}?symbols=${encodeURIComponent(yhSym)}`,
+      { signal: AbortSignal.timeout(8000) });
+    dbgLog(r.ok?'[OK]':'[WRN]', `Proxy status=${r.status}`);
+    if (r.ok) {
+      const d = await r.json();
+      const q = d?.quoteResponse?.result?.[0];
+      if (q?.regularMarketPrice) {
+        price    = q.regularMarketPrice;
+        change1d = q.regularMarketChangePercent || 0;
+        dbgLog('[OK]', `Proxy prix=${price} change=${change1d?.toFixed(2)}%`);
+      }
     }
-    // Essayer les formats de symbole en cascade jusqu'au succès
-    const tryList = tdTryList(yhSym);
-    dbgLog('[INF]', `TD /price → essai cascade: ${tryList.join(' | ')}`);
-    for (const tdSym of tryList) {
-      try {
-        const r = await fetch(
-          `https://api.twelvedata.com/price?symbol=${encodeURIComponent(tdSym)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        dbgLog(r.ok?'[OK]':'[WRN]', `TD ${tdSym} → status=${r.status}`);
-        if (r.status === 429) {
-          _tdRateLimited = Date.now();
-          dbgLog('[WRN]', 'TD 429 → rate limit mis à jour');
-          toast('Limite Twelve Data · réessayer dans 1 min');
-          return { price: null, change1d: null };
-        }
-        if (r.ok) {
-          const d = await r.json();
-          if (d.price && !d.code) {
-            price = parseFloat(d.price);
-            dbgLog('[OK]', `TD ${tdSym} prix=${price} ✓`);
-            break; // succès → arrêter la cascade
-          }
-          dbgLog('[WRN]', `TD ${tdSym} réponse: ${JSON.stringify(d).slice(0,100)}`);
-        }
-      } catch(e) { dbgLog('[ERR]', `TD ${tdSym}: ${e?.message||e}`); }
-    }
-  } else {
-    dbgLog('[INF]', 'Pas de clé API → Yahoo Finance direct');
-  }
+  } catch(e) { dbgLog('[ERR]', `Proxy: ${e?.message||e}`); }
 
-  // Fallback Yahoo Finance direct
-  if (!price) {
+  // Fallback FMP (si proxy en panne)
+  if (!price && S.fmpApiKey) {
     try {
-      dbgLog('[INF]', `Yahoo /chart → ${yhSym}`);
+      dbgLog('[INF]', `FMP fallback → ${yhSym}`);
       const r = await fetch(
-        `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yhSym)}?range=1d&interval=1d`,
-        { signal: AbortSignal.timeout(7000), credentials: 'omit' }
+        `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(yhSym)}?apikey=${encodeURIComponent(S.fmpApiKey)}`,
+        { signal: AbortSignal.timeout(8000) }
       );
-      dbgLog(r.ok?'[OK]':'[WRN]', `Yahoo status=${r.status}`);
+      dbgLog(r.ok?'[OK]':'[WRN]', `FMP status=${r.status}`);
       if (r.ok) {
         const d = await r.json();
-        price = d?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
-        dbgLog(price?'[OK]':'[WRN]', `Yahoo prix=${price}`);
+        const q = Array.isArray(d) ? d[0] : d;
+        if (q?.price && !q?.Error) {
+          price    = parseFloat(q.price);
+          change1d = parseFloat(q.changesPercentage) || 0;
+          dbgLog('[OK]', `FMP prix=${price} change=${change1d?.toFixed(2)}%`);
+        }
       }
-    } catch(e) { dbgLog('[ERR]', `Yahoo: ${e?.message||e}`); }
+    } catch(e) { dbgLog('[ERR]', `FMP: ${e?.message||e}`); }
   }
 
   if (!price) dbgLog('[ERR]', `Aucun cours trouvé pour ${sym}`);
@@ -3836,132 +3795,39 @@ async function fetchLivePrices() {
   const errors = [];
   const prices = {}; // pour savePrices()
 
-  // ── Yahoo Finance ──────────────────────────────
+  // ── Proxy Cloudflare → Yahoo Finance (+ FMP en fallback) ──
   if (yahooSymbols.length) {
     let yResults = null;
-    const dbg = dbgLog; // alias local → même fonction globale
-    dbg('[INF]', `Symboles: ${yahooSymbols.join(', ')}`);
-
-    // Helper : parse une réponse v7 quote
     const parseV7 = data => data?.quoteResponse?.result?.filter(q => q.regularMarketPrice) || [];
+    dbgLog('[INF]', `Proxy → ${yahooSymbols.length} symboles: ${yahooSymbols.join(', ')}`);
 
-    // Helper : parse une réponse v8/chart
-    const parseChart = (data, sym) => {
-      const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
-      return price ? { symbol: sym, regularMarketPrice: price } : null;
-    };
+    // Proxy Cloudflare (Yahoo Finance sans CORS)
+    try {
+      const url = PROXY_URL + '?symbols=' + yahooSymbols.join(',');
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      dbgLog(r.ok?'[OK]':'[WRN]', `Proxy status=${r.status}`);
+      if (r.ok) { yResults = parseV7(await r.json()); dbgLog('[OK]', `Proxy résultats=${yResults.length}`); }
+    } catch(e) { dbgLog('[ERR]', `Proxy: ${e?.message||e}`); }
 
-    // Si une clé API est configurée, aller directement à T3 (Twelve Data)
-    if (S.priceApiKey) {
-      dbg('[INF]', 'Clé API présente → T3 directement (Yahoo Finance ignoré)');
-    }
-
-    // Tentative 1 : batch v7 direct (query1) — ignoré si clé API configurée
-    if (!S.priceApiKey) {
+    // Fallback FMP (si proxy en panne)
+    if (!yResults?.length && S.fmpApiKey) {
       try {
-        const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',');
-        dbg('[INF]', `T1 → ${url}`);
-        const r = await fetch(url, { signal: AbortSignal.timeout(7000), credentials: 'omit' });
-        dbg(r.ok ? '[OK]' : '[WRN]', `T1 status=${r.status} ${r.statusText}`);
-        if (r.ok) { yResults = parseV7(await r.json()); dbg('[OK]', `T1 résultats=${yResults.length}`); }
-      } catch(e) { dbg('[ERR]', `T1 exception: ${e?.message||e}`); }
-    }
-
-    // Tentative 2 : v8/chart individuels direct — ignoré si clé API configurée
-    if (!yResults?.length && !S.priceApiKey) {
-      dbg('[INF]', `T2 → v8/chart individuel × ${yahooSymbols.length}`);
-      const settled = await Promise.allSettled(yahooSymbols.map(sym =>
-        fetch(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`,
-          { signal: AbortSignal.timeout(6000), credentials: 'omit' })
-          .then(r => { dbg(r.ok?'[OK]':'[WRN]',`T2 ${sym} status=${r.status}`); return r.ok ? r.json() : Promise.reject(r.status); })
-          .then(d => parseChart(d, sym))
-          .catch(e => { dbg('[ERR]',`T2 ${sym}: ${e?.message||e}`); return null; })
-      ));
-      const r2 = settled.filter(r => r.status==='fulfilled' && r.value).map(r => r.value);
-      dbg(r2.length?'[OK]':'[WRN]', `T2 résultats=${r2.length}/${yahooSymbols.length}`);
-      if (r2.length) yResults = r2;
-    }
-
-    // Tentative 3 : Twelve Data (symboles convertis au format TD, batch de 8 max)
-    if (!yResults?.length && S.priceApiKey) {
-      try {
-        const TD_LIMIT = 8;
-        // Rotation : chaque refresh couvre 8 symboles différents
-        S._tdOffset = (S._tdOffset || 0) % yahooSymbols.length;
-        const rotated = [...yahooSymbols.slice(S._tdOffset), ...yahooSymbols.slice(0, S._tdOffset)];
-        const batch = rotated.slice(0, TD_LIMIT);
-        S._tdOffset = (S._tdOffset + TD_LIMIT) % yahooSymbols.length;
-
-        // Découvrir le bon format TD via le 1er symbole (sonde), puis appliquer au batch
-        const firstYh = batch[0];
-        const formats = tdTryList(firstYh);
-        let workingFmt = null; // suffixe TD qui fonctionne (ex: ':EURONEXT')
-
-        for (const probe of formats) {
-          try {
-            const pr = await fetch(
-              `https://api.twelvedata.com/price?symbol=${encodeURIComponent(probe)}&apikey=${encodeURIComponent(S.priceApiKey)}`,
-              { signal: AbortSignal.timeout(5000) }
-            );
-            if (pr.status === 429) { _tdRateLimited = Date.now(); break; }
-            if (pr.ok) { const d = await pr.json(); if (d.price && !d.code) { workingFmt = probe; break; } }
-            dbg('[WRN]', `T3 sonde ${probe} → ${pr.status}`);
-          } catch(_) {}
-        }
-
-        const rateLimited = _tdRateLimited && (Date.now() - _tdRateLimited < 61000);
-        if (rateLimited) {
-          dbg('[WRN]', 'T3 rate limit → abandon batch');
-        } else if (!workingFmt) {
-          dbg('[WRN]', `T3 aucun format TD valide pour ${firstYh} (essayés: ${formats.join(', ')})`);
-        } else {
-          // Appliquer le format découvert à tout le batch
-          const suffix = workingFmt.slice(tdBase(firstYh).length); // ex: ':EURONEXT'
-          const tdSymbols = batch.map(yh => tdBase(yh) + suffix);
-          const tdRev = {};
-          batch.forEach((yhSym, i) => { tdRev[tdSymbols[i]] = yahooRev[yhSym]; });
-
-          const url = 'https://api.twelvedata.com/price?symbol='
-            + tdSymbols.join(',') + '&apikey=' + encodeURIComponent(S.priceApiKey);
-          dbg('[INF]', `T3 batch (fmt:${suffix}) ${batch.length}/${yahooSymbols.length}: ${tdSymbols.join(',')}`);
-          const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-          dbg(r.ok?'[OK]':'[WRN]', `T3 status=${r.status}${r.status===429?' (limite — attendre 1 min)':''}`);
-          if (r.status === 429) { _tdRateLimited = Date.now(); }
-          if (r.ok) {
-            const td = await r.json();
-            const tdArr = td.price && !td.code
-              ? [{ symbol: tdSymbols[0], regularMarketPrice: parseFloat(td.price) }]
-              : Object.entries(td)
-                  .filter(([,v]) => v?.price && !v?.code)
-                  .map(([sym,v]) => ({ symbol: sym, regularMarketPrice: parseFloat(v.price) }));
-            dbg(tdArr.length?'[OK]':'[WRN]', `T3 résultats=${tdArr.length}${!tdArr.length?' | '+JSON.stringify(td).slice(0,120):''}`);
-            if (tdArr.length) {
-              yResults = tdArr.map(q => ({ ...q, symbol: tdRev[q.symbol] || q.symbol }));
-            }
-          }
-        }
-      } catch(e) { dbg('[ERR]', `T3 Twelve Data: ${e?.message||e}`); }
-    }
-
-    // Tentative 4 : Yahoo Finance via allorigins.win (proxy serveur, autre IP)
-    if (!yResults?.length) {
-      try {
-        const target = encodeURIComponent(
-          'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(',')
+        dbgLog('[INF]', `FMP fallback → ${yahooSymbols.join(',')}`);
+        const r = await fetch(
+          `https://financialmodelingprep.com/api/v3/quote/${yahooSymbols.join(',')}?apikey=${encodeURIComponent(S.fmpApiKey)}`,
+          { signal: AbortSignal.timeout(10000) }
         );
-        dbg('[INF]', `T4 → allorigins.win`);
-        const r = await fetch('https://api.allorigins.win/get?url=' + target,
-          { signal: AbortSignal.timeout(12000) });
-        dbg(r.ok?'[OK]':'[WRN]', `T4 http=${r.status}`);
+        dbgLog(r.ok?'[OK]':'[WRN]', `FMP status=${r.status}`);
         if (r.ok) {
-          const ao = await r.json();
-          dbg(ao.status?.http_code===200?'[OK]':'[WRN]', `T4 inner=${ao.status?.http_code}`);
-          if (ao.status?.http_code===200 && ao.contents) {
-            yResults = parseV7(JSON.parse(ao.contents));
-            dbg('[OK]', `T4 résultats=${yResults.length}`);
+          const data = await r.json();
+          if (Array.isArray(data) && data.length) {
+            yResults = data.filter(q => q.price).map(q => ({
+              symbol: q.symbol, regularMarketPrice: parseFloat(q.price)
+            }));
+            dbgLog('[OK]', `FMP résultats=${yResults.length}`);
           }
         }
-      } catch(e) { dbg('[ERR]', `T4 allorigins: ${e?.message||e}`); }
+      } catch(e) { dbgLog('[ERR]', `FMP: ${e?.message||e}`); }
     }
 
     if (yResults?.length) {
@@ -3973,7 +3839,7 @@ async function fetchLivePrices() {
         prices[ticker] = price;
       });
     } else {
-      errors.push('Yahoo Finance');
+      errors.push('Proxy Yahoo Finance');
     }
   }
 
