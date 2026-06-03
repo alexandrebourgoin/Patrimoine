@@ -2136,25 +2136,28 @@ function renderSettings() {
       </div>
       <div class="toggle ${S.autoRefresh?'on':''}" id="js-autorefresh-inner"><div class="toggle-thumb"></div></div>
     </div>
+  </div>
+  <div class="s-section" style="color:var(--text3)">Clés API — fallback si proxy indisponible</div>
+  <div class="s-group">
     <div class="s-item">
-      <div class="s-ico" style="background:rgba(0,214,143,.12)">
-        <svg viewBox="0 0 24 24" fill="#00D68F"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+      <div class="s-ico" style="background:rgba(0,214,143,.08)">
+        <svg viewBox="0 0 24 24" fill="#00D68F" opacity=".6"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name">Twelve Data <a class="api-link" href="https://twelvedata.com" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ twelvedata.com</a></div>
-        <div class="s-sub">Gratuit · 800 req/jour · actions US</div>
+        <div class="s-name" style="color:var(--text2)">Twelve Data <a class="api-link" href="https://twelvedata.com" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
+        <div class="s-sub">Fallback · 800 req/jour · actions US</div>
       </div>
-      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px">
+      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
     </div>
     <div class="s-item">
-      <div class="s-ico" style="background:rgba(99,102,241,.12)">
-        <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm1 14.5h-2v-4.5H9l3-5.5 3 5.5h-2v4.5z"/></svg>
+      <div class="s-ico" style="background:rgba(99,102,241,.08)">
+        <svg viewBox="0 0 24 24" fill="#6366F1" opacity=".6"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm1 14.5h-2v-4.5H9l3-5.5 3 5.5h-2v4.5z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name">Financial Modeling Prep <a class="api-link" href="https://financialmodelingprep.com/developer/docs" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗ fmp</a></div>
-        <div class="s-sub">Gratuit · 250 req/jour · actions EU + US</div>
+        <div class="s-name" style="color:var(--text2)">Financial Modeling Prep <a class="api-link" href="https://financialmodelingprep.com/developer/docs" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
+        <div class="s-sub">Fallback · 250 req/jour · EU + US</div>
       </div>
-      <input class="s-input" id="js-fmp-key" value="${S.fmpApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px">
+      <input class="s-input" id="js-fmp-key" value="${S.fmpApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
     </div>
   </div>
 
@@ -2217,7 +2220,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version 1.0.1 — Mai 2025 · Suivi de patrimoine</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version 1.0.2 — Juin 2026 · Suivi de patrimoine</div></div>
     </div>
   </div>
   <div style="height:20px"></div>`;
@@ -3776,10 +3779,12 @@ async function fetchLivePrices() {
   const allH = S.accounts.flatMap(a => a.holdings);
   if (!allH.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
 
-  // Tickers uniques par catégorie
-  const yahooSymbols = [...new Set(
-    allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean)
-  )];
+  // Tickers uniques : comptes + watchlist (sauf crypto)
+  const watchSymbols = S.watchlist.map(w=>YAHOO_MAP[w.ticker]).filter(Boolean);
+  const yahooSymbols = [...new Set([
+    ...allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean),
+    ...watchSymbols,
+  ])];
   const cgIds = [...new Set(
     allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean)
   )];
@@ -3835,7 +3840,14 @@ async function fetchLivePrices() {
         const ticker = yahooRev[q.symbol] || q.symbol;
         const price  = q.regularMarketPrice;
         if (!price) return;
+        // Mettre à jour les holdings
         allH.filter(h => h.ticker === ticker).forEach(h => { h.currentPrice = price; recalcHolding(h); updated++; });
+        // Mettre à jour la watchlist
+        const wItem = S.watchlist.find(w => w.ticker === ticker);
+        if (wItem) {
+          wItem.price    = price;
+          wItem.change1d = q.regularMarketChangePercent || wItem.change1d;
+        }
         prices[ticker] = price;
       });
     } else {
