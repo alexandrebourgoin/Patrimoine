@@ -1712,13 +1712,13 @@ function renderAccount() {
       <div class="stat-box"><div class="t-label">Variation J</div>
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
-    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);align-items:center">
+    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
-        <div class="t-label" style="color:rgba(255,255,255,.5)">Apport net</div>
-        <div style="font-size:14px;font-weight:800;color:${netCf>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${netCf>=0?'+':''}${masked(netCf)}</div>
+        <div class="t-label">Apport net</div>
+        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${masked(netCf)}</div>
       </div>
-      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.2);font-size:11px;font-weight:700;color:rgba(255,255,255,.8);cursor:pointer">Apports / Retraits</div>
-    </div>`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.2);font-size:11px;font-weight:700;color:rgba(255,255,255,.8);cursor:pointer">+ Apport / Retrait</div>'}
+      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Apports / Retraits</div>
+    </div>`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
   </div>
   <div class="search-wrap">
     <div class="search-box">
