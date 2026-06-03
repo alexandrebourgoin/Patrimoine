@@ -2463,7 +2463,7 @@ function bindEvents(id, el) {
       bindResultClicks();
     }));
 
-    setTimeout(()=>{if(S.screen==='recherche')inp?.focus();},200);
+    // Pas d'auto-focus : évite l'ouverture du clavier mobile à l'arrivée sur l'écran
   }
   if(id==='account') {
     const acc=S.accounts.find(a=>a.id===S.accountId);
