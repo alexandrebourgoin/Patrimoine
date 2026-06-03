@@ -243,6 +243,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .hold-add-btn{width:32px;height:32px;border-radius:9px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;cursor:pointer;transition:background .15s}
 .hold-add-btn:active{background:var(--accent);color:#fff}
 .hold-add-btn svg{width:18px;height:18px;pointer-events:none}
+.top-btn{width:36px;height:36px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;cursor:pointer;transition:background .12s}
+.top-btn:active{background:var(--card2)}
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 10px}
+.top-bar-title{font-size:20px;font-weight:900;letter-spacing:-.6px}
 
 /* ─── PULL TO REFRESH ─── */
 .ptr-bar{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text2);font-size:12px;font-weight:600;transition:height .2s}
@@ -1403,6 +1407,19 @@ function renderScreen(id) {
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
+// ── TOP BAR commun (tous les écrans principaux) ──
+const _SVG_SETTINGS = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
+
+function renderTopBar(extraBtns='') {
+  return `<div class="top-bar">
+    <div class="top-bar-title">Mon patrimoine</div>
+    <div class="row gap6">
+      ${extraBtns}
+      <div id="js-settings-btn" class="top-btn tap" title="Réglages">${_SVG_SETTINGS}</div>
+    </div>
+  </div>`;
+}
+
 // ── DASHBOARD ──
 function renderDash() {
   const w=totalWealth();
@@ -1417,23 +1434,17 @@ function renderDash() {
     ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
     : `<div class="wealth-amount t-num">${fmtCur(w)}</div>`;
   return `<div class="dash-top">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:20px">
-      <div style="font-size:20px;font-weight:900;letter-spacing:-.6px">Mon patrimoine</div>
-      <div class="row gap8">
-        <div id="js-privacy-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:${S.privacy?'var(--accent)':'var(--text2)'};cursor:pointer" title="Masquer les montants">
-          ${S.privacy
-            ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`
-            : `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
-          }
-        </div>
-        <div id="js-refresh-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer" title="Actualiser les cours">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        </div>
-        <div id="js-settings-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        </div>
+    ${renderTopBar(`
+      <div id="js-privacy-btn" class="top-btn tap" title="Masquer les montants" style="color:${S.privacy?'var(--accent)':'var(--text2)'}">
+        ${S.privacy
+          ? `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`
+          : `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
+        }
       </div>
-    </div>
+      <div id="js-refresh-btn" class="top-btn tap" title="Actualiser les cours">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      </div>
+    `)}
   </div>
     <div class="wealth-card anim">
     <div class="wealth-label">Fortune totale</div>
@@ -1483,15 +1494,12 @@ function renderComptes() {
     <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
     <div style="font-size:13px">Ajoutez un compte pour commencer</div>
   </div>`:'';
-  return `<div style="padding:20px 20px 12px;display:flex;align-items:center;justify-content:space-between">
-    <div style="font-size:20px;font-weight:900;letter-spacing:-.6px">Mes comptes</div>
-    <div class="row gap8" style="align-items:center">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px">${S.accounts.length}</div>
-      <div class="hold-add-btn" id="js-acc-add" style="width:32px;height:32px;border-radius:10px">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-      </div>
+  return `${renderTopBar(`
+    <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
+    <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
     </div>
-  </div>
+  `)}
   <div class="col gap12 px">${accs}${empty}</div>`;
 }
 
@@ -1499,8 +1507,8 @@ function renderComptes() {
 function renderRecherche() {
   const mode = S.srchMode || 'titres';
   const ph = mode === 'mouvements' ? 'Ticker, date, compte…' : 'Nom, ticker, secteur…';
-  return `<div style="padding:20px 20px 10px">
-    <div style="font-size:20px;font-weight:900;letter-spacing:-.6px;margin-bottom:14px">Recherche</div>
+  return `${renderTopBar()}
+  <div style="padding:0 20px 10px">
     <div class="search-box" id="js-srch-box">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       <input type="text" id="js-srch-inp" placeholder="${ph}" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
@@ -2075,15 +2083,7 @@ function renderAnalysis() {
     bySec[h.sector]=(bySec[h.sector]||0)+h.value;
   });
   return `<div class="analysis-top anim">
-    <div class="row" style="justify-content:space-between;align-items:flex-start">
-      <div>
-        <div class="t-title">Analyse</div>
-        <div class="t-sm" style="margin-top:4px">Tous comptes · ${fmtCur(tot)}</div>
-      </div>
-      <div id="js-settings-btn" class="tap" style="width:40px;height:40px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);cursor:pointer;flex-shrink:0">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-      </div>
-    </div>
+    ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${fmtCur(tot)}</span>`)}
   </div>
   <div style="height:10px"></div>
   <div class="t-section px" style="padding-bottom:10px">Objectifs d'allocation</div>
@@ -2419,6 +2419,7 @@ function bindEvents(id, el) {
   if(id==='comptes') {
     _bindAccCards(el);
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
+    el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
   }
   if(id==='recherche') {
     const inp=el.querySelector('#js-srch-inp');
@@ -2463,6 +2464,7 @@ function bindEvents(id, el) {
       bindResultClicks();
     }));
 
+    el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     // Pas d'auto-focus : évite l'ouverture du clavier mobile à l'arrivée sur l'écran
   }
   if(id==='account') {
