@@ -145,7 +145,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .anim:nth-child(7){animation-delay:.34s}
 
 /* ─── DASHBOARD ─── */
-.dash-top{padding:24px 20px 0}
+.dash-top{padding:10px 0 0}
 .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:-.5px}
 .wealth-card{background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 60%,#0891b2 100%);border:none;border-radius:var(--r);margin:20px 20px 0;padding:22px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(37,99,235,.28)}
 .wealth-card::before{content:'';position:absolute;top:-60px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none}
@@ -186,7 +186,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .tx-dot.sell{background:var(--loss-dim);color:var(--loss)}
 
 /* ─── ANALYSIS ─── */
-.analysis-top{padding:20px 20px 10px}
+.analysis-top{padding:0}
 .donut-block{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin:0 20px 14px;display:flex;align-items:center;gap:18px}
 .legend{flex:1}
 .legend-row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
@@ -245,8 +245,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .hold-add-btn svg{width:18px;height:18px;pointer-events:none}
 .top-btn{width:36px;height:36px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;cursor:pointer;transition:background .12s}
 .top-btn:active{background:var(--card2)}
-.top-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 10px}
-.top-bar-title{font-size:20px;font-weight:900;letter-spacing:-.6px}
+.top-bar{display:flex;align-items:center;padding:14px 20px 10px}
+.top-bar-title{font-size:20px;font-weight:900;letter-spacing:-.6px;flex:1}
 
 /* ─── PULL TO REFRESH ─── */
 .ptr-bar{height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text2);font-size:12px;font-weight:600;transition:height .2s}
@@ -1413,7 +1413,7 @@ const _SVG_SETTINGS = `<svg width="19" height="19" viewBox="0 0 24 24" fill="cur
 function renderTopBar(extraBtns='') {
   return `<div class="top-bar">
     <div class="top-bar-title">Mon patrimoine</div>
-    <div class="row gap6">
+    <div class="row gap8">
       ${extraBtns}
       <div id="js-settings-btn" class="top-btn tap" title="Réglages">${_SVG_SETTINGS}</div>
     </div>
