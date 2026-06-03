@@ -1621,17 +1621,18 @@ function srchTxResults(q) {
 function renderWatchlistCard() {
   if (!S.watchlist.length) return '';
   const rows = S.watchlist.map(w => {
+    const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
     const delta = w.price * w.change1d / 100;
-    const up = w.change1d >= 0;
+    const up    = w.change1d >= 0;
     return `<div class="watch-item tap" data-watch="${w.ticker}">
       <div class="watch-tick">${w.ticker.slice(0,4)}</div>
       <div class="flex1 col gap4" style="min-width:0">
         <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
-        <div class="t-sm">${fmtCur(w.price)}</div>
+        <div class="t-sm">${fmtNative(w.price, cur)}</div>
       </div>
       <div class="col right gap4">
         <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
-        <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${delta.toFixed(2)} ${S.currency==='EUR'?'€':'$'}</div>
+        <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
       </div>
     </div>`;
   }).join('');
@@ -1758,7 +1759,9 @@ function renderHoldsHTML(acc) {
   if(cnt) cnt.textContent=`${hs.length} valeur${hs.length!==1?'s':''}`;
   if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;return;}
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
-    hs.map(h=>`
+    hs.map(h=>{
+      const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
+      return `
       <div class="hold-item" data-hid="${h.id}">
         <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
         <div class="hold-item-body">
@@ -1769,6 +1772,9 @@ function renderHoldsHTML(acc) {
           <div class="hold-item-bot">
             <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
             <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
+            <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
             <div class="hold-add-btn" data-add="${h.id}" style="width:26px;height:26px;border-radius:7px">
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
             </div>
@@ -1777,15 +1783,33 @@ function renderHoldsHTML(acc) {
             </div>
           </div>
         </div>
-      </div>`).join('')+
+      </div>`;
+    }).join('')+
   `</div>`;
   // Navigate on row click (excluding action buttons)
   el.querySelectorAll('.hold-item').forEach(item=>{
     item.addEventListener('click',e=>{
-      if(e.target.closest('.hold-del-btn')||e.target.closest('.hold-add-btn')) return;
+      if(e.target.closest('.hold-del-btn')||e.target.closest('.hold-add-btn')||e.target.closest('.hold-watch-btn')) return;
       S.holdingId=item.dataset.hid; go('stock');
     });
   });
+  // Étoile : toggle watchlist
+  el.querySelectorAll('.hold-watch-btn').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    const h = acc.holdings.find(h => h.id === b.dataset.watchHid);
+    if (!h) return;
+    const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
+    if (idx >= 0) {
+      S.watchlist.splice(idx, 1);
+      toast(`${h.ticker} retiré des favoris`);
+    } else {
+      S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
+      toast(`${h.ticker} ajouté aux favoris ⭐`);
+    }
+    saveAccounts();
+    refreshMain();
+    renderHoldsHTML(acc);
+  }));
   el.querySelectorAll('.hold-add-btn[data-add]').forEach(b=>b.addEventListener('click',e=>{
     e.stopPropagation();
     openAddOrder(S.accountId, b.dataset.add);
@@ -1901,20 +1925,28 @@ function renderStock() {
     </div>`;
   }).join('');
 
+  const _isWatched = !!S.watchlist.find(w => w.ticker === h.ticker);
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     ${acc.name}
   </div>
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
-    <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
-    <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div>
+        <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
+        <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
+      </div>
+      <div id="js-watch-toggle" class="tap" style="width:36px;height:36px;border-radius:50%;background:${_isWatched?'rgba(245,158,11,.15)':'var(--card2)'};border:1px solid ${_isWatched?'#F59E0B':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px" title="${_isWatched?'Retirer des favoris':'Ajouter aux favoris'}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="${_isWatched?'#F59E0B':'none'}" stroke="${_isWatched?'#F59E0B':'var(--text2)'}" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
       <div class="stock-price t-num" style="margin:0">${fmtNative(h.currentPrice,hCur)}</div>
       <div id="js-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
       </div>
     </div>
-    <div class="row gap8">
+    <div class="row gap8" style="margin-top:4px">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
       <span class="t-sm">${h.type} · ${h.country} · ${h.sector}</span>
     </div>
@@ -2274,6 +2306,7 @@ function renderWatchStock() {
   const delta = watch.price * watch.change1d / 100;
   const sec   = SECURITIES_DB[watch.ticker];
   const secInfo = sec ? `${sec.type} · ${sec.country} · ${sec.sector}` : '';
+  const wCur  = watch.currency || sec?.currency || 'EUR';
 
   const periodPct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
 
@@ -2294,14 +2327,14 @@ function renderWatchStock() {
     <div class="stock-ticker-badge">${watch.ticker}</div>
     <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${watch.name}</div>
     <div style="display:flex;align-items:center;gap:10px">
-      <div class="stock-price t-num" style="margin:0">${fmtCur(watch.price)}</div>
+      <div class="stock-price t-num" style="margin:0">${fmtNative(watch.price, wCur)}</div>
       <div id="js-watch-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
       </div>
     </div>
     <div class="row gap8" style="align-items:center;flex-wrap:wrap">
       <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(watch.change1d).toFixed(2)}%</div>
-      <span style="font-size:13px;font-weight:700;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${delta.toFixed(2)} ${S.currency==='EUR'?'€':'$'}</span>
+      <span style="font-size:13px;font-weight:700;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), wCur)}</span>
       ${secInfo?`<span class="t-sm">${secInfo}</span>`:''}
     </div>
   </div>
@@ -2488,6 +2521,22 @@ function bindEvents(id, el) {
       const acc = S.accounts.find(a => a.id === S.accountId);
       const h   = acc?.holdings.find(h => h.id === S.holdingId);
       if (h) fetchTickerPrice(h.ticker, S.accountId, S.holdingId);
+    });
+    el.querySelector('#js-watch-toggle')?.addEventListener('click', () => {
+      const acc = S.accounts.find(a => a.id === S.accountId);
+      const h   = acc?.holdings.find(h => h.id === S.holdingId);
+      if (!h) return;
+      const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
+      if (idx >= 0) {
+        S.watchlist.splice(idx, 1);
+        toast(`${h.ticker} retiré des favoris`);
+      } else {
+        S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
+        toast(`${h.ticker} ajouté aux favoris ⭐`);
+      }
+      saveAccounts();
+      refreshMain();
+      renderScreen('stock');
     });
     // Interactive stock chart with overlays
     const chartWrap=el.querySelector('#js-stock-chart-wrap');
@@ -3019,7 +3068,8 @@ document.getElementById('watch-submit').addEventListener('click',()=>{
   const change=parseFloat(document.getElementById('watch-change').value)||0;
   if(!ticker||!name||!(price>0)){toast('Ticker, nom et prix requis');return;}
   if(S.watchlist.find(w=>w.ticker===ticker)){toast('Ticker déjà suivi');return;}
-  S.watchlist.push({ticker,name,price,change1d:change});
+  const _wCur = SECURITIES_DB[ticker]?.currency || 'EUR';
+  S.watchlist.push({ticker, name, price, change1d:change, currency:_wCur});
   closeWatchModal();
   refreshMain();
   toast(`${ticker} ajouté aux titres suivis ✓`);
