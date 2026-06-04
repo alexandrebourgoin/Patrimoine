@@ -136,6 +136,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .7s linear infinite}
 .anim{animation:up .35s ease both}
+@keyframes star-pop{0%{transform:scale(1)}40%{transform:scale(1.55)}70%{transform:scale(.9)}100%{transform:scale(1)}}
+.star-pop{animation:star-pop .35s cubic-bezier(.4,0,.2,1)}
 .anim:nth-child(1){animation-delay:.04s}
 .anim:nth-child(2){animation-delay:.09s}
 .anim:nth-child(3){animation-delay:.14s}
@@ -1769,13 +1771,17 @@ function renderHoldsHTML(acc) {
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
       const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
+      const weight  = acc.value > 0 ? (h.value / acc.value * 100).toFixed(1) : '0';
       return `
       <div class="hold-item" data-hid="${h.id}">
         <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
         <div class="hold-item-body">
           <div class="hold-item-top">
             <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
-            <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.value)}</div>
+            <div class="col right" style="gap:1px;flex-shrink:0">
+              <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.value)}</div>
+              <div style="font-size:10px;color:var(--text3);text-align:right">${weight}%</div>
+            </div>
           </div>
           <div class="hold-item-bot">
             <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
@@ -1807,12 +1813,18 @@ function renderHoldsHTML(acc) {
     const h = acc.holdings.find(h => h.id === b.dataset.watchHid);
     if (!h) return;
     const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
+    haptic(idx >= 0 ? 6 : 12);
     if (idx >= 0) {
       S.watchlist.splice(idx, 1);
       toast(`${h.ticker} retiré des favoris`);
     } else {
       S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
       toast(`${h.ticker} ajouté aux favoris ⭐`);
+      // Animation pop sur le bouton étoile
+      const starBtn = b.closest('.hold-watch-btn') || b;
+      starBtn.classList.remove('star-pop');
+      void starBtn.offsetWidth;
+      starBtn.classList.add('star-pop');
     }
     saveAccounts();
     refreshMain();
@@ -2465,6 +2477,10 @@ function bindEvents(id, el) {
     }));
 
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    // Ferme le clavier si tap hors de la search-box
+    el.addEventListener('touchstart', e => {
+      if (!e.target.closest('#js-srch-box')) inp?.blur();
+    }, { passive: true });
     // Pas d'auto-focus : évite l'ouverture du clavier mobile à l'arrivée sur l'écran
   }
   if(id==='account') {
@@ -2529,12 +2545,15 @@ function bindEvents(id, el) {
       const h   = acc?.holdings.find(h => h.id === S.holdingId);
       if (!h) return;
       const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
+      haptic(idx >= 0 ? 6 : 12);
       if (idx >= 0) {
         S.watchlist.splice(idx, 1);
         toast(`${h.ticker} retiré des favoris`);
       } else {
         S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
         toast(`${h.ticker} ajouté aux favoris ⭐`);
+        const starEl = el.querySelector('#js-watch-toggle');
+        if (starEl) { starEl.classList.remove('star-pop'); void starEl.offsetWidth; starEl.classList.add('star-pop'); }
       }
       saveAccounts();
       refreshMain();
@@ -3045,7 +3064,7 @@ function closeConfirm(){
 }
 document.getElementById('confirm-cancel').addEventListener('click',closeConfirm);
 document.getElementById('confirm-bg').addEventListener('click',closeConfirm);
-document.getElementById('confirm-ok').addEventListener('click',()=>{ if(_confirmCb)_confirmCb(); closeConfirm(); });
+document.getElementById('confirm-ok').addEventListener('click',()=>{ haptic(10); if(_confirmCb)_confirmCb(); closeConfirm(); });
 
 // ═══════════════════════════════════════════════
 // ADD WATCHLIST MODAL
@@ -3951,6 +3970,9 @@ async function fetchLivePrices() {
 
 // ═══════════════════════════════════════════════
 // INIT
+// ── Retour haptique (no-op sur desktop) ──
+function haptic(ms=8) { try { navigator.vibrate?.(ms); } catch(_) {} }
+
 // ═══════════════════════════════════════════════
 const _hasData=loadData();
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
