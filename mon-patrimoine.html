@@ -138,6 +138,14 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .anim{animation:up .35s ease both}
 @keyframes star-pop{0%{transform:scale(1)}40%{transform:scale(1.55)}70%{transform:scale(.9)}100%{transform:scale(1)}}
 .star-pop{animation:star-pop .35s cubic-bezier(.4,0,.2,1)}
+@keyframes num-flash{0%{opacity:1}25%{opacity:.25;color:var(--gain)}100%{opacity:1}}
+.num-flash{animation:num-flash .55s ease}
+@keyframes card-glow{0%{box-shadow:0 8px 32px rgba(37,99,235,.28)}50%{box-shadow:0 8px 40px rgba(0,214,143,.45)}100%{box-shadow:0 8px 32px rgba(37,99,235,.28)}}
+.card-glow{animation:card-glow .9s ease}
+.fresh-dot{position:absolute;bottom:3px;right:3px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--card);pointer-events:none;transition:background .5s}
+.watch-item-wrap{position:relative;overflow:hidden}
+.watch-del-reveal{position:absolute;right:0;top:0;bottom:0;width:72px;background:var(--loss);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
+.watch-item{transition:transform .2s ease}
 .anim:nth-child(1){animation-delay:.04s}
 .anim:nth-child(2){animation-delay:.09s}
 .anim:nth-child(3){animation-delay:.14s}
@@ -1444,8 +1452,9 @@ function renderDash() {
           : `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
         }
       </div>
-      <div id="js-refresh-btn" class="top-btn tap" title="Actualiser les cours">
+      <div id="js-refresh-btn" class="top-btn tap" title="Actualiser les cours" style="position:relative">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        <div class="fresh-dot" id="js-fresh-dot"></div>
       </div>
     `)}
   </div>
@@ -1512,10 +1521,13 @@ function renderRecherche() {
   const ph = mode === 'mouvements' ? 'Ticker, date, compte…' : 'Nom, ticker, secteur…';
   return `${renderTopBar()}
   <div style="padding:0 20px 10px">
+    <div style="position:relative">
     <div class="search-box" id="js-srch-box">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       <input type="text" id="js-srch-inp" placeholder="${ph}" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
       ${S.srchQuery?`<div class="search-clear" id="js-srch-clr">✕</div>`:''}
+    </div>
+    <div id="js-srch-ac" style="display:none;position:absolute;top:44px;left:0;right:0;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;z-index:20;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
     </div>
     <div style="display:flex;gap:6px;margin-top:10px">
       <div class="hperiod${mode==='titres'?' on':''}" data-srchmode="titres">Titres</div>
@@ -1645,15 +1657,18 @@ function renderWatchlistCard() {
     const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
     const delta = w.price * w.change1d / 100;
     const up    = w.change1d >= 0;
-    return `<div class="watch-item tap" data-watch="${w.ticker}">
-      <div class="watch-tick">${w.ticker.slice(0,4)}</div>
-      <div class="flex1 col gap4" style="min-width:0">
-        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
-        <div class="t-sm">${fmtNative(w.price, cur)}</div>
-      </div>
-      <div class="col right gap4">
-        <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
-        <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
+    return `<div class="watch-item-wrap" data-wticker="${w.ticker}">
+      <div class="watch-del-reveal" data-wdel="${w.ticker}">Retirer</div>
+      <div class="watch-item tap" data-watch="${w.ticker}">
+        <div class="watch-tick">${w.ticker.slice(0,4)}</div>
+        <div class="flex1 col gap4" style="min-width:0">
+          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+          <div class="t-sm">${fmtNative(w.price, cur)}</div>
+        </div>
+        <div class="col right gap4">
+          <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
+          <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -2440,6 +2455,62 @@ function bindEvents(id, el) {
       S.watchSort = modes[(modes.indexOf(S.watchSort||'default') + 1) % modes.length];
       renderScreen('dashboard');
     });
+
+    // ── Fraîcheur des cours ──
+    function updateFreshDot() {
+      const dot = document.getElementById('js-fresh-dot');
+      if (!dot) return;
+      const age = S.lastPriceUpdate ? Date.now() - S.lastPriceUpdate : Infinity;
+      dot.style.background = age < 5*60*1000 ? 'var(--gain)'
+                           : age < 60*60*1000 ? '#F59E0B'
+                           : 'var(--text3)';
+    }
+    updateFreshDot();
+    const _freshTimer = setInterval(updateFreshDot, 60*1000);
+    // Nettoyer le timer quand on quitte l'écran
+    const _cleanFresh = () => { clearInterval(_freshTimer); document.removeEventListener('visibilitychange', _cleanFresh); };
+    document.addEventListener('visibilitychange', _cleanFresh);
+
+    // ── Swipe gauche sur watchlist → révèle "Retirer" ──
+    let _swipeTarget = null, _swipeX0 = 0, _swipeActive = false;
+    el.addEventListener('touchstart', e => {
+      const wrap = e.target.closest('.watch-item-wrap');
+      if (!wrap) { _swipeActive = false; return; }
+      _swipeTarget = wrap.querySelector('.watch-item');
+      _swipeX0 = e.touches[0].clientX;
+      _swipeActive = true;
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      if (!_swipeActive || !_swipeTarget) return;
+      const dx = Math.min(0, e.touches[0].clientX - _swipeX0);
+      if (dx < 0 && dx > -80) _swipeTarget.style.transform = `translateX(${dx}px)`;
+    }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (!_swipeActive || !_swipeTarget) return;
+      _swipeActive = false;
+      const dx = e.changedTouches[0].clientX - _swipeX0;
+      _swipeTarget.style.transform = dx < -52 ? 'translateX(-72px)' : '';
+      _swipeTarget = null;
+    }, { passive: true });
+    // Tap sur "Retirer" après swipe
+    el.addEventListener('click', e => {
+      const delBtn = e.target.closest('[data-wdel]');
+      if (!delBtn) {
+        // Refermer tout item swiped si on tape ailleurs
+        el.querySelectorAll('.watch-item').forEach(i => { i.style.transform = ''; });
+        return;
+      }
+      e.stopPropagation();
+      const ticker = delBtn.dataset.wdel;
+      haptic(10);
+      openConfirm(`Retirer ${ticker} de la liste de suivi ?`, () => {
+        const name = S.watchlist.find(w => w.ticker === ticker)?.name || ticker;
+        S.watchlist = S.watchlist.filter(w => w.ticker !== ticker);
+        saveAccounts();
+        refreshMain();
+        toast(`${name} retiré des favoris`);
+      });
+    });
     el.querySelectorAll('[data-watch]').forEach(item => {
       item.addEventListener('click', () => {
         S.watchTicker = item.dataset.watch;
@@ -2491,8 +2562,36 @@ function bindEvents(id, el) {
       } else if(!q&&clr){clr.remove();}
     }
 
-    inp?.addEventListener('input',e=>doSearch(e.target.value));
-    clrBtn?.addEventListener('click',()=>{inp.value='';doSearch('');inp.focus();});
+    const acBox = el.querySelector('#js-srch-ac');
+
+    function showAC(q) {
+      if (!acBox || !q || q.length < 1) { if(acBox) acBox.style.display='none'; return; }
+      const ql = q.toLowerCase();
+      const matches = Object.entries(SECURITIES_DB)
+        .filter(([t,v]) => t.toLowerCase().startsWith(ql) || v.name.toLowerCase().includes(ql))
+        .slice(0, 6);
+      if (!matches.length) { acBox.style.display='none'; return; }
+      acBox.innerHTML = matches.map(([t,v]) =>
+        `<div class="tap" data-ac="${t}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer">
+          <div style="width:34px;height:34px;border-radius:8px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--accent);flex-shrink:0">${t.slice(0,4)}</div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}</div>
+            <div class="t-sm">${t} · ${v.type} · ${v.country}</div>
+          </div>
+        </div>`
+      ).join('');
+      acBox.style.display='block';
+      acBox.querySelectorAll('[data-ac]').forEach(item => item.addEventListener('click', () => {
+        inp.value = item.dataset.ac;
+        acBox.style.display='none';
+        doSearch(item.dataset.ac);
+        inp.blur();
+      }));
+    }
+
+    inp?.addEventListener('input',e=>{ doSearch(e.target.value); showAC(e.target.value); });
+    inp?.addEventListener('focus', e=>showAC(e.target.value));
+    clrBtn?.addEventListener('click',()=>{inp.value='';doSearch('');acBox.style.display='none';inp.focus();});
     bindResultClicks();
 
     // Mode pills
@@ -4003,6 +4102,17 @@ async function fetchLivePrices() {
     S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
     savePrices(prices);
     refreshMain();
+    // Animation wealth card + montants clés
+    requestAnimationFrame(() => {
+      const wc = document.querySelector('.wealth-card');
+      if (wc) { wc.classList.remove('card-glow'); void wc.offsetWidth; wc.classList.add('card-glow'); }
+      document.querySelectorAll('.wealth-amount,.metric-val,.stat-box div:last-child').forEach(el => {
+        el.classList.remove('num-flash'); void el.offsetWidth; el.classList.add('num-flash');
+      });
+      // Mettre à jour le dot fraîcheur
+      const dot = document.getElementById('js-fresh-dot');
+      if (dot) dot.style.background = 'var(--gain)';
+    });
     const total = allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean).length
                 + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
     const partial = updated < total ? ` (${updated}/${total})` : '';
