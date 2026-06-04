@@ -810,6 +810,7 @@ const S = {
   isDemo: true,   // true = données démo (jamais sauvegardées)
   watchTicker: null,
   watchPeriod: '3M',
+  watchSort: 'default',  // 'default' | 'perf_desc' | 'perf_asc'
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   priceApiKey: '',    // clé Twelve Data (US stocks)
@@ -1630,7 +1631,17 @@ function srchTxResults(q) {
 // ── WATCHLIST CARD ──
 function renderWatchlistCard() {
   if (!S.watchlist.length) return '';
-  const rows = S.watchlist.map(w => {
+
+  // Tri
+  const sortMode = S.watchSort || 'default';
+  const sorted = [...S.watchlist].sort((a, b) => {
+    if (sortMode === 'perf_desc') return b.change1d - a.change1d;
+    if (sortMode === 'perf_asc')  return a.change1d - b.change1d;
+    return 0;
+  });
+  const sortLabel = {default:'—', perf_desc:'▲ Perf', perf_asc:'▼ Perf'}[sortMode];
+
+  const rows = sorted.map(w => {
     const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
     const delta = w.price * w.change1d / 100;
     const up    = w.change1d >= 0;
@@ -1646,10 +1657,12 @@ function renderWatchlistCard() {
       </div>
     </div>`;
   }).join('');
+
   return `<div class="watch-card anim">
     <div class="watch-head">
       <div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Titres suivis</div>
       <div class="row gap8" style="align-items:center">
+        <div id="js-watch-sort" class="tap" style="font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);padding:1px 8px;border-radius:6px;cursor:pointer" title="Trier">${sortLabel}</div>
         <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card2);border:1px solid var(--border);padding:1px 9px;border-radius:20px">${S.watchlist.length}</div>
         <div class="hold-add-btn" id="js-watch-add" style="width:28px;height:28px;border-radius:8px">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -2147,6 +2160,16 @@ function renderSettings() {
   </div>
   <div class="s-section">Stockage</div>
   <div class="s-group">
+    <div class="s-item tap" id="js-export-btn">
+      <div class="s-ico" style="background:rgba(99,102,241,.12)">
+        <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Exporter les données</div>
+        <div class="s-sub">Télécharge comptes &amp; transactions en JSON</div>
+      </div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </div>
     <div class="s-item tap" id="js-clear-prices">
       <div class="s-ico" style="background:rgba(245,158,11,.12)">
         <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm4.24 16L12 15.45 7.77 18l1.12-4.81-3.73-3.23 4.92-.42L12 5l1.92 4.53 4.92.42-3.73 3.23L16.23 18z"/></svg>
@@ -2412,6 +2435,11 @@ function bindEvents(id, el) {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-refresh-btn')?.addEventListener('click', fetchLivePrices);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
+    el.querySelector('#js-watch-sort')?.addEventListener('click', () => {
+      const modes = ['default','perf_desc','perf_asc'];
+      S.watchSort = modes[(modes.indexOf(S.watchSort||'default') + 1) % modes.length];
+      renderScreen('dashboard');
+    });
     el.querySelectorAll('[data-watch]').forEach(item => {
       item.addEventListener('click', () => {
         S.watchTicker = item.dataset.watch;
@@ -2668,6 +2696,27 @@ function bindEvents(id, el) {
       const sub=el.querySelector('#js-price-cache-age');
       if(sub) sub.textContent='Aucun cache enregistré';
       toast('Cache des prix effacé');
+    });
+    el.querySelector('#js-export-btn')?.addEventListener('click', () => {
+      const data = {
+        exportedAt: new Date().toISOString(),
+        version: '1.0.2',
+        accounts:  S.isDemo ? [] : S.accounts,
+        watchlist: S.watchlist,
+        targets:   S.targets,
+        user:      S.user,
+      };
+      const json = JSON.stringify(data, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `patrimoine-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Export téléchargé ✓');
     });
     el.querySelector('#js-reset-all')?.addEventListener('click',()=>{
       openConfirm('Supprimer tous les comptes et transactions ? Les réglages sont conservés.', ()=>{
