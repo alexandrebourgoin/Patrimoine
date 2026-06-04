@@ -143,9 +143,6 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 @keyframes card-glow{0%{box-shadow:0 8px 32px rgba(37,99,235,.28)}50%{box-shadow:0 8px 40px rgba(0,214,143,.45)}100%{box-shadow:0 8px 32px rgba(37,99,235,.28)}}
 .card-glow{animation:card-glow .9s ease}
 .fresh-dot{position:absolute;bottom:3px;right:3px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--card);pointer-events:none;transition:background .5s}
-.watch-item-wrap{position:relative;overflow:hidden}
-.watch-del-reveal{position:absolute;right:0;top:0;bottom:0;width:72px;background:var(--loss);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
-.watch-item{transition:transform .2s ease}
 .anim:nth-child(1){animation-delay:.04s}
 .anim:nth-child(2){animation-delay:.09s}
 .anim:nth-child(3){animation-delay:.14s}
@@ -1657,18 +1654,18 @@ function renderWatchlistCard() {
     const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
     const delta = w.price * w.change1d / 100;
     const up    = w.change1d >= 0;
-    return `<div class="watch-item-wrap" data-wticker="${w.ticker}">
-      <div class="watch-del-reveal" data-wdel="${w.ticker}">Retirer</div>
-      <div class="watch-item tap" data-watch="${w.ticker}">
-        <div class="watch-tick">${w.ticker.slice(0,4)}</div>
-        <div class="flex1 col gap4" style="min-width:0">
-          <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
-          <div class="t-sm">${fmtNative(w.price, cur)}</div>
-        </div>
-        <div class="col right gap4">
-          <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
-          <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
-        </div>
+    return `<div class="watch-item tap" data-watch="${w.ticker}">
+      <div class="watch-tick">${w.ticker.slice(0,4)}</div>
+      <div class="flex1 col gap4" style="min-width:0">
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+        <div class="t-sm">${fmtNative(w.price, cur)}</div>
+      </div>
+      <div class="col right gap4" style="align-items:flex-end">
+        <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
+        <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
+      </div>
+      <div class="hold-del-btn tap" data-wdel="${w.ticker}" style="width:28px;height:28px;border-radius:8px;margin-left:6px;flex-shrink:0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       </div>
     </div>`;
   }).join('');
@@ -2471,44 +2468,19 @@ function bindEvents(id, el) {
     const _cleanFresh = () => { clearInterval(_freshTimer); document.removeEventListener('visibilitychange', _cleanFresh); };
     document.addEventListener('visibilitychange', _cleanFresh);
 
-    // ── Swipe gauche sur watchlist → révèle "Retirer" ──
-    let _swipeTarget = null, _swipeX0 = 0, _swipeActive = false;
-    el.addEventListener('touchstart', e => {
-      const wrap = e.target.closest('.watch-item-wrap');
-      if (!wrap) { _swipeActive = false; return; }
-      _swipeTarget = wrap.querySelector('.watch-item');
-      _swipeX0 = e.touches[0].clientX;
-      _swipeActive = true;
-    }, { passive: true });
-    el.addEventListener('touchmove', e => {
-      if (!_swipeActive || !_swipeTarget) return;
-      const dx = Math.min(0, e.touches[0].clientX - _swipeX0);
-      if (dx < 0 && dx > -80) _swipeTarget.style.transform = `translateX(${dx}px)`;
-    }, { passive: true });
-    el.addEventListener('touchend', e => {
-      if (!_swipeActive || !_swipeTarget) return;
-      _swipeActive = false;
-      const dx = e.changedTouches[0].clientX - _swipeX0;
-      _swipeTarget.style.transform = dx < -52 ? 'translateX(-72px)' : '';
-      _swipeTarget = null;
-    }, { passive: true });
-    // Tap sur "Retirer" après swipe
-    el.addEventListener('click', e => {
-      const delBtn = e.target.closest('[data-wdel]');
-      if (!delBtn) {
-        // Refermer tout item swiped si on tape ailleurs
-        el.querySelectorAll('.watch-item').forEach(i => { i.style.transform = ''; });
-        return;
-      }
-      e.stopPropagation();
-      const ticker = delBtn.dataset.wdel;
-      haptic(10);
-      openConfirm(`Retirer ${ticker} de la liste de suivi ?`, () => {
-        const name = S.watchlist.find(w => w.ticker === ticker)?.name || ticker;
-        S.watchlist = S.watchlist.filter(w => w.ticker !== ticker);
-        saveAccounts();
-        refreshMain();
-        toast(`${name} retiré des favoris`);
+    // ── Supprimer un titre suivi ──
+    el.querySelectorAll('[data-wdel]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const ticker = btn.dataset.wdel;
+        haptic(10);
+        openConfirm(`Retirer ${ticker} de la liste de suivi ?`, () => {
+          const name = S.watchlist.find(w => w.ticker === ticker)?.name || ticker;
+          S.watchlist = S.watchlist.filter(w => w.ticker !== ticker);
+          saveAccounts();
+          refreshMain();
+          toast(`${name} retiré des favoris`);
+        });
       });
     });
     el.querySelectorAll('[data-watch]').forEach(item => {
