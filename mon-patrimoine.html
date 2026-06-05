@@ -1403,7 +1403,18 @@ function go(target, dir=null) {
 }
 
 function back() {
-  if(S.stack.length>1) go(S.stack[S.stack.length-2]);
+  if (S.stack.length > 1) {
+    go(S.stack[S.stack.length - 2]);
+  } else {
+    // Fallback défensif : si le stack est corrompu, on sait quand même
+    // où on doit revenir selon l'écran courant
+    const fallbacks = {
+      account: 'comptes', stock: 'account',
+      watchstock: 'dashboard', settings: 'dashboard',
+    };
+    const fb = fallbacks[S.screen];
+    if (fb) go(fb);
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -2724,6 +2735,8 @@ function bindEvents(id, el) {
     });
   }
   if(id==='settings') {
+    // Retirer le badge de logs sur tous les boutons ⚙
+    document.querySelectorAll('.log-badge').forEach(b => b.remove());
     el.querySelector('#js-back')?.addEventListener('click',back);
     el.querySelector('#js-name')?.addEventListener('change',e=>{
       S.user.name=e.target.value||S.user.name;
@@ -3809,6 +3822,17 @@ function dbgLog(tag, msg) {
                 : 'var(--text2)';
       return `<span style="color:${col}">${l.replace(/</g,'&lt;')}</span>`;
     }).join('\n');
+  } else if (S.screen !== 'settings') {
+    // Badge sur le bouton ⚙ pour signaler qu'il y a des logs à consulter
+    document.querySelectorAll('#js-settings-btn').forEach(btn => {
+      if (!btn.querySelector('.log-badge')) {
+        const b = document.createElement('div');
+        b.className = 'log-badge';
+        b.style.cssText = 'position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#F59E0B;border:1.5px solid var(--card);pointer-events:none';
+        btn.style.position = 'relative';
+        btn.appendChild(b);
+      }
+    });
   }
 }
 
@@ -4151,11 +4175,11 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
       // Close any open modal first
       const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                        'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
-                       'acc-action-sheet','rename-acc-sheet']
+                       'acc-action-sheet','rename-acc-sheet','csv-modal-sheet']
                       .some(id => document.getElementById(id)?.classList.contains('show'));
       if (anyOpen) {
         closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
-        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc();
+        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal();
         return;
       }
       back();
