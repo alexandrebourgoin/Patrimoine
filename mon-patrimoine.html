@@ -4314,25 +4314,28 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
     // from reaching the "exit" entry.
     history.pushState({ appNav: true, depth: 1 }, '');
 
+    // Close any open modal first (regardless of stack depth)
+    const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
+                     'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
+                     'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet']
+                    .some(id => document.getElementById(id)?.classList.contains('show'));
+    if (anyOpen) {
+      closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
+      closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
+      return;
+    }
+
     if (S.stack.length > 1) {
-      // Close any open modal first
-      const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
-                       'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
-                       'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet']
-                      .some(id => document.getElementById(id)?.classList.contains('show'));
-      if (anyOpen) {
-        closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
-        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
-        return;
-      }
+      back();
+      _exitTs = 0;
+    } else if (!NAV_SCREENS.includes(S.screen)) {
+      // Stack corrompu mais on est sur un écran non-racine : utiliser les fallbacks
       back();
       _exitTs = 0;
     } else {
-      // Already at root
+      // Sur un écran racine (tab) avec stack à 1 entrée → logique de sortie
       const now = Date.now();
       if (now - _exitTs < 2200) {
-        // Second tap within 2.2 s — nothing more to do in standalone mode
-        // (Android will close via the task switcher)
         toast('Utilisez le sélecteur d\'apps pour fermer');
         _exitTs = 0;
       } else {
