@@ -124,6 +124,23 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .tap{cursor:pointer;transition:background .12s, opacity .12s}
 .tap:active{opacity:.75}
 
+/* DESKTOP – hover states + centrage */
+@media(hover:hover){
+  .tap:hover{opacity:.82}
+  .acc-card:hover{background:var(--card2)}
+  .nav-btn:hover{color:var(--text2)}
+  .top-btn:hover{background:var(--card2)}
+  .tab:hover:not(.on){background:var(--accent-dim);color:var(--accent)}
+  .watch-item:hover{background:var(--card2)}
+  .tx-item:hover{background:var(--card2)}
+  .back:hover{opacity:.7}
+}
+@media(min-width:520px){
+  html,body{overflow:auto;background:var(--surface)}
+  #app{box-shadow:0 0 0 1px var(--border),0 12px 48px rgba(0,0,0,.18);border-radius:0}
+  .screen{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+}
+
 /* SEPARATOR */
 .sep{height:1px;background:var(--border);margin:0 16px}
 
@@ -519,6 +536,20 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
   </div>
 </div>
 
+<!-- FX RATES MODAL -->
+<div id="fx-modal-bg" class="add-modal-bg"></div>
+<div id="fx-modal-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div style="padding:0 20px 8px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-size:17px;font-weight:800">Cours de change</div>
+    <div class="tap" id="js-fx-modal-refresh" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" id="js-fx-modal-refresh-icon"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+      Actualiser
+    </div>
+  </div>
+  <div id="js-fx-modal-body" style="padding:0 20px 20px"></div>
+</div>
+
 <!-- CSV IMPORT PREVIEW -->
 <div id="csv-modal-bg" class="add-modal-bg"></div>
 <div id="csv-modal-sheet" class="add-modal-sheet" style="max-height:90vh;display:flex;flex-direction:column">
@@ -839,7 +870,8 @@ function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, curren
   const value = qty * cur;
   const pnl = (cur - buy) * qty;
   const pnlPct = ((cur - buy) / buy) * 100;
-  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency };
+  const valueRef = +toRefCcy(value, currency).toFixed(2);
+  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency, valueRef };
 }
 function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
@@ -891,6 +923,18 @@ function fmtNative(v, cur) {
   return new Intl.NumberFormat('fr-FR',{style:'currency',currency:cur||'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
 }
 
+// Convert amount from native currency to app currency using FX_RATES
+// FX_RATES[X] = "units of X per EUR", so to convert X→EUR: amount / FX_RATES[X]
+function toRefCcy(amount, fromCcy) {
+  const fromFx = FX_RATES[fromCcy || 'EUR'] || 1;
+  const toFx   = FX_RATES[S.currency || 'EUR'] || 1;
+  return amount * toFx / fromFx;
+}
+// Sum holdings values converted to app currency
+function accSum(holdings) {
+  return holdings.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
+}
+
 function computeRealizedPnL(h) {
   let runQty=0, runCost=0, realized=0;
   [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
@@ -919,6 +963,7 @@ function recalcHolding(h) {
   h.value=+(h.quantity*h.currentPrice).toFixed(2);
   h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
   h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+  h.valueRef=+toRefCcy(h.value, h.currency).toFixed(2);
 }
 
 function masked(v) { return S.privacy?'<span class="prv">● ● ●</span>':fmtCur(v); }
@@ -1581,7 +1626,7 @@ function srchRow(h, acc) {
     <div class="hold-item-body">
       <div class="hold-item-top">
         <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
-        <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.value)}</div>
+        <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.valueRef??h.value)}</div>
       </div>
       <div class="hold-item-bot">
         <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.name} · ${h.type}</div>
@@ -1815,12 +1860,12 @@ function renderHoldsHTML(acc) {
           <div class="hold-item-top">
             <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
             <div class="col right" style="gap:1px;flex-shrink:0">
-              <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.value)}</div>
+              <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.valueRef??h.value)}</div>
               <div style="font-size:10px;color:var(--text3);text-align:right">${weight}%</div>
             </div>
           </div>
           <div class="hold-item-bot">
-            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtCur(h.currentPrice)} · ${h.type}</div>
+            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
             <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
             <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
@@ -1883,7 +1928,7 @@ function deleteHolding(accId,holdId) {
   if(!h) return;
   openConfirm(`Supprimer ${h.name} ?`, ()=>{
     acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
-    acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+    acc.value=accSum(acc.holdings);
     renderHoldsHTML(acc);
     refreshMain();
     toast('Position supprimée');
@@ -1904,10 +1949,11 @@ function applyRefresh(accId) {
       const chg=(Math.random()*.028-.006);
       h.currentPrice=+(h.currentPrice*(1+chg)).toFixed(2);
       h.value=+(h.quantity*h.currentPrice).toFixed(2);
+      h.valueRef=+toRefCcy(h.value,h.currency).toFixed(2);
       h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
       h.pnlPct=((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100;
     });
-    acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+    acc.value=accSum(acc.holdings);
     acc.change1d=+(Math.random()*4-1).toFixed(2);
   });
 }
@@ -2145,6 +2191,36 @@ function renderAnalysis() {
 }
 
 // ── SETTINGS ──
+function renderFxModalRows() {
+  const pairs = [
+    { ccy:'USD', symbol:'$',  flag:'🇺🇸', label:'Dollar US' },
+    { ccy:'GBP', symbol:'£',  flag:'🇬🇧', label:'Livre sterling' },
+    { ccy:'CHF', symbol:'Fr', flag:'🇨🇭', label:'Franc suisse' },
+    { ccy:'JPY', symbol:'¥',  flag:'🇯🇵', label:'Yen japonais' },
+  ];
+  const ageStr = _fxUpdatedAt
+    ? 'Mis à jour ' + timeSince(_fxUpdatedAt)
+    : 'Valeurs approximatives (non actualisées)';
+  const rows = pairs.map((p, i) => {
+    const rate = FX_RATES[p.ccy];
+    const rateStr = rate != null ? rate.toFixed(p.ccy === 'JPY' ? 2 : 4) : '—';
+    const border = i < pairs.length - 1 ? `border-bottom:1px solid var(--border)` : '';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:14px 0;${border}">
+      <div style="font-size:24px;flex-shrink:0;width:32px;text-align:center">${p.flag}</div>
+      <div class="flex1 col gap4">
+        <div style="font-size:14px;font-weight:700">EUR / ${p.ccy}</div>
+        <div class="t-sm">${p.label}</div>
+      </div>
+      <div class="t-num" style="text-align:right">
+        <span style="font-size:18px;font-weight:800">${rateStr}</span>
+        <span style="font-size:12px;color:var(--text2);margin-left:3px">${p.symbol}</span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:0 16px;margin-bottom:12px">${rows}</div>
+  <div class="t-sm" style="text-align:center;color:var(--text3)">${ageStr}</div>`;
+}
+
 function renderSettings() {
   const demo=S.isDemo;
   return `<div class="back tap" id="js-back">
@@ -2225,6 +2301,17 @@ function renderSettings() {
         <div class="s-sub">Rafraîchit les cours au démarrage</div>
       </div>
       <div class="toggle ${S.autoRefresh?'on':''}" id="js-autorefresh-inner"><div class="toggle-thumb"></div></div>
+    </div>
+    <div class="sep"></div>
+    <div class="s-item tap" id="js-fx-row">
+      <div class="s-ico" style="background:rgba(99,102,241,.12)">
+        <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.38 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Cours de change</div>
+        <div class="s-sub" id="js-fx-sub">${_fxUpdatedAt ? '1 EUR = ' + (FX_RATES.USD||'—').toFixed(4) + ' $ · ' + (FX_RATES.GBP||'—').toFixed(4) + ' £' : 'Valeurs approximatives'}</div>
+      </div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>
   </div>
   <div class="s-section" style="color:var(--text3)">Clés API — fallback si proxy indisponible</div>
@@ -2689,7 +2776,7 @@ function bindEvents(id, el) {
         openConfirm(`Supprimer ce ${lbl} du ${fmtDate(tx.date)} ?`,()=>{
           h.transactions.splice(idx,1);
           recalcHolding(h);
-          acc.value=acc.holdings.reduce((s,hh)=>s+hh.value,0);
+          acc.value=accSum(acc.holdings);
           renderScreen('stock');
           refreshMain();
           toast('Mouvement supprimé');
@@ -2815,6 +2902,7 @@ function bindEvents(id, el) {
       saveData();
       toast('Actualisation auto ' + (S.autoRefresh ? 'activée' : 'désactivée'));
     });
+    el.querySelector('#js-fx-row')?.addEventListener('click', openFxModal);
     el.querySelector('#js-price-key')?.addEventListener('change', e => {
       S.priceApiKey = e.target.value.trim();
       saveSettings();
@@ -3119,6 +3207,29 @@ function closeCsvModal() {
   document.getElementById('csv-modal-sheet').classList.remove('show');
 }
 
+function openFxModal() {
+  document.getElementById('js-fx-modal-body').innerHTML = renderFxModalRows();
+  document.getElementById('fx-modal-bg').classList.add('show');
+  document.getElementById('fx-modal-sheet').classList.add('show');
+}
+function closeFxModal() {
+  document.getElementById('fx-modal-bg').classList.remove('show');
+  document.getElementById('fx-modal-sheet').classList.remove('show');
+}
+document.getElementById('fx-modal-bg').addEventListener('click', closeFxModal);
+document.getElementById('js-fx-modal-refresh').addEventListener('click', async () => {
+  const icon = document.getElementById('js-fx-modal-refresh-icon');
+  if (icon) icon.classList.add('spin');
+  await fetchFxRates();
+  if (icon) icon.classList.remove('spin');
+  document.getElementById('js-fx-modal-body').innerHTML = renderFxModalRows();
+  // Mettre à jour le sous-titre dans settings si visible
+  const sub = document.getElementById('js-fx-sub');
+  if (sub) sub.textContent = _fxUpdatedAt
+    ? '1 EUR = ' + (FX_RATES.USD||0).toFixed(4) + ' $ · ' + (FX_RATES.GBP||0).toFixed(4) + ' £'
+    : 'Valeurs approximatives';
+});
+
 function confirmImport() {
   const accIdVal = document.getElementById('csv-acc-select')?.value;
   let targetAcc;
@@ -3167,7 +3278,7 @@ function confirmImport() {
     added++;
   });
 
-  targetAcc.value = targetAcc.holdings.reduce((s, h) => s + h.value, 0);
+  targetAcc.value = accSum(targetAcc.holdings);
   if (S.isDemo) { S.isDemo = false; }
   saveData();
   refreshMain();
@@ -3349,9 +3460,9 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
     type,country,sector,currency,
     transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
-    value:qty*pru,pnl:0,pnlPct:0};
+    value:qty*pru,pnl:0,pnlPct:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
   acc.holdings.push(newH);
-  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+  acc.value=accSum(acc.holdings);
   closePosModal();
   if(S.screen==='account'&&S.accountId===_posAccId) renderHoldsHTML(acc);
   refreshMain();
@@ -3400,7 +3511,7 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
   if(!h){toast('Position introuvable');return;}
   h.transactions[_editTxIdx]={date,type:_editTxType,qty,price};
   recalcHolding(h);
-  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+  acc.value=accSum(acc.holdings);
   closeEditTx();
   renderScreen('stock');
   refreshMain();
@@ -3592,7 +3703,7 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   h.value=+(h.quantity*h.currentPrice).toFixed(2);
   h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
   h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
-  acc.value=acc.holdings.reduce((s,h)=>s+h.value,0);
+  acc.value=accSum(acc.holdings);
   closeModal();
   const accEl=document.getElementById('s-account');
   const holdsEl=accEl?.querySelector('#js-holds');
@@ -3801,7 +3912,7 @@ function applyPrices(priceData) {
     const p=priceData.prices[h.ticker];
     if(p!=null){ h.currentPrice=p; recalcHolding(h); }
   });
-  S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
+  S.accounts.forEach(a=>{ a.value=accSum(a.holdings); });
   S.lastPriceUpdate=priceData.updatedAt;
 }
 
@@ -3850,6 +3961,7 @@ const PROXY_URL = 'https://patrimoine-prices.al-the-best.workers.dev';
 
 let _fetching = false;
 let _tdRateLimited = 0;
+let _fxUpdatedAt = null;
 
 // Helper partagé : fetch un cours unique via Twelve Data ou Yahoo
 async function _fetchSinglePrice(yhSym, cgId) {
@@ -3942,7 +4054,7 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
   if (h) {
     h.currentPrice = price;
     recalcHolding(h);
-    acc.value = acc.holdings.reduce((s, hh) => s + hh.value, 0);
+    acc.value = accSum(acc.holdings);
     const cached = loadPrices() || { prices: {} };
     cached.prices[ticker] = price;
     savePrices(cached.prices);
@@ -3983,6 +4095,34 @@ async function fetchWatchPrice(ticker) {
   }
 }
 
+// FX pairs to fetch: EURUSD=X → regularMarketPrice = USD per EUR = FX_RATES.USD
+const FX_PAIRS = ['EURUSD=X','EURGBP=X','EURCHF=X','EURJPY=X'];
+
+async function fetchFxRates() {
+  dbgLog('[INF]', `FX → ${FX_PAIRS.join(', ')}`);
+  try {
+    const url = PROXY_URL + '?symbols=' + FX_PAIRS.join(',');
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) { dbgLog('[WRN]', `FX status=${r.status}`); return; }
+    const data = await r.json();
+    const results = data?.quoteResponse?.result || [];
+    let updated = 0;
+    results.forEach(q => {
+      const m = q.symbol.match(/^EUR(\w+)=X$/);
+      if (m && q.regularMarketPrice) {
+        FX_RATES[m[1]] = q.regularMarketPrice;
+        updated++;
+      }
+    });
+    if (updated) {
+      _fxUpdatedAt = Date.now();
+      dbgLog('[OK]', `FX mis à jour: ${Object.entries(FX_RATES).map(([k,v])=>`${k}=${v}`).join(', ')}`);
+    } else dbgLog('[WRN]', 'FX: aucun résultat');
+  } catch(e) {
+    dbgLog('[ERR]', `FX: ${e?.message||e}`);
+  }
+}
+
 async function fetchLivePrices() {
   if (_fetching) return;
   _fetching = true;
@@ -3993,6 +4133,9 @@ async function fetchLivePrices() {
 
   const allH = S.accounts.flatMap(a => a.holdings);
   if (!allH.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+
+  // Taux de change live (avant recalcHolding pour que valueRef soit correct)
+  await fetchFxRates();
 
   // Tickers uniques : comptes + watchlist (sauf crypto)
   const watchSymbols = S.watchlist.map(w=>YAHOO_MAP[w.ticker]).filter(Boolean);
@@ -4095,7 +4238,7 @@ async function fetchLivePrices() {
   // ── Finalisation ───────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
   if (updated > 0) {
-    S.accounts.forEach(a=>{ a.value=a.holdings.reduce((s,h)=>s+h.value,0); });
+    S.accounts.forEach(a=>{ a.value=accSum(a.holdings); });
     savePrices(prices);
     refreshMain();
     // Animation wealth card + montants clés
@@ -4175,11 +4318,11 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
       // Close any open modal first
       const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                        'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
-                       'acc-action-sheet','rename-acc-sheet','csv-modal-sheet']
+                       'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet']
                       .some(id => document.getElementById(id)?.classList.contains('show'));
       if (anyOpen) {
         closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
-        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal();
+        closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
         return;
       }
       back();
@@ -4199,6 +4342,24 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
     }
   });
 })();
+
+// ═══════════════════════════════════════════════
+// KEYBOARD SHORTCUTS (desktop)
+// ═══════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
+                     'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
+                     'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet']
+                    .some(id => document.getElementById(id)?.classList.contains('show'));
+    if (anyOpen) {
+      closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
+      closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
+    } else if (S.stack.length > 1) {
+      back();
+    }
+  }
+});
 
 // ═══════════════════════════════════════════════
 // SERVICE WORKER (PWA)
