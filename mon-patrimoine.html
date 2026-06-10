@@ -871,7 +871,8 @@ function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, curren
   const pnl = (cur - buy) * qty;
   const pnlPct = ((cur - buy) / buy) * 100;
   const valueRef = +toRefCcy(value, currency).toFixed(2);
-  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency, valueRef };
+  const pnlRef   = +toRefCcy(pnl,   currency).toFixed(2);
+  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency, valueRef, pnlRef };
 }
 function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
@@ -964,6 +965,7 @@ function recalcHolding(h) {
   h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
   h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
   h.valueRef=+toRefCcy(h.value, h.currency).toFixed(2);
+  h.pnlRef  =+toRefCcy(h.pnl,   h.currency).toFixed(2);
 }
 
 function masked(v) { return S.privacy?'<span class="prv">● ● ●</span>':fmtCur(v); }
@@ -1489,8 +1491,8 @@ function renderDash() {
   const w=totalWealth();
   const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.change1d*(a.value/w),0):0;
   const allH=S.accounts.flatMap(a=>a.holdings);
-  const totPnl=allH.reduce((s,h)=>s+h.pnl,0);
-  const totInv=allH.reduce((s,h)=>s+h.avgBuyPrice*h.quantity,0);
+  const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl),0);
+  const totInv=allH.reduce((s,h)=>s+toRefCcy(h.avgBuyPrice*h.quantity,h.currency||'EUR'),0);
   const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
   const spark=sparkData(w*.86,28,.022); spark[spark.length-1]=w;
 
@@ -1773,7 +1775,7 @@ const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
 
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
-  const totPnl=acc.holdings.reduce((s,h)=>s+h.pnl,0);
+  const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl),0);
   const totPnlPct=(totPnl/(acc.value-totPnl))*100;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
@@ -1951,6 +1953,7 @@ function applyRefresh(accId) {
       h.value=+(h.quantity*h.currentPrice).toFixed(2);
       h.valueRef=+toRefCcy(h.value,h.currency).toFixed(2);
       h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
+      h.pnlRef=+toRefCcy(h.pnl,h.currency).toFixed(2);
       h.pnlPct=((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100;
     });
     acc.value=accSum(acc.holdings);
@@ -2191,24 +2194,43 @@ function renderAnalysis() {
 }
 
 // ── SETTINGS ──
+function fxSubText() {
+  const appCcy = S.currency || 'EUR';
+  const appFx  = FX_RATES[appCcy] || 1;
+  const ALL = [
+    { ccy:'USD', sym:'$' }, { ccy:'EUR', sym:'€' },
+    { ccy:'GBP', sym:'£' }, { ccy:'CHF', sym:'Fr' }, { ccy:'JPY', sym:'¥' }
+  ];
+  if (!_fxUpdatedAt) return 'Valeurs approximatives';
+  const top2 = ALL.filter(p => p.ccy !== appCcy).slice(0, 2);
+  return top2.map(p => {
+    const r = (FX_RATES[p.ccy]||1) / appFx;
+    return `1 ${appCcy} = ${r >= 10 ? r.toFixed(2) : r.toFixed(4)} ${p.sym}`;
+  }).join(' · ');
+}
+
 function renderFxModalRows() {
-  const pairs = [
+  const appCcy = S.currency || 'EUR';
+  const appFx  = FX_RATES[appCcy] || 1;
+  const ALL_CCY = [
+    { ccy:'EUR', symbol:'€',  flag:'🇪🇺', label:'Euro' },
     { ccy:'USD', symbol:'$',  flag:'🇺🇸', label:'Dollar US' },
     { ccy:'GBP', symbol:'£',  flag:'🇬🇧', label:'Livre sterling' },
     { ccy:'CHF', symbol:'Fr', flag:'🇨🇭', label:'Franc suisse' },
     { ccy:'JPY', symbol:'¥',  flag:'🇯🇵', label:'Yen japonais' },
   ];
+  const pairs = ALL_CCY.filter(p => p.ccy !== appCcy);
   const ageStr = _fxUpdatedAt
     ? 'Mis à jour ' + timeSince(_fxUpdatedAt)
     : 'Valeurs approximatives (non actualisées)';
   const rows = pairs.map((p, i) => {
-    const rate = FX_RATES[p.ccy];
-    const rateStr = rate != null ? rate.toFixed(p.ccy === 'JPY' ? 2 : 4) : '—';
+    const rate = (FX_RATES[p.ccy] || 1) / appFx;
+    const rateStr = rate >= 10 ? rate.toFixed(2) : rate.toFixed(4);
     const border = i < pairs.length - 1 ? `border-bottom:1px solid var(--border)` : '';
     return `<div style="display:flex;align-items:center;gap:12px;padding:14px 0;${border}">
       <div style="font-size:24px;flex-shrink:0;width:32px;text-align:center">${p.flag}</div>
       <div class="flex1 col gap4">
-        <div style="font-size:14px;font-weight:700">EUR / ${p.ccy}</div>
+        <div style="font-size:14px;font-weight:700">${appCcy} / ${p.ccy}</div>
         <div class="t-sm">${p.label}</div>
       </div>
       <div class="t-num" style="text-align:right">
@@ -2309,7 +2331,7 @@ function renderSettings() {
       </div>
       <div class="flex1 col gap4">
         <div class="s-name">Cours de change</div>
-        <div class="s-sub" id="js-fx-sub">${_fxUpdatedAt ? '1 EUR = ' + (FX_RATES.USD||'—').toFixed(4) + ' $ · ' + (FX_RATES.GBP||'—').toFixed(4) + ' £' : 'Valeurs approximatives'}</div>
+        <div class="s-sub" id="js-fx-sub">${fxSubText()}</div>
       </div>
       <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>
@@ -3225,9 +3247,7 @@ document.getElementById('js-fx-modal-refresh').addEventListener('click', async (
   document.getElementById('js-fx-modal-body').innerHTML = renderFxModalRows();
   // Mettre à jour le sous-titre dans settings si visible
   const sub = document.getElementById('js-fx-sub');
-  if (sub) sub.textContent = _fxUpdatedAt
-    ? '1 EUR = ' + (FX_RATES.USD||0).toFixed(4) + ' $ · ' + (FX_RATES.GBP||0).toFixed(4) + ' £'
-    : 'Valeurs approximatives';
+  if (sub) sub.textContent = fxSubText();
 });
 
 function confirmImport() {
@@ -3460,7 +3480,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
     type,country,sector,currency,
     transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
-    value:qty*pru,pnl:0,pnlPct:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
+    value:qty*pru,pnl:0,pnlPct:0,pnlRef:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
   acc.holdings.push(newH);
   acc.value=accSum(acc.holdings);
   closePosModal();
@@ -3895,14 +3915,25 @@ function loadData() {
 function savePrices(prices) {
   // prices = { 'MC': 734.2, 'AAPL': 189.3, ... }
   try {
-    localStorage.setItem(STORE_PRICES, JSON.stringify({ prices, updatedAt: Date.now() }));
+    const fxToSave = Object.fromEntries(Object.entries(FX_RATES).filter(([k]) => k !== 'EUR'));
+    localStorage.setItem(STORE_PRICES, JSON.stringify({ prices, updatedAt: Date.now(), fxRates: fxToSave, fxUpdatedAt: _fxUpdatedAt }));
+  } catch(e) {}
+}
+
+function saveFxRates() {
+  try {
+    const raw = localStorage.getItem(STORE_PRICES);
+    const data = raw ? JSON.parse(raw) : { prices: {}, updatedAt: 0 };
+    data.fxRates = Object.fromEntries(Object.entries(FX_RATES).filter(([k]) => k !== 'EUR'));
+    data.fxUpdatedAt = _fxUpdatedAt;
+    localStorage.setItem(STORE_PRICES, JSON.stringify(data));
   } catch(e) {}
 }
 
 function loadPrices() {
   try {
     const raw=localStorage.getItem(STORE_PRICES);
-    return raw ? JSON.parse(raw) : null;  // { prices:{...}, updatedAt: ms }
+    return raw ? JSON.parse(raw) : null;  // { prices:{...}, updatedAt: ms, fxRates:{...}, fxUpdatedAt: ms }
   } catch(e) { return null; }
 }
 
@@ -4116,6 +4147,15 @@ async function fetchFxRates() {
     });
     if (updated) {
       _fxUpdatedAt = Date.now();
+      saveFxRates();
+      // Recalculer valueRef/pnlRef pour tous les titres avec les nouveaux taux
+      S.accounts.forEach(acc => {
+        acc.holdings.forEach(h => {
+          h.valueRef = +toRefCcy(h.value, h.currency).toFixed(2);
+          h.pnlRef   = +toRefCcy(h.pnl,   h.currency).toFixed(2);
+        });
+        acc.value = accSum(acc.holdings);
+      });
       dbgLog('[OK]', `FX mis à jour: ${Object.entries(FX_RATES).map(([k,v])=>`${k}=${v}`).join(', ')}`);
     } else dbgLog('[WRN]', 'FX: aucun résultat');
   } catch(e) {
@@ -4281,6 +4321,10 @@ if(!_hasData) saveData();
 applyTheme(S.theme);
 // Appliquer le cache de prix uniquement en mode réel
 const _priceCache=loadPrices();
+if(_priceCache?.fxRates) {
+  Object.assign(FX_RATES, _priceCache.fxRates);
+  _fxUpdatedAt = _priceCache.fxUpdatedAt || null;
+}
 if(_priceCache && !S.isDemo) applyPrices(_priceCache);
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
