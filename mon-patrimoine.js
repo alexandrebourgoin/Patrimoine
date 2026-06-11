@@ -422,10 +422,11 @@ function genSecurityHistory(h) {
   const txDates = h.transactions.map(t => new Date(t.date+'T00:00:00'));
   const minDate = txDates.length > 0 ? new Date(Math.min(...txDates)) : new Date(today.getTime() - 90*86400000);
   const days = Math.max(90, Math.round((today - minDate) / 86400000) + 1);
+  const startDate = new Date(today.getTime() - (days - 1) * 86400000);
   const pts = new Array(days);
   pts[days-1] = h.currentPrice;
   for(let i=days-2;i>=0;i--) pts[i] = pts[i+1] / (1 + 0.0003 + (lcg()*0.038 - 0.018));
-  return { pts, startDate: minDate, days };
+  return { pts, startDate, days };
 }
 
 function stockChartSvg(h, w, ch) {
@@ -2599,6 +2600,42 @@ function closeWatchModal(){
 }
 document.getElementById('watch-modal-bg').addEventListener('click',closeWatchModal);
 document.getElementById('watch-modal-close').addEventListener('click',closeWatchModal);
+
+// Autocomplete ticker watchlist
+(()=>{
+  const inp  = document.getElementById('watch-ticker');
+  const acL  = document.getElementById('watch-ac-list');
+  function fill(ticker){
+    const db = SECURITIES_DB[ticker];
+    if(!db) return;
+    document.getElementById('watch-name').value = db.name;
+    acL.classList.add('hidden');
+  }
+  inp.addEventListener('input',()=>{
+    const q = inp.value.trim().toUpperCase();
+    if(!q){ acL.classList.add('hidden'); return; }
+    const matches = Object.entries(SECURITIES_DB).filter(([k,v])=>
+      k.startsWith(q) || v.name.toUpperCase().includes(q)
+    ).slice(0,6);
+    if(!matches.length){ acL.classList.add('hidden'); return; }
+    acL.innerHTML = matches.map(([t,db])=>
+      `<div class="ac-item" data-ticker="${t}">
+        <span class="ac-tick">${t}</span>
+        <span class="ac-name">${db.name}</span>
+        <span class="ac-sub">${db.type} · ${db.currency}</span>
+      </div>`
+    ).join('');
+    acL.classList.remove('hidden');
+  });
+  acL.addEventListener('click',e=>{
+    const item = e.target.closest('.ac-item');
+    if(!item) return;
+    inp.value = item.dataset.ticker;
+    fill(item.dataset.ticker);
+  });
+  inp.addEventListener('blur',()=>setTimeout(()=>acL.classList.add('hidden'),200));
+  inp.addEventListener('change',()=>fill(inp.value.trim().toUpperCase()));
+})();
 document.getElementById('watch-submit').addEventListener('click',()=>{
   const ticker=document.getElementById('watch-ticker').value.trim().toUpperCase();
   const name=document.getElementById('watch-name').value.trim();
