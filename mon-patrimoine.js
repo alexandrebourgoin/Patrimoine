@@ -110,7 +110,7 @@ function genDemo() {
 function fmtCur(v) {
   return new Intl.NumberFormat('fr-FR',{style:'currency',currency:S.currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
 }
-function fmtPct(v) { return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' %'; }
+function fmtPct(v) { return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' %'; }
 function fmtDate(s) { return new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
 function initials(n) { return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
 // Observer accounts excluded from total wealth
@@ -2465,9 +2465,10 @@ function renderChangelogBody(version) {
     </div>`;
   }).join('');
 }
-function openChangelogModal() {
+function openChangelogModal(fromStartup = false) {
   document.getElementById('js-changelog-version').textContent = 'Version ' + APP_VERSION;
   document.getElementById('js-changelog-body').innerHTML = renderChangelogBody(APP_VERSION);
+  document.getElementById('js-changelog-ok').textContent = fromStartup ? 'Découvrir ✨' : 'Fermer';
   document.getElementById('changelog-modal-bg').classList.add('show');
   document.getElementById('changelog-modal-sheet').classList.add('show');
 }
@@ -3580,7 +3581,7 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
 // Popup changelog si nouvelle version
 try {
   if (localStorage.getItem(STORE_VERSION) !== APP_VERSION) {
-    setTimeout(openChangelogModal, 600);
+    setTimeout(() => openChangelogModal(true), 600);
   }
 } catch(e) {}
 
