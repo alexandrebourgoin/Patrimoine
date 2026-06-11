@@ -700,10 +700,10 @@ function renderTopBar(extraBtns='') {
 // ── DASHBOARD ──
 function renderDash() {
   const w=totalWealth();
-  const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.change1d*(a.value/w),0):0;
+  const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+(a.change1d??0)*(a.value/w),0):0;
   const allH=S.accounts.flatMap(a=>a.holdings);
-  const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl),0);
-  const totInv=allH.reduce((s,h)=>s+toRefCcy(h.avgBuyPrice*h.quantity,h.currency||'EUR'),0);
+  const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
+  const totInv=allH.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
   const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
   const spark=sparkData(w*.86,28,.022); spark[spark.length-1]=w;
 
@@ -986,8 +986,9 @@ const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
 
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
-  const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl),0);
-  const totPnlPct=(totPnl/(acc.value-totPnl))*100;
+  const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
+  const costBase=acc.value-totPnl;
+  const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
@@ -3441,8 +3442,8 @@ async function fetchFxRates() {
       // Recalculer valueRef/pnlRef pour tous les titres avec les nouveaux taux
       S.accounts.forEach(acc => {
         acc.holdings.forEach(h => {
-          h.valueRef = +toRefCcy(h.value, h.currency).toFixed(2);
-          h.pnlRef   = +toRefCcy(h.pnl,   h.currency).toFixed(2);
+          h.valueRef = +toRefCcy(h.value||0, h.currency).toFixed(2);
+          h.pnlRef   = +toRefCcy(h.pnl||0,   h.currency).toFixed(2);
         });
         acc.value = accSum(acc.holdings);
       });
