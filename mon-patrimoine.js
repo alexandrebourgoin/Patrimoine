@@ -445,6 +445,11 @@ function stockChartSvg(h, w, ch) {
   const pruLabel = `PRU ${h.avgBuyPrice.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
     <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
+  // Current price annotation at the right edge
+  const lastY = ys[ys.length - 1];
+  const txtY = Math.max(padT + 10, Math.min(ch - padB - 2, lastY - 4));
+  const curLabel = fmtNative(pts[pts.length - 1], h.currency || 'EUR');
+  const curPriceAnnot = `<text x="${w - 4}" y="${txtY.toFixed(1)}" text-anchor="end" font-size="9" fill="${color}" font-weight="700">${curLabel}</text>`;
   // BUY / SELL markers mapped to extended history window
   const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
     const idx = Math.max(0, Math.min(days-1, Math.round((new Date(tx.date+'T00:00:00') - startDate) / 86400000)));
@@ -463,6 +468,7 @@ function stockChartSvg(h, w, ch) {
     </linearGradient></defs>
     <path d="${area}" fill="url(#${gid})"/>
     ${pruLine}
+    ${curPriceAnnot}
     ${markers}
     <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <line id="stock-xhair" x1="0" y1="${padT}" x2="0" y2="${ch-padB}" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
@@ -498,7 +504,7 @@ function initStockChart(container, h) {
     tip.style.top=Math.max(0,y-22)+'px';
     tip.style.opacity='1';
     const d=new Date(startDate.getTime()+i*86400000);
-    tip.textContent=fmtCur(pts[i])+'  '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+    tip.textContent=fmtNative(pts[i], h.currency||'EUR')+'  '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   }
   function hide(){if(locked) return; xhair.setAttribute('opacity','0');dot.setAttribute('opacity','0');tip.style.opacity='0';}
   // Touch: drag to scrub, tap to lock/unlock tooltip
@@ -536,7 +542,7 @@ function genWatchHistory(ticker, price, period) {
   return { pts, startDate, days };
 }
 
-function watchChartSvg(pts, w, h) {
+function watchChartSvg(pts, w, h, wCur = 'EUR') {
   if (!pts || pts.length < 2) return '';
   const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
   const pad = 2;
@@ -546,6 +552,9 @@ function watchChartSvg(pts, w, h) {
   const line = 'M' + xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line + `L${xs[xs.length-1].toFixed(1)},${h}L${xs[0].toFixed(1)},${h}Z`;
   const gid = 'wg' + Math.random().toString(36).slice(2, 7);
+  const lastY = ys[ys.length - 1];
+  const curTxtY = Math.max(14, Math.min(h - 4, lastY - 4));
+  const curAnnot = `<text x="${(w - pad - 2).toFixed(1)}" y="${curTxtY.toFixed(1)}" text-anchor="end" font-size="10" fill="${color}" font-weight="700">${fmtNative(pts[pts.length - 1], wCur)}</text>`;
   return `<svg id="watch-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;overflow:hidden;cursor:crosshair">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity=".22"/>
@@ -553,12 +562,13 @@ function watchChartSvg(pts, w, h) {
     </linearGradient></defs>
     <path d="${area}" fill="url(#${gid})"/>
     <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    ${curAnnot}
     <line id="watch-xhair" x1="0" y1="0" x2="0" y2="${h}" stroke="var(--text3)" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
     <circle id="watch-dot" cx="0" cy="0" r="4" fill="${color}" stroke="var(--bg)" stroke-width="2" opacity="0"/>
   </svg>`;
 }
 
-function initWatchChart(container, pts, startDate) {
+function initWatchChart(container, pts, startDate, wCur = 'EUR') {
   const svg = container.querySelector('#watch-svg');
   const tip = container.querySelector('#watch-chart-tip');
   if (!svg || !pts || pts.length < 2) return;
@@ -584,7 +594,7 @@ function initWatchChart(container, pts, startDate) {
       tip.style.top = Math.max(0, y - 22) + 'px';
       tip.style.opacity = '1';
       const d = new Date(startDate.getTime() + i * 86400000);
-      tip.textContent = fmtCur(pts[i]) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+      tip.textContent = fmtNative(pts[i], wCur) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
     }
   }
   function hide() {
@@ -1718,7 +1728,7 @@ function renderWatchStock() {
   </div>
 
   <div style="position:relative" id="js-watch-chart-wrap">
-    ${watchChartSvg(pts, chartW, 140)}
+    ${watchChartSvg(pts, chartW, 140, wCur)}
     <div id="watch-chart-tip" class="stock-chart-tip" style="position:absolute;top:4px;left:0"></div>
   </div>
 
@@ -1736,11 +1746,11 @@ function renderWatchStock() {
     ${perfBox('6 mois', perf6M)}
     <div class="metric">
       <div class="t-label">52 sem. haut</div>
-      <div class="metric-val t-num">${fmtCur(high52)}</div>
+      <div class="metric-val t-num">${fmtNative(high52, wCur)}</div>
     </div>
     <div class="metric">
       <div class="t-label">52 sem. bas</div>
-      <div class="metric-val t-num">${fmtCur(low52)}</div>
+      <div class="metric-val t-num">${fmtNative(low52, wCur)}</div>
     </div>
   </div>
 
@@ -2183,11 +2193,12 @@ function bindEvents(id, el) {
       if (!watch) return;
       const chartW = Math.min(window.innerWidth, 480);
       const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod);
+      const wCur = watch.currency || SECURITIES_DB[watch.ticker]?.currency || 'EUR';
       const wrap = el.querySelector('#js-watch-chart-wrap');
       if (wrap) {
-        wrap.innerHTML = watchChartSvg(pts, chartW, 140) +
+        wrap.innerHTML = watchChartSvg(pts, chartW, 140, wCur) +
           '<div id="watch-chart-tip" class="stock-chart-tip" style="position:absolute;top:4px;left:0"></div>';
-        initWatchChart(wrap, pts, startDate);
+        initWatchChart(wrap, pts, startDate, wCur);
       }
       const pct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
       const perfEl = el.querySelector('#js-watch-period-perf');
@@ -2205,7 +2216,8 @@ function bindEvents(id, el) {
       const wrap = el.querySelector('#js-watch-chart-wrap');
       if (wrap) {
         const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod || '3M');
-        initWatchChart(wrap, pts, startDate);
+        const wCur = watch.currency || SECURITIES_DB[watch.ticker]?.currency || 'EUR';
+        initWatchChart(wrap, pts, startDate, wCur);
       }
     }
 
@@ -3243,17 +3255,16 @@ async function _fetchSinglePrice(yhSym, cgId) {
 
   if (cgId) {
     try {
-      const vs = S.currency.toLowerCase();
       dbgLog('[INF]', `CoinGecko → ${cgId}`);
       const r  = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=${vs}&include_24hr_change=true`,
+        `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_24hr_change=true`,
         { signal: AbortSignal.timeout(8000) }
       );
       dbgLog(r.ok?'[OK]':'[WRN]', `CoinGecko status=${r.status}`);
       if (r.ok) {
         const d = await r.json();
-        price    = d[cgId]?.[vs]                 || null;
-        change1d = d[cgId]?.[`${vs}_24h_change`] ?? null;
+        price    = d[cgId]?.usd             || null;
+        change1d = d[cgId]?.usd_24h_change  ?? null;
         dbgLog(price?'[OK]':'[WRN]', `CoinGecko prix=${price} change=${change1d}`);
       }
     } catch(e) { dbgLog('[ERR]', `CoinGecko: ${e?.message||e}`); }
@@ -3333,7 +3344,7 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
     S.lastPriceUpdate = Date.now();
     renderScreen('stock');
     refreshMain();
-    toast(`${ticker} · ${fmtCur(price)} ✓`);
+    toast(`${ticker} · ${fmtNative(price, h.currency||'EUR')} ✓`);
   }
 }
 
@@ -3363,7 +3374,8 @@ async function fetchWatchPrice(ticker) {
     saveAccounts();
     renderScreen('watchstock');
     refreshMain();
-    toast(`${ticker} · ${fmtCur(price)} ✓`);
+    const wCur = w.currency || SECURITIES_DB[ticker]?.currency || 'EUR';
+    toast(`${ticker} · ${fmtNative(price, wCur)} ✓`);
   }
 }
 
@@ -3497,17 +3509,22 @@ async function fetchLivePrices() {
   // ── CoinGecko ──────────────────────────────────
   if (cgIds.length) {
     try {
-      const vs = S.currency.toLowerCase();
       const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
-        + cgIds.join(',') + '&vs_currencies=' + vs;
+        + cgIds.join(',') + '&vs_currencies=usd&include_24hr_change=true';
       const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
       if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
       cgIds.forEach(id => {
         const ticker = cgRev[id];
-        const price  = data[id]?.[vs];
+        const price  = data[id]?.usd;  // toujours en USD (devise native des cryptos)
         if (!ticker || !price) return;
         allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        // Mettre à jour la watchlist si présente
+        const wItem = S.watchlist.find(w => w.ticker === ticker);
+        if (wItem) {
+          wItem.price    = price;
+          wItem.change1d = data[id]?.usd_24h_change ?? wItem.change1d;
+        }
         prices[ticker] = price;
       });
     } catch(e) {
