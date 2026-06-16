@@ -206,6 +206,16 @@
         <div class="form-label">Type</div>
         <input class="form-input" type="text" id="acc-type" placeholder="Plan d'Épargne en Actions" autocomplete="off">
       </div>
+      <div class="form-field">
+        <div class="form-label">Devise</div>
+        <select class="form-input" id="acc-currency" style="cursor:pointer">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+          <option value="GBP">GBP £</option>
+          <option value="CHF">CHF ₣</option>
+          <option value="JPY">JPY ¥</option>
+        </select>
+      </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
@@ -260,14 +270,26 @@
   <div class="modal-drag"></div>
   <div class="modal-body">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div class="modal-title" style="margin-bottom:0">Renommer le compte</div>
+      <div class="modal-title" style="margin-bottom:0">Modifier le compte</div>
       <div id="rename-acc-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
-    <div class="form-field" style="margin-bottom:14px">
-      <div class="form-label">Nouveau nom</div>
-      <input class="form-input" type="text" id="rename-acc-input" placeholder="Nom du compte" autocomplete="off">
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Nom du compte</div>
+        <input class="form-input" type="text" id="rename-acc-input" placeholder="Nom du compte" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Devise</div>
+        <select class="form-input" id="rename-acc-currency" style="cursor:pointer">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+          <option value="GBP">GBP £</option>
+          <option value="CHF">CHF ₣</option>
+          <option value="JPY">JPY ¥</option>
+        </select>
+      </div>
     </div>
-    <button class="form-submit" id="rename-acc-submit">Renommer</button>
+    <button class="form-submit" id="rename-acc-submit">Enregistrer</button>
   </div>
 </div>
 
@@ -426,6 +448,87 @@
       </div>
     </div>
     <button class="form-submit" id="cf-submit">Enregistrer</button>
+  </div>
+</div>
+
+<!-- EDIT HOLDING MODAL -->
+<div id="edit-holding-bg" class="add-modal-bg"></div>
+<div id="edit-holding-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Modifier le titre</div>
+      <div id="edit-holding-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field" style="flex:.45">
+        <div class="form-label">Ticker</div>
+        <input class="form-input" type="text" id="eh-ticker" readonly style="opacity:.55;cursor:default">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Nom</div>
+        <input class="form-input" type="text" id="eh-name" placeholder="Nom de l'entreprise" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Type</div>
+        <select class="form-input" id="eh-type" style="cursor:pointer">
+          <option value="Action">Action</option>
+          <option value="ETF">ETF</option>
+          <option value="Obligation">Obligation</option>
+          <option value="Cash">Cash</option>
+          <option value="Crypto">Crypto</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <div class="form-label">Devise native</div>
+        <select class="form-input" id="eh-currency" style="cursor:pointer">
+          <option value="EUR">EUR €</option>
+          <option value="USD">USD $</option>
+          <option value="GBP">GBP £</option>
+          <option value="CHF">CHF ₣</option>
+          <option value="JPY">JPY ¥</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Pays / Zone</div>
+        <input class="form-input" type="text" id="eh-country" placeholder="France" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <div class="form-label">Secteur</div>
+        <select class="form-input" id="eh-sector" style="cursor:pointer">
+          <option value="Technologie">Technologie</option>
+          <option value="Finance">Finance</option>
+          <option value="Santé">Santé</option>
+          <option value="Énergie">Énergie</option>
+          <option value="Aéronautique">Aéronautique</option>
+          <option value="Automobile">Automobile</option>
+          <option value="Luxe">Luxe</option>
+          <option value="Agroalimentaire">Agroalimentaire</option>
+          <option value="Chimie">Chimie</option>
+          <option value="Matériaux">Matériaux</option>
+          <option value="Immobilier">Immobilier</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Télécoms">Télécoms</option>
+          <option value="Consommation">Consommation</option>
+          <option value="Industrie">Industrie</option>
+          <option value="Cosmétiques">Cosmétiques</option>
+          <option value="Crypto">Crypto</option>
+          <option value="Diversifié">Diversifié</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Cours actuel</div>
+        <input class="form-input" type="number" id="eh-price" min="0" step="any" placeholder="0.00" inputmode="decimal">
+      </div>
+    </div>
+    <button class="form-submit" id="eh-submit">Enregistrer</button>
   </div>
 </div>
 

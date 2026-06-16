@@ -31,6 +31,7 @@ const S = {
   watchTicker: null,
   watchPeriod: '3M',
   watchSort: 'default',  // 'default' | 'perf_desc' | 'perf_asc'
+  stockPeriod: 'MAX',   // '1M' | '3M' | '6M' | '1A' | 'MAX'
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   priceApiKey: '',    // clé Twelve Data (US stocks)
@@ -42,14 +43,34 @@ const S = {
 // ═══════════════════════════════════════════════
 // STORAGE KEYS
 // ═══════════════════════════════════════════════
-const STORE_ACCOUNTS = 'patrimoine-accounts'; // comptes, transactions, watchlist, cibles
+const STORE_ACCOUNTS      = 'patrimoine-accounts';      // slot actif (toujours chargé au démarrage)
+const STORE_ACCOUNTS_DEMO = 'patrimoine-accounts-demo'; // slot backup mode démo
+const STORE_ACCOUNTS_REAL = 'patrimoine-accounts-real'; // slot backup mode réel
 const STORE_SETTINGS = 'patrimoine-settings'; // thème, devise, clé API, préférences
 const STORE_PRICES   = 'patrimoine-prices';   // cache cours (inchangé)
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const CHANGELOG = {
+  '1.3.0': [
+    { type:'fix',     text:'Renommage de compte : le bouton Enregistrer ne fonctionnait pas (id transmis après nullification)' },
+    { type:'fix',     text:'Crypto : prix affichés dans la bonne devise (USD) et non en EUR' },
+    { type:'fix',     text:'Graphique crypto : dates correctes, plus de projections dans le futur' },
+    { type:'fix',     text:'Performance portefeuille : NaN corrigé pour les comptes sans historique de P&L' },
+    { type:'fix',     text:'Mode démo : modifications et créations sauvegardées correctement' },
+    { type:'new',     text:'Devise du compte : choisir à la création et modifier via "Modifier le compte"' },
+    { type:'new',     text:'Modifier un titre existant : nom, type, devise, pays, secteur et cours actuel' },
+    { type:'new',     text:'Sélecteur de période sur le graphique titre : 1M / 3M / 6M / 1A / MAX' },
+    { type:'new',     text:'Saisie d\'un code ISIN pour rechercher et ajouter un titre' },
+    { type:'new',     text:'20+ nouveaux tickers : BABA, TSM, SHOP, PLTR, ARM, COIN, UBER, SPOT, DOGE, ADA, AVAX…' },
+    { type:'new',     text:'Mode démo ↔ réel : deux fichiers de sauvegarde indépendants, bascule sans perte de données' },
+    { type:'new',     text:'Bouton "Réinitialiser les données démo" dans les Réglages' },
+    { type:'improve', text:'Synthèse des comptes : performance all-time (P&L / investi) au lieu du daily' },
+    { type:'improve', text:'Synthèse des comptes : montant affiché dans la devise du compte' },
+    { type:'improve', text:'Tooltips des graphiques masqués en mode confidentialité' },
+    { type:'improve', text:'Autocomplete ticker disponible également dans la watchlist' },
+  ],
   '1.2.0': [
     { type:'fix',     text:'Devise correcte pour les titres en USD affichés dans un compte EUR' },
     { type:'fix',     text:'P&L total juste pour les comptes avec plusieurs devises' },
@@ -216,6 +237,27 @@ const SECURITIES_DB = {
   'SOL':   {name:'Solana',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'BNB':   {name:'BNB',                    sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'XRP':   {name:'Ripple',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  // Asia & others
+  'BABA':  {name:'Alibaba',                sector:'Technologie',    country:'Chine',    currency:'USD',type:'Action'},
+  'TSM':   {name:'Taiwan Semiconductor',   sector:'Technologie',    country:'Asie',     currency:'USD',type:'Action'},
+  'SHOP':  {name:'Shopify',               sector:'Technologie',    country:'Canada',   currency:'USD',type:'Action'},
+  'PLTR':  {name:'Palantir',              sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'ARM':   {name:'ARM Holdings',           sector:'Technologie',    country:'UK',       currency:'USD',type:'Action'},
+  'COIN':  {name:'Coinbase',              sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
+  'UBER':  {name:'Uber',                  sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
+  'SPOT':  {name:'Spotify',               sector:'Technologie',    country:'Europe',   currency:'USD',type:'Action'},
+  'SIE':   {name:'Siemens',              sector:'Industrie',      country:'Europe',   currency:'EUR',type:'Action'},
+  'BAS':   {name:'BASF',                 sector:'Chimie',         country:'Europe',   currency:'EUR',type:'Action'},
+  'SU':    {name:'Schneider Electric',   sector:'Industrie',      country:'France',   currency:'EUR',type:'Action'},
+  'CS':    {name:'AXA',                  sector:'Finance',        country:'France',   currency:'EUR',type:'Action'},
+  'CAP':   {name:'Capgemini',            sector:'Technologie',    country:'France',   currency:'EUR',type:'Action'},
+  'HO':    {name:'Thales',               sector:'Aéronautique',   country:'France',   currency:'EUR',type:'Action'},
+  // Crypto
+  'DOGE':  {name:'Dogecoin',              sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'ADA':   {name:'Cardano',               sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'AVAX':  {name:'Avalanche',             sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'DOT':   {name:'Polkadot',              sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
+  'LINK':  {name:'Chainlink',             sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
 };
 
 // ─── Yahoo Finance symbol mapping ───
@@ -234,11 +276,17 @@ const YAHOO_MAP = {
   // ETFs
   'CW8':'CW8.PA','IWDA':'IWDA.AS','SP5':'SP5.PA','PAEEM':'PAEEM.PA',
   'EWLD':'EWLD.PA','QQQ':'QQQ','MWRD':'MWRD.PA',
+  // Asia & others
+  'BABA':'BABA','TSM':'TSM','SHOP':'SHOP','PLTR':'PLTR','ARM':'ARM',
+  'COIN':'COIN','UBER':'UBER','SPOT':'SPOT',
+  'SIE':'SIE.DE','BAS':'BAS.DE',
+  'SU':'SU.PA','CS':'CS.PA','CAP':'CAP.PA','HO':'HO.PA',
 };
 
 // ─── CoinGecko IDs (crypto uniquement) ───
 const CG_IDS = {
   'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
+  'DOGE':'dogecoin','ADA':'cardano','AVAX':'avalanche-2','DOT':'polkadot','LINK':'chainlink',
 };
 
 // (Twelve Data cascade supprimée — proxy Cloudflare utilisé directement)
@@ -397,6 +445,7 @@ function initHistChart(container, pts) {
     if (tipX + 115 > rect.width) tipX = relX - 125;
     tip.style.left = Math.max(0, tipX) + 'px';
     tip.style.top = Math.max(0, y - 22) + 'px';
+    if(S.privacy){tip.style.opacity='0';return;}
     tip.style.opacity = '1';
     tip.textContent = fmtCur(pts[i]);
   }
@@ -413,15 +462,18 @@ function initHistChart(container, pts) {
 }
 
 // ── SECURITY CHART (90-day price history) ──
-function genSecurityHistory(h) {
+function genSecurityHistory(h, period) {
+  period = period || 'MAX';
   let seed = 0;
   for(let i=0;i<h.ticker.length;i++) seed = (Math.imul(31, seed) + h.ticker.charCodeAt(i)) | 0;
   seed = Math.abs(seed) || 42;
   const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
   const today = new Date(); today.setHours(0,0,0,0);
   const txDates = h.transactions.map(t => new Date(t.date+'T00:00:00'));
-  const minDate = txDates.length > 0 ? new Date(Math.min(...txDates)) : new Date(today.getTime() - 90*86400000);
-  const days = Math.max(90, Math.round((today - minDate) / 86400000) + 1);
+  const firstTxDate = txDates.length > 0 ? new Date(Math.min(...txDates)) : new Date(today.getTime() - 90*86400000);
+  const periodDaysMap = {'1M':30,'3M':90,'6M':182,'1A':365};
+  const periodDays = periodDaysMap[period];
+  const days = periodDays || Math.max(90, Math.round((today - firstTxDate) / 86400000) + 1);
   const startDate = new Date(today.getTime() - (days - 1) * 86400000);
   const pts = new Array(days);
   pts[days-1] = h.currentPrice;
@@ -429,8 +481,8 @@ function genSecurityHistory(h) {
   return { pts, startDate, days };
 }
 
-function stockChartSvg(h, w, ch) {
-  const {pts, startDate, days} = genSecurityHistory(h);
+function stockChartSvg(h, w, ch, period) {
+  const {pts, startDate, days} = genSecurityHistory(h, period);
   const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
   const padT=8, padB=8;
   const xs = pts.map((_,i) => (i/(pts.length-1))*w);
@@ -479,7 +531,7 @@ function stockChartSvg(h, w, ch) {
 }
 
 function initStockChart(container, h) {
-  const {pts, startDate} = genSecurityHistory(h);
+  const {pts, startDate} = genSecurityHistory(h, S.stockPeriod||'MAX');
   const svg = container.querySelector('#stock-svg');
   const tip = container.querySelector('.stock-chart-tip');
   if(!svg||!pts||pts.length<2) return;
@@ -505,6 +557,7 @@ function initStockChart(container, h) {
     tip.style.top=Math.max(0,y-22)+'px';
     tip.style.opacity='1';
     const d=new Date(startDate.getTime()+i*86400000);
+    if(S.privacy){tip.style.opacity='0';return;}
     tip.textContent=fmtNative(pts[i], h.currency||'EUR')+'  '+d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   }
   function hide(){if(locked) return; xhair.setAttribute('opacity','0');dot.setAttribute('opacity','0');tip.style.opacity='0';}
@@ -593,6 +646,7 @@ function initWatchChart(container, pts, startDate, wCur = 'EUR') {
     if (tip) {
       tip.style.left = Math.max(0, tipX) + 'px';
       tip.style.top = Math.max(0, y - 22) + 'px';
+      if(S.privacy){tip.style.opacity='0';return;}
       tip.style.opacity = '1';
       const d = new Date(startDate.getTime() + i * 86400000);
       tip.textContent = fmtNative(pts[i], wCur) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
@@ -745,7 +799,13 @@ function renderComptes() {
   const w=totalWealth();
   const accs=S.accounts.map(a=>{
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
-    const up=a.change1d>=0;
+    const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
+    const totInv=a.holdings.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
+    const allTimePct=totInv>0?(totPnl/totInv)*100:0;
+    const up=allTimePct>=0;
+    const accCcy=a.currency||S.currency;
+    const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
+    const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
     return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
@@ -757,8 +817,8 @@ function renderComptes() {
           <div class="t-sm">${a.type} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
-          <div style="font-size:15px;font-weight:800" class="t-num">${masked(a.value)}</div>
-          <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${fmtPct(a.change1d)}</div>
+          <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
+          <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
         </div>
         <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
@@ -1253,8 +1313,13 @@ function renderStock() {
         <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
         <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
       </div>
-      <div id="js-watch-toggle" class="tap" style="width:36px;height:36px;border-radius:50%;background:${_isWatched?'rgba(245,158,11,.15)':'var(--card2)'};border:1px solid ${_isWatched?'#F59E0B':'var(--border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:4px" title="${_isWatched?'Retirer des favoris':'Ajouter aux favoris'}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="${_isWatched?'#F59E0B':'none'}" stroke="${_isWatched?'#F59E0B':'var(--text2)'}" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-top:4px">
+        <div id="js-edit-holding" class="tap" style="width:36px;height:36px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2)" title="Modifier ce titre">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </div>
+        <div id="js-watch-toggle" class="tap" style="width:36px;height:36px;border-radius:50%;background:${_isWatched?'rgba(245,158,11,.15)':'var(--card2)'};border:1px solid ${_isWatched?'#F59E0B':'var(--border)'};display:flex;align-items:center;justify-content:center" title="${_isWatched?'Retirer des favoris':'Ajouter aux favoris'}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="${_isWatched?'#F59E0B':'none'}" stroke="${_isWatched?'#F59E0B':'var(--text2)'}" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
@@ -1269,8 +1334,11 @@ function renderStock() {
     </div>
   </div>
   <div class="stock-chart-wrap" id="js-stock-chart-wrap" style="padding:8px 0 0">
-    ${stockChartSvg(h,chartW,120)}
+    ${stockChartSvg(h,chartW,120,S.stockPeriod||'MAX')}
     <div class="stock-chart-tip" id="js-stock-chart-tip"></div>
+  </div>
+  <div style="display:flex;align-items:center;padding:6px 16px 2px;gap:6px;overflow-x:auto">
+    ${['1M','3M','6M','1A','MAX'].map(p=>`<div class="hperiod${(S.stockPeriod||'MAX')===p?' on':''}" data-speriod="${p}">${p}</div>`).join('')}
   </div>
   <div style="display:flex;align-items:center;padding:5px 16px 10px;gap:10px">
     <div style="width:14px;height:0;border-top:2px dashed #2563eb;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">PRU</span>
@@ -1480,9 +1548,15 @@ function renderSettings() {
       <div class="s-ico" style="background:rgba(0,194,203,.12)">
         <svg viewBox="0 0 24 24" fill="#00C2CB"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mode démo</div><div class="s-sub">Données d'exemple générées</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mode démo</div><div class="s-sub">Données d'exemple — modifiables et persistées</div></div>
       <div class="toggle ${demo?'on':''}" id="js-demo-tog"><div class="toggle-thumb"></div></div>
     </div>
+    ${demo?`<div class="s-item tap" id="js-demo-reset">
+      <div class="s-ico" style="background:rgba(245,158,11,.12)">
+        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+      </div>
+      <div class="flex1 col gap4"><div class="s-name">Réinitialiser les données démo</div><div class="s-sub">Recharge les données d'exemple d'origine</div></div>
+    </div>`:''}
     <div class="s-item tap" id="js-csv-btn">
       <div class="s-ico" style="background:rgba(0,214,143,.12)">
         <svg viewBox="0 0 24 24" fill="#00D68F"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
@@ -1997,6 +2071,26 @@ function bindEvents(id, el) {
       refreshMain();
       renderScreen('stock');
     });
+    // Period selector
+    el.querySelectorAll('[data-speriod]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        S.stockPeriod=btn.dataset.speriod;
+        const wrap=el.querySelector('#js-stock-chart-wrap');
+        const a=S.accounts.find(a=>a.id===S.accountId);
+        const hh=a?.holdings.find(h=>h.id===S.holdingId);
+        if(!wrap||!hh) return;
+        const cw=Math.min(window.innerWidth,480);
+        wrap.innerHTML=stockChartSvg(hh,cw,120,S.stockPeriod)+'<div class="stock-chart-tip" id="js-stock-chart-tip"></div>';
+        initStockChart(wrap,hh);
+        el.querySelectorAll('[data-speriod]').forEach(b=>b.classList.toggle('on',b.dataset.speriod===S.stockPeriod));
+      });
+    });
+    // Edit holding button
+    el.querySelector('#js-edit-holding')?.addEventListener('click',()=>{
+      const a=S.accounts.find(a=>a.id===S.accountId);
+      const hh=a?.holdings.find(h=>h.id===S.holdingId);
+      if(hh) openEditHolding(S.accountId,S.holdingId);
+    });
     // Interactive stock chart with overlays
     const chartWrap=el.querySelector('#js-stock-chart-wrap');
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -2074,18 +2168,53 @@ function bindEvents(id, el) {
     });
     el.querySelector('#js-demo-tog')?.addEventListener('click',()=>{
       if(S.isDemo){
-        // Démo → mode réel : restaurer les vrais comptes depuis le storage
+        // Démo → réel : sauvegarde le slot démo, charge le slot réel
+        localStorage.setItem(STORE_ACCOUNTS_DEMO, localStorage.getItem(STORE_ACCOUNTS)||'{}');
+        const rawReal = localStorage.getItem(STORE_ACCOUNTS_REAL);
+        if(rawReal){
+          try{
+            const d=JSON.parse(rawReal);
+            S.accounts  = d.accounts  || [];
+            if(d.watchlist) S.watchlist = d.watchlist;
+            if(d.targets)   S.targets   = d.targets;
+            if(d.user)      S.user      = d.user;
+          }catch(e){ S.accounts=[]; }
+        } else {
+          S.accounts=[];
+        }
         S.isDemo=false;
-        try { S.accounts=JSON.parse(localStorage.getItem(STORE_ACCOUNTS)||'{}').accounts||[]; } catch(e){ S.accounts=[]; }
-        toast('Mode démo désactivé');
+        saveAccounts();
+        toast('Mode réel chargé');
       } else {
-        // Mode réel → démo
+        // Réel → démo : sauvegarde le slot réel, charge le slot démo
+        localStorage.setItem(STORE_ACCOUNTS_REAL, localStorage.getItem(STORE_ACCOUNTS)||'{}');
+        const rawDemo = localStorage.getItem(STORE_ACCOUNTS_DEMO);
+        if(rawDemo){
+          try{
+            const d=JSON.parse(rawDemo);
+            S.accounts  = d.accounts  || [];
+            if(d.watchlist) S.watchlist = d.watchlist;
+            if(d.targets)   S.targets   = d.targets;
+            if(d.user)      S.user      = d.user;
+          }catch(e){ S.accounts=genDemo(); }
+        } else {
+          S.accounts=genDemo();
+        }
         S.isDemo=true;
-        S.accounts=genDemo();
-        toast('Mode démo activé ✓');
+        saveAccounts();
+        toast('Mode démo chargé ✓');
       }
       refreshMain();
-      el.querySelector('#js-demo-tog').classList.toggle('on',S.isDemo);
+      renderScreen('settings');
+    });
+    el.querySelector('#js-demo-reset')?.addEventListener('click',()=>{
+      openConfirm('Réinitialiser les données démo ?',()=>{
+        S.accounts=genDemo();
+        saveAccounts();
+        refreshMain();
+        renderScreen('settings');
+        toast('Données démo réinitialisées ✓');
+      });
     });
     el.querySelector('#js-csv-btn')?.addEventListener('click',()=>document.getElementById('csv-file').click());
     el.querySelectorAll('[data-cur]').forEach(b=>b.addEventListener('click',()=>{
@@ -2133,6 +2262,8 @@ function bindEvents(id, el) {
     el.querySelector('#js-reset-all')?.addEventListener('click',()=>{
       openConfirm('Supprimer tous les comptes et transactions ? Les réglages sont conservés.', ()=>{
         localStorage.removeItem(STORE_ACCOUNTS);
+        localStorage.removeItem(STORE_ACCOUNTS_DEMO);
+        localStorage.removeItem(STORE_ACCOUNTS_REAL);
         localStorage.removeItem(STORE_PRICES);
         location.reload();
       });
@@ -2683,7 +2814,8 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
-  S.accounts.push({id,name,type,icon,iconBg,value:0,change1d:0,holdings:[],observer:_accObserver});
+  const currency=document.getElementById('acc-currency').value||'EUR';
+  S.accounts.push({id,name,type,icon,iconBg,currency,value:0,change1d:0,holdings:[],observer:_accObserver});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -2717,17 +2849,33 @@ function closePosModal(){
   const acList=document.getElementById('pos-ac-list');
   function fillFromDB(ticker){
     const db=SECURITIES_DB[ticker];
-    if(!db) return;
+    if(!db) return false;
     document.getElementById('pos-name').value=db.name;
     document.getElementById('pos-type').value=db.type;
     document.getElementById('pos-currency').value=db.currency;
     document.getElementById('pos-country').value=db.country;
     document.getElementById('pos-sector').value=db.sector;
     acList.classList.add('hidden');
+    return true;
   }
   tickerInp.addEventListener('input',()=>{
     const q=tickerInp.value.trim().toUpperCase();
     if(!q){acList.classList.add('hidden');return;}
+    // ISIN detection: 12 chars, 2 letters + 10 alphanumeric
+    if(/^[A-Z]{2}[A-Z0-9]{10}$/.test(q)){
+      const entry=ISIN_MAP[q];
+      if(entry){
+        tickerInp.value=entry.ticker;
+        if(!fillFromDB(entry.ticker)){
+          document.getElementById('pos-name').value=entry.name;
+        }
+        toast(`ISIN résolu : ${entry.ticker} ✓`);
+        acList.classList.add('hidden');
+        return;
+      }
+      acList.classList.add('hidden');
+      return;
+    }
     const matches=Object.entries(SECURITIES_DB).filter(([k,v])=>
       k.startsWith(q)||v.name.toUpperCase().includes(q)
     ).slice(0,6);
@@ -2912,9 +3060,10 @@ document.getElementById('acc-action-obs').addEventListener('click',()=>{
   toast(acc.observer?'Mode observateur activé':'Mode observateur désactivé');
 });
 document.getElementById('acc-action-rename').addEventListener('click',()=>{
-  const acc=S.accounts.find(a=>a.id===_menuAccId); if(!acc) return;
+  const id=_menuAccId;
+  const acc=S.accounts.find(a=>a.id===id); if(!acc) return;
   closeAccMenu();
-  openRenameAcc(_menuAccId, acc.name);
+  openRenameAcc(id, acc.name);
 });
 document.getElementById('acc-action-del').addEventListener('click',()=>{
   const id=_menuAccId;
@@ -2928,8 +3077,11 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 let _renameAccId=null;
 function openRenameAcc(accId, currentName){
   _renameAccId=accId;
+  const acc=S.accounts.find(a=>a.id===accId);
   const inp=document.getElementById('rename-acc-input');
   inp.value=currentName||'';
+  const curSel=document.getElementById('rename-acc-currency');
+  if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
@@ -2944,16 +3096,66 @@ document.getElementById('rename-acc-close').addEventListener('click',closeRename
 document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const name=document.getElementById('rename-acc-input').value.trim();
   if(!name){toast('Nom requis');return;}
-  const acc=S.accounts.find(a=>a.id===_renameAccId); if(!acc) return;
+  const renamedId=_renameAccId;
+  const acc=S.accounts.find(a=>a.id===renamedId); if(!acc) return;
   acc.name=name;
+  acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
+  saveAccounts();
   closeRenameAcc();
   refreshMain();
-  if(S.screen==='account'&&S.accountId===_renameAccId) renderScreen('account');
-  toast(`Compte renommé en "${name}" ✓`);
+  if(S.screen==='account'&&S.accountId===renamedId) renderScreen('account');
+  toast(`Compte mis à jour ✓`);
 });
 // Also submit on Enter key
 document.getElementById('rename-acc-input').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();document.getElementById('rename-acc-submit').click();}
+});
+
+// ═══════════════════════════════════════════════
+// EDIT HOLDING
+// ═══════════════════════════════════════════════
+let _ehAccId=null,_ehHoldId=null;
+function openEditHolding(accId,holdId){
+  _ehAccId=accId; _ehHoldId=holdId;
+  const acc=S.accounts.find(a=>a.id===accId);
+  const h=acc?.holdings.find(h=>h.id===holdId); if(!h) return;
+  document.getElementById('eh-ticker').value=h.ticker;
+  document.getElementById('eh-name').value=h.name||'';
+  document.getElementById('eh-type').value=h.type||'Action';
+  document.getElementById('eh-currency').value=h.currency||'EUR';
+  document.getElementById('eh-country').value=h.country||'';
+  document.getElementById('eh-sector').value=h.sector||'Autre';
+  document.getElementById('eh-price').value=h.currentPrice||'';
+  document.getElementById('edit-holding-bg').classList.add('show');
+  document.getElementById('edit-holding-sheet').classList.add('show');
+}
+function closeEditHolding(){
+  document.getElementById('edit-holding-bg').classList.remove('show');
+  document.getElementById('edit-holding-sheet').classList.remove('show');
+  _ehAccId=null; _ehHoldId=null;
+}
+document.getElementById('edit-holding-bg').addEventListener('click',closeEditHolding);
+document.getElementById('edit-holding-close').addEventListener('click',closeEditHolding);
+document.getElementById('eh-submit').addEventListener('click',()=>{
+  const acc=S.accounts.find(a=>a.id===_ehAccId);
+  const h=acc?.holdings.find(h=>h.id===_ehHoldId); if(!h) return;
+  const newName=document.getElementById('eh-name').value.trim();
+  if(newName) h.name=newName;
+  h.type=document.getElementById('eh-type').value;
+  h.currency=document.getElementById('eh-currency').value;
+  h.country=document.getElementById('eh-country').value.trim()||h.country;
+  h.sector=document.getElementById('eh-sector').value;
+  const newPrice=parseFloat(document.getElementById('eh-price').value);
+  if(newPrice>0){
+    h.currentPrice=newPrice;
+    recalcHolding(h);
+    acc.value=accSum(acc.holdings);
+  }
+  saveAccounts();
+  closeEditHolding();
+  renderScreen('stock');
+  refreshMain();
+  toast(`${h.ticker} mis à jour ✓`);
 });
 
 // ═══════════════════════════════════════════════
@@ -3104,13 +3306,8 @@ function timeSince(ts) {
 // ── Sauvegarde données financières ──
 function saveAccounts() {
   try {
-    // En mode démo, on préserve les vrais comptes déjà stockés (jamais écrasés)
-    let realAccounts = S.accounts;
-    if (S.isDemo) {
-      try { realAccounts = JSON.parse(localStorage.getItem(STORE_ACCOUNTS)||'{}').accounts || []; } catch(e) { realAccounts = []; }
-    }
     localStorage.setItem(STORE_ACCOUNTS, JSON.stringify({
-      accounts:  realAccounts,
+      accounts:  S.accounts,
       isDemo:    S.isDemo,
       watchlist: S.watchlist,
       targets:   S.targets,
