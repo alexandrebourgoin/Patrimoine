@@ -52,8 +52,11 @@ const STORE_HISTORY  = 'patrimoine-history';  // séries historiques réelles pa
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const CHANGELOG = {
+  '1.4.1': [
+    { type:'new',     text:'Bouton plein écran en bas à droite de chaque graphique (évolution du patrimoine, titre détenu, titre suivi) : affichage agrandi avec passage en paysage sur Android' },
+  ],
   '1.4.0': [
     { type:'new',     text:'Reprise d\'historique réel : bouton sur l\'écran d\'un titre détenu ET d\'un titre suivi pour récupérer les vrais cours passés (Yahoo Finance / CoinGecko) au lieu de la courbe estimée' },
     { type:'improve', text:'Titres suivis : les performances (YTD, 1M, 3M, 6M, 52 sem.) deviennent réelles une fois l\'historique repris' },
@@ -706,6 +709,127 @@ function initWatchChart(container, pts, startDate, wCur = 'EUR') {
   svg.addEventListener('touchend', hide, { passive: true });
   svg.addEventListener('mousemove', e => update(e.clientX));
   svg.addEventListener('mouseleave', hide);
+}
+
+// ── FULLSCREEN CHART ──
+// Configs par type : recalculent les données depuis l'état S (jamais de closure stale).
+// render(w,h) -> markup SVG + tooltip dimensionné en pixels (viewBox == pixels => interactivité OK).
+// init(container) -> réattache l'interactivité sur le SVG du conteneur.
+function _chartFsConfig(type) {
+  if (type === 'hist') {
+    return {
+      title: 'Évolution du patrimoine',
+      render: (w, h) => histSvg(genHistData(S.histPeriod), w, h) + '<div class="hist-tip"></div>',
+      init: (c) => initHistChart(c, genHistData(S.histPeriod)),
+    };
+  }
+  if (type === 'stock') {
+    const acc = S.accounts.find(a => a.id === S.accountId);
+    const h = acc?.holdings.find(x => x.id === S.holdingId);
+    if (!h) return null;
+    const period = S.stockPeriod || 'MAX';
+    return {
+      title: `${h.ticker} · ${h.name}`,
+      render: (w, ch) => stockChartSvg(h, w, ch, period) + '<div class="stock-chart-tip"></div>',
+      init: (c) => initStockChart(c, h),
+    };
+  }
+  if (type === 'watch') {
+    const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
+    if (!watch) return null;
+    const wCur = watch.currency || SECURITIES_DB[watch.ticker]?.currency || 'EUR';
+    const period = S.watchPeriod || '3M';
+    return {
+      title: `${watch.ticker} · ${watch.name}`,
+      render: (w, h) => {
+        const { pts } = genWatchHistory(watch.ticker, watch.price, period);
+        return watchChartSvg(pts, w, h, wCur) + '<div id="watch-chart-tip" class="stock-chart-tip"></div>';
+      },
+      init: (c) => {
+        const { pts, startDate } = genWatchHistory(watch.ticker, watch.price, period);
+        initWatchChart(c, pts, startDate, wCur);
+      },
+    };
+  }
+  return null;
+}
+
+function openChartFullscreen(type) {
+  const cfg = _chartFsConfig(type);
+  if (!cfg) return;
+  let ov = document.getElementById('chart-fs-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'chart-fs-overlay';
+    ov.className = 'chart-fs-overlay';
+    ov.innerHTML = `<div class="chart-fs-bar">
+        <span class="chart-fs-title" id="chart-fs-title"></span>
+        <button class="chart-fs-close" id="chart-fs-close" aria-label="Fermer">✕</button>
+      </div>
+      <div class="chart-fs-body" id="chart-fs-body"></div>`;
+    document.body.appendChild(ov);
+  }
+  const body = ov.querySelector('#chart-fs-body');
+  ov.querySelector('#chart-fs-title').textContent = cfg.title;
+
+  function paint() {
+    // viewBox == pixels affichés => les fonctions init() existantes mappent correctement le curseur.
+    const w = Math.max(220, body.clientWidth - 16);
+    const isLandscape = body.clientWidth > body.clientHeight;
+    const h = isLandscape
+      ? Math.max(160, body.clientHeight - 16)
+      : Math.max(180, Math.min(body.clientHeight - 16, Math.round(w * 0.72)));
+    body.innerHTML = cfg.render(w, h);
+    cfg.init(body);
+  }
+  let rt;
+  function onResize() { clearTimeout(rt); rt = setTimeout(paint, 120); }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  function close() {
+    ov.classList.remove('show');
+    window.removeEventListener('resize', onResize);
+    document.removeEventListener('keydown', onKey);
+    body.innerHTML = '';
+    try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+  }
+
+  ov.querySelector('#chart-fs-close').onclick = close;
+  window.addEventListener('resize', onResize);
+  document.addEventListener('keydown', onKey);
+  ov.classList.add('show');
+  paint(); // rendu synchrone : la lecture de clientWidth force le layout (pas de dépendance à rAF)
+
+  // Plein écran réel + paysage : best-effort (Android). Sans effet sur iOS, l'overlay CSS suffit.
+  // Le redimensionnement déclenché re-render le graphique aux bonnes dimensions via onResize.
+  try {
+    const rfs = ov.requestFullscreen || ov.webkitRequestFullscreen;
+    if (rfs) {
+      Promise.resolve(rfs.call(ov)).then(() => {
+        try { const p = screen.orientation.lock('landscape'); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+      }).catch(() => {});
+    }
+  } catch (e) {}
+}
+
+// Ajoute (ou rafraîchit) le bouton plein écran en bas à droite d'un conteneur de graphique.
+function attachChartFs(wrap, type) {
+  if (!wrap) return;
+  let btn = wrap.querySelector('.chart-fs-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'chart-fs-btn';
+    btn.title = 'Plein écran';
+    btn.setAttribute('aria-label', 'Plein écran');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>';
+    wrap.appendChild(btn);
+  }
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    try { haptic(4); } catch (err) {}
+    openChartFullscreen(type);
+  };
 }
 
 // ═══════════════════════════════════════════════
@@ -1911,9 +2035,11 @@ function bindEvents(id, el) {
       const rangeEl=el.querySelector('.hist-range');
       if(rangeEl) rangeEl.innerHTML=`<span>${fmtCur(pts[0])}</span><span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span><span>${fmtCur(pts[pts.length-1])}</span>`;
       initHistChart(el.querySelector('.hist-card'), pts);
+      attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
     }));
     const histCard=el.querySelector('.hist-card');
     if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
+    attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-refresh-btn')?.addEventListener('click', fetchLivePrices);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
@@ -2144,6 +2270,7 @@ function bindEvents(id, el) {
         const cw=Math.min(window.innerWidth,480);
         wrap.innerHTML=stockChartSvg(hh,cw,120,S.stockPeriod)+'<div class="stock-chart-tip" id="js-stock-chart-tip"></div>';
         initStockChart(wrap,hh);
+        attachChartFs(wrap,'stock');
         el.querySelectorAll('[data-speriod]').forEach(b=>b.classList.toggle('on',b.dataset.speriod===S.stockPeriod));
       });
     });
@@ -2157,7 +2284,7 @@ function bindEvents(id, el) {
     const chartWrap=el.querySelector('#js-stock-chart-wrap');
     const acc=S.accounts.find(a=>a.id===S.accountId);
     const h=acc?.holdings.find(h=>h.id===S.holdingId);
-    if(chartWrap&&h) initStockChart(chartWrap,h);
+    if(chartWrap&&h) { initStockChart(chartWrap,h); attachChartFs(chartWrap,'stock'); }
     // Transaction edit and delete buttons
     el.querySelector('#js-tx-list')?.addEventListener('click',e=>{
       const editBtn=e.target.closest('.tx-edit-btn');
@@ -2397,6 +2524,7 @@ function bindEvents(id, el) {
         wrap.innerHTML = watchChartSvg(pts, chartW, 140, wCur) +
           '<div id="watch-chart-tip" class="stock-chart-tip" style="position:absolute;top:4px;left:0"></div>';
         initWatchChart(wrap, pts, startDate, wCur);
+        attachChartFs(wrap, 'watch');
       }
       const pct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
       const perfEl = el.querySelector('#js-watch-period-perf');
@@ -2416,6 +2544,7 @@ function bindEvents(id, el) {
         const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod || '3M');
         const wCur = watch.currency || SECURITIES_DB[watch.ticker]?.currency || 'EUR';
         initWatchChart(wrap, pts, startDate, wCur);
+        attachChartFs(wrap, 'watch');
       }
     }
 
