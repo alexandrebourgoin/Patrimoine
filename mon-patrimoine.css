@@ -381,6 +381,8 @@ input.sim-range::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:
 .ac-tick{font-size:11px;font-weight:800;color:var(--accent);width:44px;flex-shrink:0}
 .ac-name{flex:1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ac-sub{font-size:10px;color:var(--text2);flex-shrink:0}
+.ac-empty .ac-tick{font-size:15px;text-align:center;line-height:1}
+.ac-empty .ac-name{color:var(--text2);font-weight:600}
 
 /* ─── EDIT / DELETE TRANSACTION ─── */
 .tx-edit-btn,.tx-del-btn{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s}
