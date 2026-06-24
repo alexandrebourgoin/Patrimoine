@@ -48,11 +48,17 @@ const STORE_ACCOUNTS_DEMO = 'patrimoine-accounts-demo'; // slot backup mode dém
 const STORE_ACCOUNTS_REAL = 'patrimoine-accounts-real'; // slot backup mode réel
 const STORE_SETTINGS = 'patrimoine-settings'; // thème, devise, clé API, préférences
 const STORE_PRICES   = 'patrimoine-prices';   // cache cours (inchangé)
+const STORE_HISTORY  = 'patrimoine-history';  // séries historiques réelles par ticker
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const CHANGELOG = {
+  '1.4.0': [
+    { type:'new',     text:'Reprise d\'historique réel : bouton sur l\'écran d\'un titre détenu ET d\'un titre suivi pour récupérer les vrais cours passés (Yahoo Finance / CoinGecko) au lieu de la courbe estimée' },
+    { type:'improve', text:'Titres suivis : les performances (YTD, 1M, 3M, 6M, 52 sem.) deviennent réelles une fois l\'historique repris' },
+    { type:'improve', text:'Graphiques titre & suivi : indicateur "● réel / ○ estimé" selon la source des données' },
+  ],
   '1.3.0': [
     { type:'fix',     text:'Renommage de compte : le bouton Enregistrer ne fonctionnait pas (id transmis après nullification)' },
     { type:'fix',     text:'Crypto : prix affichés dans la bonne devise (USD) et non en EUR' },
@@ -461,13 +467,31 @@ function initHistChart(container, pts) {
   svg.addEventListener('mouseleave', hide);
 }
 
+// Construit pts[] (un point par jour calendaire) depuis une série réelle :
+// forward-fill weekends/fériés, backfill avant la 1ère clôture, dernier point ancré sur anchorPrice.
+function _ptsFromRealSeries(hist, startDate, days, anchorPrice) {
+  const byDay = {};
+  hist.series.forEach(p => { byDay[p.d] = p.c; });
+  let last = null;
+  const startKey = startDate.toISOString().slice(0,10);
+  for (const p of hist.series) { if (p.d < startKey) last = p.c; else break; }
+  const pts = new Array(days);
+  for (let i = 0; i < days; i++) {
+    const key = new Date(startDate.getTime() + i*86400000).toISOString().slice(0,10);
+    if (byDay[key] != null) last = byDay[key];
+    pts[i] = last;
+  }
+  if (pts[0] == null) {
+    const firstKnown = pts.find(v => v != null) ?? anchorPrice;
+    for (let i = 0; i < days && pts[i] == null; i++) pts[i] = firstKnown;
+  }
+  pts[days-1] = anchorPrice; // cours live, plus frais que la dernière clôture
+  return pts;
+}
+
 // ── SECURITY CHART (90-day price history) ──
 function genSecurityHistory(h, period) {
   period = period || 'MAX';
-  let seed = 0;
-  for(let i=0;i<h.ticker.length;i++) seed = (Math.imul(31, seed) + h.ticker.charCodeAt(i)) | 0;
-  seed = Math.abs(seed) || 42;
-  const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
   const today = new Date(); today.setHours(0,0,0,0);
   const txDates = h.transactions.map(t => new Date(t.date+'T00:00:00'));
   const firstTxDate = txDates.length > 0 ? new Date(Math.min(...txDates)) : new Date(today.getTime() - 90*86400000);
@@ -475,10 +499,22 @@ function genSecurityHistory(h, period) {
   const periodDays = periodDaysMap[period];
   const days = periodDays || Math.max(90, Math.round((today - firstTxDate) / 86400000) + 1);
   const startDate = new Date(today.getTime() - (days - 1) * 86400000);
+
+  // ── Série réelle si récupérée → forward-fill jour par jour (weekends/fériés = dernière clôture) ──
+  const hist = getHistorySeries(h.ticker);
+  if (hist) {
+    return { pts: _ptsFromRealSeries(hist, startDate, days, h.currentPrice), startDate, days, real: true };
+  }
+
+  // ── Fallback synthétique déterministe (marche aléatoire seedée sur le ticker) ──
+  let seed = 0;
+  for(let i=0;i<h.ticker.length;i++) seed = (Math.imul(31, seed) + h.ticker.charCodeAt(i)) | 0;
+  seed = Math.abs(seed) || 42;
+  const lcg = () => { seed = (Math.imul(1664525, seed) + 1013904223) | 0; return (seed >>> 0) / 4294967296; };
   const pts = new Array(days);
   pts[days-1] = h.currentPrice;
   for(let i=days-2;i>=0;i--) pts[i] = pts[i+1] / (1 + 0.0003 + (lcg()*0.038 - 0.018));
-  return { pts, startDate, days };
+  return { pts, startDate, days, real: false };
 }
 
 function stockChartSvg(h, w, ch, period) {
@@ -585,6 +621,15 @@ function genWatchHistory(ticker, price, period) {
     const map = {'1S':7,'1M':30,'3M':90,'6M':182,'1A':365};
     days = map[period] || 90;
   }
+  const startDate = new Date(today.getTime() - (days - 1) * 86400000);
+
+  // ── Série réelle si récupérée (partagée avec les titres détenus via le ticker) ──
+  const hist = getHistorySeries(ticker);
+  if (hist) {
+    return { pts: _ptsFromRealSeries(hist, startDate, days, price), startDate, days, real: true };
+  }
+
+  // ── Fallback synthétique déterministe ──
   let seed = 0;
   for (let i = 0; i < ticker.length; i++) seed = (Math.imul(31, seed) + ticker.charCodeAt(i)) | 0;
   seed = Math.abs(seed) || 42;
@@ -592,8 +637,7 @@ function genWatchHistory(ticker, price, period) {
   const pts = new Array(days);
   pts[days - 1] = price;
   for (let i = days - 2; i >= 0; i--) pts[i] = pts[i + 1] / (1 + 0.0002 + (lcg() * 0.032 - 0.015));
-  const startDate = new Date(today.getTime() - (days - 1) * 86400000);
-  return { pts, startDate, days };
+  return { pts, startDate, days, real: false };
 }
 
 function watchChartSvg(pts, w, h, wCur = 'EUR') {
@@ -1303,6 +1347,8 @@ function renderStock() {
   }).join('');
 
   const _isWatched = !!S.watchlist.find(w => w.ticker === h.ticker);
+  const _hist = getHistorySeries(h.ticker);
+  const _histChip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_hist?'var(--gain)':'var(--text3)'}" title="${_hist?('Historique réel · '+timeSince(_hist.fetchedAt)):'Courbe estimée — touchez l’icône historique pour récupérer les vrais cours'}">${_hist?'● réel':'○ estimé'}</span>`;
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     ${acc.name}
@@ -1327,6 +1373,9 @@ function renderStock() {
       <div id="js-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
       </div>
+      <div id="js-ticker-history" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Reprendre l’historique réel des cours">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+      </div>
     </div>
     <div class="row gap8" style="margin-top:4px">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
@@ -1344,6 +1393,7 @@ function renderStock() {
     <div style="width:14px;height:0;border-top:2px dashed #2563eb;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">PRU</span>
     <div style="width:10px;height:2px;background:var(--gain);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Achat</span>
     <div style="width:10px;height:2px;background:var(--loss);border-radius:1px;opacity:.8"></div><span style="font-size:10px;color:var(--text3)">Vente</span>
+    ${_histChip}
     <div style="flex:1"></div>
     <span style="font-size:10px;color:var(--text3);font-style:italic">Tap pour verrouiller</span>
   </div>
@@ -1768,6 +1818,9 @@ function renderWatchStock() {
   const secInfo = sec ? `${sec.type} · ${sec.country} · ${sec.sector}` : '';
   const wCur  = watch.currency || sec?.currency || 'EUR';
 
+  const _whist = getHistorySeries(watch.ticker);
+  const _wChip = `<span style="font-size:11px;font-weight:600;white-space:nowrap;color:${_whist?'var(--gain)':'var(--text3)'}" title="${_whist?('Historique réel · '+timeSince(_whist.fetchedAt)):'Courbe estimée — touchez l’icône historique pour récupérer les vrais cours'}">${_whist?'● réel':'○ estimé'}</span>`;
+
   const periodPct = (pts[pts.length-1] - pts[0]) / pts[0] * 100;
 
   const perfBox = (label, val) => {
@@ -1791,11 +1844,15 @@ function renderWatchStock() {
       <div id="js-watch-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
       </div>
+      <div id="js-watch-ticker-history" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Reprendre l’historique réel des cours">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+      </div>
     </div>
     <div class="row gap8" style="align-items:center;flex-wrap:wrap">
       <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(watch.change1d).toFixed(2)}%</div>
       <span style="font-size:13px;font-weight:700;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), wCur)}</span>
       ${secInfo?`<span class="t-sm">${secInfo}</span>`:''}
+      ${_wChip}
     </div>
   </div>
 
@@ -2051,6 +2108,11 @@ function bindEvents(id, el) {
       const acc = S.accounts.find(a => a.id === S.accountId);
       const h   = acc?.holdings.find(h => h.id === S.holdingId);
       if (h) fetchTickerPrice(h.ticker, S.accountId, S.holdingId);
+    });
+    el.querySelector('#js-ticker-history')?.addEventListener('click', () => {
+      const acc = S.accounts.find(a => a.id === S.accountId);
+      const h   = acc?.holdings.find(h => h.id === S.holdingId);
+      if (h) fetchTickerHistory(h.ticker, S.accountId, S.holdingId);
     });
     el.querySelector('#js-watch-toggle')?.addEventListener('click', () => {
       const acc = S.accounts.find(a => a.id === S.accountId);
@@ -2316,6 +2378,9 @@ function bindEvents(id, el) {
     el.querySelector('#js-back')?.addEventListener('click', back);
     el.querySelector('#js-watch-ticker-refresh')?.addEventListener('click', () => {
       if (S.watchTicker) fetchWatchPrice(S.watchTicker);
+    });
+    el.querySelector('#js-watch-ticker-history')?.addEventListener('click', () => {
+      if (S.watchTicker) fetchWatchHistory(S.watchTicker);
     });
 
     // Period selector: swap chart + labels in-place
@@ -2749,7 +2814,16 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
     const matches = Object.entries(SECURITIES_DB).filter(([k,v])=>
       k.startsWith(q) || v.name.toUpperCase().includes(q)
     ).slice(0,6);
-    if(!matches.length){ acL.classList.add('hidden'); return; }
+    if(!matches.length){
+      const safe=q.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      acL.innerHTML=`<div class="ac-item ac-empty" data-manual="1">
+        <span class="ac-tick">+</span>
+        <span class="ac-name">Suivre « ${safe} » (hors liste)</span>
+        <span class="ac-sub">saisie manuelle</span>
+      </div>`;
+      acL.classList.remove('hidden');
+      return;
+    }
     acL.innerHTML = matches.map(([t,db])=>
       `<div class="ac-item" data-ticker="${t}">
         <span class="ac-tick">${t}</span>
@@ -2762,6 +2836,11 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
   acL.addEventListener('click',e=>{
     const item = e.target.closest('.ac-item');
     if(!item) return;
+    if(item.dataset.manual){
+      acL.classList.add('hidden');
+      document.getElementById('watch-name').focus();
+      return;
+    }
     inp.value = item.dataset.ticker;
     fill(item.dataset.ticker);
   });
@@ -2873,13 +2952,21 @@ function closePosModal(){
         acList.classList.add('hidden');
         return;
       }
-      acList.classList.add('hidden');
-      return;
+      // ISIN inconnu → on laisse tomber dans la recherche normale (affiche l'option saisie manuelle)
     }
     const matches=Object.entries(SECURITIES_DB).filter(([k,v])=>
       k.startsWith(q)||v.name.toUpperCase().includes(q)
     ).slice(0,6);
-    if(!matches.length){acList.classList.add('hidden');return;}
+    if(!matches.length){
+      const safe=q.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      acList.innerHTML=`<div class="ac-item ac-empty" data-manual="1">
+        <span class="ac-tick">+</span>
+        <span class="ac-name">Ajouter « ${safe} » (hors liste)</span>
+        <span class="ac-sub">saisie manuelle</span>
+      </div>`;
+      acList.classList.remove('hidden');
+      return;
+    }
     acList.innerHTML=matches.map(([ticker,db])=>
       `<div class="ac-item" data-ticker="${ticker}">
         <span class="ac-tick">${ticker}</span>
@@ -2892,6 +2979,11 @@ function closePosModal(){
   acList.addEventListener('click',e=>{
     const item=e.target.closest('.ac-item');
     if(!item) return;
+    if(item.dataset.manual){
+      acList.classList.add('hidden');
+      document.getElementById('pos-name').focus();
+      return;
+    }
     tickerInp.value=item.dataset.ticker;
     fillFromDB(item.dataset.ticker);
   });
@@ -3425,6 +3517,29 @@ function loadPrices() {
   } catch(e) { return null; }
 }
 
+// ── Historique réel des cours (séries quotidiennes par ticker) ──
+// Format stocké : { 'AAPL': { series:[{d:'YYYY-MM-DD', c:close}], currency:'USD', fetchedAt: ms }, ... }
+let _historyCache = null;
+function loadHistory() {
+  if (_historyCache) return _historyCache;
+  try {
+    const raw = localStorage.getItem(STORE_HISTORY);
+    _historyCache = raw ? JSON.parse(raw) : {};
+  } catch(e) { _historyCache = {}; }
+  return _historyCache;
+}
+function saveHistory(ticker, series, currency) {
+  const all = loadHistory();
+  all[ticker] = { series, currency: currency || 'EUR', fetchedAt: Date.now() };
+  _historyCache = all;
+  try { localStorage.setItem(STORE_HISTORY, JSON.stringify(all)); } catch(e) {}
+}
+// Renvoie l'entrée historique d'un ticker si elle existe et contient des points, sinon null
+function getHistorySeries(ticker) {
+  const h = loadHistory()[ticker];
+  return (h && Array.isArray(h.series) && h.series.length >= 2) ? h : null;
+}
+
 function applyPrices(priceData) {
   if(!priceData?.prices) return;
   S.accounts.flatMap(a=>a.holdings).forEach(h=>{
@@ -3581,6 +3696,125 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
     refreshMain();
     toast(`${ticker} · ${fmtNative(price, h.currency||'EUR')} ✓`);
   }
+}
+
+// ── Reprise d'historique réel à la demande (écran titre) ──
+// Choisit la profondeur Yahoo couvrant la 1ère transaction (capée à 'max')
+function _histRange(h) {
+  const txMs = h.transactions.map(t => new Date(t.date+'T00:00:00').getTime());
+  const first = txMs.length ? Math.min(...txMs) : Date.now() - 365*86400000;
+  const yrs = (Date.now() - first) / (365*86400000);
+  return yrs <= 1 ? '1y' : yrs <= 2 ? '2y' : yrs <= 5 ? '5y' : yrs <= 10 ? '10y' : 'max';
+}
+
+// Normalise un dictionnaire {jour → close} en série ascendante [{d, c}]
+function _histSeriesFromByDay(byDay) {
+  return Object.keys(byDay).sort().map(d => ({ d, c: byDay[d] }));
+}
+
+async function _fetchYahooHistory(yhSym, range) {
+  range = range || '5y';
+  dbgLog('[INF]', `Proxy chart → ${yhSym} range=${range}`);
+  const r = await fetch(`${PROXY_URL}?chart=${encodeURIComponent(yhSym)}&range=${range}&interval=1d`,
+    { signal: AbortSignal.timeout(12000) });
+  dbgLog(r.ok?'[OK]':'[WRN]', `Proxy chart status=${r.status}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  const res = d?.chart?.result?.[0];
+  const ts  = res?.timestamp;
+  if (!ts) return null;
+  const vals = res.indicators?.adjclose?.[0]?.adjclose || res.indicators?.quote?.[0]?.close;
+  if (!vals) return null;
+  const byDay = {};
+  for (let i = 0; i < ts.length; i++) {
+    if (vals[i] == null) continue;
+    const dt = new Date(ts[i]*1000); dt.setHours(0,0,0,0);
+    byDay[dt.toISOString().slice(0,10)] = +vals[i].toFixed(4);
+  }
+  dbgLog('[OK]', `Yahoo history ${Object.keys(byDay).length} jours`);
+  return _histSeriesFromByDay(byDay);
+}
+
+async function _fetchCryptoHistory(cgId, days) {
+  // CoinGecko free tier : daily limité à ~365 jours
+  days = Math.min(days || 365, 365);
+  dbgLog('[INF]', `CoinGecko chart → ${cgId} days=${days}`);
+  const r = await fetch(
+    `https://api.coingecko.com/api/v3/coins/${cgId}/market_chart?vs_currency=usd&days=${days}&interval=daily`,
+    { signal: AbortSignal.timeout(12000) });
+  dbgLog(r.ok?'[OK]':'[WRN]', `CoinGecko chart status=${r.status}`);
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (!Array.isArray(d?.prices)) return null;
+  const byDay = {};
+  d.prices.forEach(([ms, price]) => {
+    const dt = new Date(ms); dt.setHours(0,0,0,0);
+    byDay[dt.toISOString().slice(0,10)] = +price.toFixed(6);
+  });
+  dbgLog('[OK]', `CoinGecko history ${Object.keys(byDay).length} jours`);
+  return _histSeriesFromByDay(byDay);
+}
+
+let _histFetching = false;
+async function fetchTickerHistory(ticker, accId, holdingId) {
+  if (_histFetching) return;
+  const acc = S.accounts.find(a => a.id === accId);
+  const h   = acc?.holdings.find(h => h.id === holdingId);
+  if (!h) return;
+  const yhSym = YAHOO_MAP[ticker];
+  const cgId  = CG_IDS[ticker];
+  if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
+
+  _histFetching = true;
+  const btn = document.querySelector('#js-ticker-history svg');
+  if (btn) btn.classList.add('spin');
+
+  // Profondeur adaptée à la 1ère transaction du titre
+  const txMs = h.transactions.map(t => new Date(t.date+'T00:00:00').getTime());
+  const first = txMs.length ? Math.min(...txMs) : Date.now() - 365*86400000;
+  const cryptoDays = Math.ceil((Date.now() - first)/86400000) + 5;
+
+  let series = null;
+  try {
+    series = cgId ? await _fetchCryptoHistory(cgId, cryptoDays) : await _fetchYahooHistory(yhSym, _histRange(h));
+  } catch(e) { dbgLog('[ERR]', `Historique ${ticker}: ${e?.message||e}`); }
+
+  if (btn) btn.classList.remove('spin');
+  _histFetching = false;
+
+  if (!series || series.length < 2) { toast('Historique introuvable'); return; }
+  saveHistory(ticker, series, h.currency || 'EUR');
+  renderScreen('stock');
+  toast(`Historique ${ticker} repris · ${series.length} points ✓`);
+}
+
+// ── Reprise d'historique réel à la demande (écran watchstock) ──
+// Pas de transactions ici → profondeur fixe (Yahoo 2y / crypto 365j) couvrant toutes les périodes (1S→1A, 52 sem.)
+let _watchHistFetching = false;
+async function fetchWatchHistory(ticker) {
+  if (_watchHistFetching) return;
+  const w = S.watchlist.find(w => w.ticker === ticker);
+  if (!w) return;
+  const yhSym = YAHOO_MAP[ticker];
+  const cgId  = CG_IDS[ticker];
+  if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
+
+  _watchHistFetching = true;
+  const btn = document.querySelector('#js-watch-ticker-history svg');
+  if (btn) btn.classList.add('spin');
+
+  let series = null;
+  try {
+    series = cgId ? await _fetchCryptoHistory(cgId, 365) : await _fetchYahooHistory(yhSym, '2y');
+  } catch(e) { dbgLog('[ERR]', `Historique ${ticker}: ${e?.message||e}`); }
+
+  if (btn) btn.classList.remove('spin');
+  _watchHistFetching = false;
+
+  if (!series || series.length < 2) { toast('Historique introuvable'); return; }
+  saveHistory(ticker, series, w.currency || SECURITIES_DB[ticker]?.currency || 'EUR');
+  renderScreen('watchstock');
+  toast(`Historique ${ticker} repris · ${series.length} points ✓`);
 }
 
 // Rafraîchit le cours d'un titre suivi (écran watchstock)
