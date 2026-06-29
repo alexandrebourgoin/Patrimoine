@@ -34,6 +34,7 @@ const S = {
   stockPeriod: 'MAX',   // '1M' | '3M' | '6M' | '1A' | 'MAX'
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
+  assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
   priceApiKey: '',    // clé Twelve Data (US stocks)
   fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
   _debugLog: [],      // non persisté
@@ -52,8 +53,11 @@ const STORE_HISTORY  = 'patrimoine-history';  // séries historiques réelles pa
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 const CHANGELOG = {
+  '1.5.0': [
+    { type:'new',     text:'Assistant IA : nouveau menu (icône ✨ en haut) qui analyse automatiquement vos comptes et titres et propose des recommandations — concentration, diversification, exposition devise, performances, allocation vs objectifs, liquidités, watchlist. Analyse 100 % locale, aucune donnée envoyée. Activable/masquable dans Réglages.' },
+  ],
   '1.4.1': [
     { type:'new',     text:'Bouton plein écran en bas à droite de chaque graphique (évolution du patrimoine, titre détenu, titre suivi) : affichage agrandi avec passage en paysage sur Android' },
   ],
@@ -890,7 +894,7 @@ function back() {
     // où on doit revenir selon l'écran courant
     const fallbacks = {
       account: 'comptes', stock: 'account',
-      watchstock: 'dashboard', settings: 'dashboard',
+      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard',
     };
     const fb = fallbacks[S.screen];
     if (fb) go(fb);
@@ -902,18 +906,20 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock};
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant};
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
 // ── TOP BAR commun (tous les écrans principaux) ──
 const _SVG_SETTINGS = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
+const _SVG_ASSISTANT = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12zM6 14l.75 2.05L8.8 16.8l-2.05.75L6 19.6l-.75-2.05L3.2 16.8l2.05-.75L6 14z"/></svg>`;
 
 function renderTopBar(extraBtns='') {
   return `<div class="top-bar">
     <div class="top-bar-title">Mon patrimoine</div>
     <div class="row gap8">
       ${extraBtns}
+      ${S.assistantEnabled ? `<div id="js-assistant-btn" class="top-btn tap" title="Assistant IA" style="color:var(--accent)">${_SVG_ASSISTANT}</div>` : ''}
       <div id="js-settings-btn" class="top-btn tap" title="Réglages">${_SVG_SETTINGS}</div>
     </div>
   </div>`;
@@ -1647,6 +1653,150 @@ function renderAnalysis() {
   ${donutBlock('',buildSegs(bySec,SEC_C))}`;
 }
 
+// ── ASSISTANT IA (moteur de recommandations local) ──
+// Analyse 100% déterministe, hors-ligne, aucune donnée envoyée.
+// Renvoie une liste de recos triées par sévérité (3 = important, 2 = à surveiller, 1 = suggestion).
+function analyzePortfolio(S) {
+  const recos = [];
+  const accs = S.accounts.filter(a => !a.observer);
+  const all  = accs.flatMap(a => a.holdings.map(h => ({ h, acc: a })));
+  const vOf  = h => (h.valueRef ?? h.value ?? 0);
+  const tot  = all.reduce((s, x) => s + vOf(x.h), 0);
+  if (!all.length || tot <= 0) return recos;
+  const appCcy = S.currency || 'EUR';
+  const pct = v => (v / tot) * 100;
+
+  // 1. Concentration par titre (agrégé par ticker, tous comptes confondus)
+  const byTicker = {};
+  all.forEach(({ h, acc }) => {
+    const k = h.ticker || h.name || '?';
+    if (!byTicker[k]) byTicker[k] = { val: 0, name: h.name || k, accId: acc.id, holdId: h.id, n: 0 };
+    byTicker[k].val += vOf(h); byTicker[k].n++;
+  });
+  Object.values(byTicker).forEach(t => {
+    const w = pct(t.val);
+    const link = t.n === 1 ? { accId: t.accId, holdId: t.holdId } : {};
+    if (w >= 25) recos.push({ sev: 3, icon: '⚠️', title: `Surexposition : ${t.name}`,
+      detail: `Ce titre pèse ${w.toFixed(0)} % du portefeuille. Une forte baisse aurait un impact majeur — envisagez d'alléger ou de diversifier.`, ...link });
+    else if (w >= 15) recos.push({ sev: 2, icon: '📊', title: `Forte pondération : ${t.name}`,
+      detail: `${w.toFixed(0)} % du portefeuille concentré sur une seule ligne. À surveiller.`, ...link });
+  });
+
+  // 2. Nombre de lignes
+  const nLignes = Object.keys(byTicker).length;
+  if (nLignes < 5) recos.push({ sev: 2, icon: '🧩', title: 'Portefeuille peu diversifié',
+    detail: `Seulement ${nLignes} ligne${nLignes > 1 ? 's' : ''} en portefeuille. Multiplier les positions réduit le risque spécifique.` });
+
+  // 3. Concentration sectorielle
+  const bySec = {};
+  all.forEach(({ h }) => { const k = h.sector || 'Autre'; bySec[k] = (bySec[k] || 0) + vOf(h); });
+  const topSec = Object.entries(bySec).sort((a, b) => b[1] - a[1])[0];
+  if (topSec && pct(topSec[1]) >= 40) recos.push({ sev: 2, icon: '🏭', title: `Concentration sectorielle : ${topSec[0]}`,
+    detail: `${pct(topSec[1]).toFixed(0)} % de l'exposition sur un seul secteur. Diversifier les secteurs lisse la performance.` });
+
+  // 4. Diversification géographique
+  const byGeo = {};
+  all.forEach(({ h }) => { const k = h.country || 'Autre'; byGeo[k] = (byGeo[k] || 0) + vOf(h); });
+  const topGeo = Object.entries(byGeo).sort((a, b) => b[1] - a[1])[0];
+  if (topGeo && pct(topGeo[1]) >= 60) recos.push({ sev: 1, icon: '🌍', title: `Exposition géographique : ${topGeo[0]}`,
+    detail: `${pct(topGeo[1]).toFixed(0)} % concentré sur une zone. Une exposition internationale diversifie le risque pays.` });
+
+  // 5. Exposition au risque de change
+  const byCcy = {};
+  all.forEach(({ h }) => { const k = h.currency || appCcy; byCcy[k] = (byCcy[k] || 0) + vOf(h); });
+  const foreign = Object.entries(byCcy).filter(([k]) => k !== appCcy).reduce((s, [, v]) => s + v, 0);
+  if (pct(foreign) >= 40) recos.push({ sev: 2, icon: '💱', title: 'Exposition au risque de change',
+    detail: `${pct(foreign).toFixed(0)} % du portefeuille est libellé hors ${appCcy}. Les variations de change affectent directement sa valeur.` });
+
+  // 6. Fortes moins-values vs PRU
+  all.filter(({ h }) => (h.pnlPct ?? 0) <= -20).sort((a, b) => (a.h.pnlPct ?? 0) - (b.h.pnlPct ?? 0)).slice(0, 3)
+    .forEach(({ h, acc }) => recos.push({ sev: 2, icon: '📉', title: `Forte moins-value : ${h.name || h.ticker}`,
+      detail: `${fmtPct(h.pnlPct ?? 0)} vs PRU. Réévaluez la thèse d'investissement ou envisagez un arbitrage.`, accId: acc.id, holdId: h.id }));
+
+  // 7. Fortes plus-values vs PRU
+  all.filter(({ h }) => (h.pnlPct ?? 0) >= 50).sort((a, b) => (b.h.pnlPct ?? 0) - (a.h.pnlPct ?? 0)).slice(0, 2)
+    .forEach(({ h, acc }) => recos.push({ sev: 1, icon: '🚀', title: `Belle plus-value : ${h.name || h.ticker}`,
+      detail: `${fmtPct(h.pnlPct ?? 0)} vs PRU. Vous pourriez sécuriser une partie des gains.`, accId: acc.id, holdId: h.id }));
+
+  // 8. Allocation vs objectifs
+  const byType = {};
+  all.forEach(({ h }) => { const k = h.type || 'Autre'; byType[k] = (byType[k] || 0) + vOf(h); });
+  Object.entries(S.targets || {}).forEach(([type, target]) => {
+    const cur = pct(byType[type] || 0);
+    const d = cur - target;
+    if (Math.abs(d) >= 15) recos.push({ sev: 1, icon: '🎯', title: `Allocation ${type} hors objectif`,
+      detail: `Actuel ${cur.toFixed(0)} % vs objectif ${target} % (${d > 0 ? '+' : ''}${d.toFixed(0)} pts) — ${d > 0 ? 'surpondéré' : 'sous-pondéré'}.` });
+  });
+
+  // 9. Liquidités dormantes
+  const cashW = pct(byType['Cash'] || 0);
+  if (cashW >= 15) recos.push({ sev: 1, icon: '💰', title: 'Liquidités importantes',
+    detail: `${cashW.toFixed(0)} % en cash. Des liquidités dormantes perdent de la valeur avec l'inflation — envisagez de les investir.` });
+
+  // 10. Watchlist — mouvements notables du jour
+  (S.watchlist || []).filter(w => Math.abs(w.change1d ?? 0) >= 3).slice(0, 3).forEach(w => {
+    const up = (w.change1d ?? 0) >= 0;
+    recos.push({ sev: 1, icon: up ? '📈' : '📉', title: `Suivi : ${w.name || w.ticker} ${fmtPct(w.change1d ?? 0)}`,
+      detail: `Mouvement notable aujourd'hui sur un titre de votre liste de suivi.` });
+  });
+
+  recos.sort((a, b) => b.sev - a.sev);
+  return recos;
+}
+
+function renderAssistant() {
+  const recos  = analyzePortfolio(S);
+  const hasData = S.accounts.some(a => a.holdings.length);
+  const SEV = {
+    3: { bg: 'var(--loss-dim)',   col: 'var(--loss)' },
+    2: { bg: 'rgba(245,158,11,.12)', col: '#F59E0B' },
+    1: { bg: 'var(--accent-dim)', col: 'var(--accent)' },
+  };
+  const header = `<div class="back tap" id="js-back">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    Retour
+  </div>
+  <div class="settings-top" style="padding-top:4px">
+    <div class="t-title">Assistant IA</div>
+    <div class="t-sm" style="margin-top:2px">Analyse automatique de vos comptes et titres</div>
+  </div>`;
+
+  if (!hasData) return header + `<div style="text-align:center;padding:60px 20px;color:var(--text2)">
+    <div style="font-size:40px;margin-bottom:12px">🤖</div>
+    <div style="font-size:15px;font-weight:600">Aucune donnée à analyser</div>
+    <div class="t-sm" style="margin-top:6px">Ajoutez des comptes et des titres pour obtenir des recommandations.</div>
+  </div>`;
+
+  let body;
+  if (!recos.length) {
+    body = `<div class="s-group"><div class="s-item">
+      <div class="s-ico" style="background:var(--gain-dim)"><svg viewBox="0 0 24 24" fill="var(--gain)"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+      <div class="flex1 col gap4"><div class="s-name">Portefeuille équilibré</div><div class="s-sub">Aucun point d'attention détecté selon les règles d'analyse.</div></div>
+    </div></div>`;
+  } else {
+    const cards = recos.map(r => {
+      const sv = SEV[r.sev] || SEV[1];
+      const clickable = r.holdId && r.accId;
+      return `<div class="s-item ${clickable ? 'tap js-reco' : ''}" ${clickable ? `data-acc="${r.accId}" data-hold="${r.holdId}"` : ''}>
+        <div class="s-ico" style="background:${sv.bg};font-size:18px">${r.icon}</div>
+        <div class="flex1 col gap4">
+          <div class="s-name" style="color:${sv.col}">${r.title}</div>
+          <div class="s-sub">${r.detail}</div>
+        </div>
+        ${clickable ? `<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>` : ''}
+      </div>`;
+    }).join('');
+    const n = recos.length;
+    body = `<div class="s-section">${n} recommandation${n > 1 ? 's' : ''}</div><div class="s-group">${cards}</div>`;
+  }
+
+  const disclaimer = `<div class="t-sm" style="padding:14px 16px 30px;color:var(--text3);text-align:center;line-height:1.6">
+    ℹ️ Analyse automatique fournie à titre informatif uniquement.<br>Ceci ne constitue pas un conseil en investissement.
+  </div>`;
+
+  return header + `<div style="height:8px"></div>` + body + disclaimer;
+}
+
 // ── SETTINGS ──
 function fxSubText() {
   const appCcy = S.currency || 'EUR';
@@ -1849,6 +1999,20 @@ function renderSettings() {
     </div>` : ''}
   </div>
 
+  <div class="s-section">Assistant IA</div>
+  <div class="s-group">
+    <div class="s-item tap" id="js-assistant-tog">
+      <div class="s-ico" style="background:var(--accent-dim)">
+        <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Assistant IA</div>
+        <div class="s-sub">Recommandations locales sur vos comptes et titres</div>
+      </div>
+      <div class="toggle ${S.assistantEnabled ? 'on' : ''}" id="js-assistant-inner"><div class="toggle-thumb"></div></div>
+    </div>
+  </div>
+
   <div class="s-section">Préférences</div>
   <div class="s-group">
     <div class="s-item">
@@ -2041,6 +2205,7 @@ function bindEvents(id, el) {
     if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
     attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
     el.querySelector('#js-refresh-btn')?.addEventListener('click', fetchLivePrices);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
     el.querySelector('#js-watch-sort')?.addEventListener('click', () => {
@@ -2099,6 +2264,7 @@ function bindEvents(id, el) {
     _bindAccCards(el);
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
   }
   if(id==='recherche') {
     const inp=el.querySelector('#js-srch-inp');
@@ -2172,6 +2338,7 @@ function bindEvents(id, el) {
     }));
 
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
     // Ferme le clavier si tap hors de la search-box
     el.addEventListener('touchstart', e => {
       if (!e.target.closest('#js-srch-box')) inp?.blur();
@@ -2310,6 +2477,7 @@ function bindEvents(id, el) {
   }
   if(id==='analysis') {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
+    el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
     // Use event delegation so it survives partial DOM replacement
     el.addEventListener('input', e => {
       const inp = e.target.closest('.tgt-inp');
@@ -2463,6 +2631,14 @@ function bindEvents(id, el) {
       saveData();
       toast('Actualisation auto ' + (S.autoRefresh ? 'activée' : 'désactivée'));
     });
+    el.querySelector('#js-assistant-tog')?.addEventListener('click', () => {
+      S.assistantEnabled = !S.assistantEnabled;
+      el.querySelector('#js-assistant-inner')?.classList.toggle('on', S.assistantEnabled);
+      saveSettings();
+      // Re-render des écrans à top-bar pour afficher/masquer le bouton immédiatement
+      ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
+      toast('Assistant IA ' + (S.assistantEnabled ? 'activé' : 'masqué'));
+    });
     el.querySelector('#js-fx-row')?.addEventListener('click', openFxModal);
     el.querySelector('#js-open-changelog')?.addEventListener('click', openChangelogModal);
     el.querySelector('#js-price-key')?.addEventListener('change', e => {
@@ -2499,6 +2675,16 @@ function bindEvents(id, el) {
     el.querySelector('#js-debug-clear')?.addEventListener('click',()=>{
       S._debugLog = [];
       renderScreen('settings');
+    });
+  }
+  if (id === 'assistant') {
+    el.querySelector('#js-back')?.addEventListener('click', back);
+    el.querySelectorAll('.js-reco').forEach(item => {
+      item.addEventListener('click', () => {
+        S.accountId = item.dataset.acc;
+        S.holdingId = item.dataset.hold;
+        go('stock');
+      });
     });
   }
   if (id === 'watchstock') {
@@ -3549,6 +3735,7 @@ function saveSettings() {
       sortDir:     S.sortDir,
       debug:       S.debug,
       autoRefresh: S.autoRefresh,
+      assistantEnabled: S.assistantEnabled,
       priceApiKey: S.priceApiKey,
       fmpApiKey:   S.fmpApiKey,
     }));
@@ -3614,6 +3801,7 @@ function loadData() {
       if (s.sortDir !== undefined)  S.sortDir     = s.sortDir;
       if (s.debug !== undefined)    S.debug       = s.debug;
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
+      if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
       if (s.fmpApiKey)              S.fmpApiKey   = s.fmpApiKey;
     }
