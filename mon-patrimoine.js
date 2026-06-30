@@ -53,8 +53,11 @@ const STORE_HISTORY  = 'patrimoine-history';  // séries historiques réelles pa
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const CHANGELOG = {
+  '1.6.0': [
+    { type:'new',     text:'Titres hors base reconnus automatiquement (ex: HOOD, AMD…) : saisissez un ticker absent de la liste et l\'appli récupère en ligne son nom, sa devise et son prix. Les cours et l\'historique de ces titres se mettent désormais à jour comme les autres.' },
+  ],
   '1.5.0': [
     { type:'new',     text:'Assistant IA : nouveau menu (icône ✨ en haut) qui analyse automatiquement vos comptes et titres et propose des recommandations — concentration, diversification, exposition devise, performances, allocation vs objectifs, liquidités, watchlist. Analyse 100 % locale, aucune donnée envoyée. Activable/masquable dans Réglages.' },
   ],
@@ -295,6 +298,10 @@ const YAHOO_MAP = {
   'SIE':'SIE.DE','BAS':'BAS.DE',
   'SU':'SU.PA','CS':'CS.PA','CAP':'CAP.PA','HO':'HO.PA',
 };
+
+// Symbole Yahoo pour un titre : table explicite, sinon le ticker brut.
+// Vrai pour la plupart des actions/ETF US cotés sans suffixe (ex: HOOD, AMD…).
+function yahooSymbolFor(ticker){ return YAHOO_MAP[ticker] || ticker; }
 
 // ─── CoinGecko IDs (crypto uniquement) ───
 const CG_IDS = {
@@ -3123,6 +3130,17 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
     document.getElementById('watch-name').value = db.name;
     acL.classList.add('hidden');
   }
+  // Titre hors base : résolution en ligne (nom + prix + devise) via le proxy
+  async function resolveWatch(tk){
+    if(!tk || SECURITIES_DB[tk]) return;
+    const info = await resolveTickerOnline(tk);
+    if(!info){ toast(`« ${tk} » introuvable en ligne`); return; }
+    const nameEl=document.getElementById('watch-name');
+    const priceEl=document.getElementById('watch-price');
+    if(!nameEl.value.trim()) nameEl.value=info.name;
+    if(priceEl && !priceEl.value && info.price) priceEl.value=info.price;
+    toast(`${tk} résolu : ${info.name} (${info.currency}) ✓`);
+  }
   inp.addEventListener('input',()=>{
     const q = inp.value.trim().toUpperCase();
     if(!q){ acL.classList.add('hidden'); return; }
@@ -3132,9 +3150,9 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
     if(!matches.length){
       const safe=q.replace(/&/g,'&amp;').replace(/</g,'&lt;');
       acL.innerHTML=`<div class="ac-item ac-empty" data-manual="1">
-        <span class="ac-tick">+</span>
-        <span class="ac-name">Suivre « ${safe} » (hors liste)</span>
-        <span class="ac-sub">saisie manuelle</span>
+        <span class="ac-tick">🔍</span>
+        <span class="ac-name">Rechercher « ${safe} » en ligne</span>
+        <span class="ac-sub">nom + prix + devise auto</span>
       </div>`;
       acL.classList.remove('hidden');
       return;
@@ -3153,6 +3171,7 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
     if(!item) return;
     if(item.dataset.manual){
       acL.classList.add('hidden');
+      resolveWatch(inp.value.trim().toUpperCase());
       document.getElementById('watch-name').focus();
       return;
     }
@@ -3160,7 +3179,10 @@ document.getElementById('watch-modal-close').addEventListener('click',closeWatch
     fill(item.dataset.ticker);
   });
   inp.addEventListener('blur',()=>setTimeout(()=>acL.classList.add('hidden'),200));
-  inp.addEventListener('change',()=>fill(inp.value.trim().toUpperCase()));
+  inp.addEventListener('change',()=>{
+    const tk=inp.value.trim().toUpperCase();
+    if(SECURITIES_DB[tk]) fill(tk); else resolveWatch(tk);
+  });
 })();
 document.getElementById('watch-submit').addEventListener('click',()=>{
   const ticker=document.getElementById('watch-ticker').value.trim().toUpperCase();
@@ -3169,7 +3191,7 @@ document.getElementById('watch-submit').addEventListener('click',()=>{
   const change=parseFloat(document.getElementById('watch-change').value)||0;
   if(!ticker||!name||!(price>0)){toast('Ticker, nom et prix requis');return;}
   if(S.watchlist.find(w=>w.ticker===ticker)){toast('Ticker déjà suivi');return;}
-  const _wCur = SECURITIES_DB[ticker]?.currency || 'EUR';
+  const _wCur = SECURITIES_DB[ticker]?.currency || _tickerMeta[ticker]?.currency || 'EUR';
   S.watchlist.push({ticker, name, price, change1d:change, currency:_wCur});
   closeWatchModal();
   refreshMain();
@@ -3252,6 +3274,17 @@ function closePosModal(){
     acList.classList.add('hidden');
     return true;
   }
+  // Titre hors base : résolution en ligne (nom, devise, type) via le proxy
+  async function resolveAndFill(tk){
+    if(!tk || SECURITIES_DB[tk]) return;
+    const info = await resolveTickerOnline(tk);
+    if(!info){ toast(`« ${tk} » introuvable en ligne`); return; }
+    const nameEl=document.getElementById('pos-name');
+    if(!nameEl.value.trim()) nameEl.value=info.name;
+    setSelectValue(document.getElementById('pos-currency'), info.currency, info.currency);
+    document.getElementById('pos-type').value=info.type;
+    toast(`${tk} résolu : ${info.name} (${info.currency}) ✓`);
+  }
   tickerInp.addEventListener('input',()=>{
     const q=tickerInp.value.trim().toUpperCase();
     if(!q){acList.classList.add('hidden');return;}
@@ -3275,9 +3308,9 @@ function closePosModal(){
     if(!matches.length){
       const safe=q.replace(/&/g,'&amp;').replace(/</g,'&lt;');
       acList.innerHTML=`<div class="ac-item ac-empty" data-manual="1">
-        <span class="ac-tick">+</span>
-        <span class="ac-name">Ajouter « ${safe} » (hors liste)</span>
-        <span class="ac-sub">saisie manuelle</span>
+        <span class="ac-tick">🔍</span>
+        <span class="ac-name">Rechercher « ${safe} » en ligne</span>
+        <span class="ac-sub">nom + devise auto</span>
       </div>`;
       acList.classList.remove('hidden');
       return;
@@ -3296,6 +3329,7 @@ function closePosModal(){
     if(!item) return;
     if(item.dataset.manual){
       acList.classList.add('hidden');
+      resolveAndFill(tickerInp.value.trim().toUpperCase());
       document.getElementById('pos-name').focus();
       return;
     }
@@ -3303,7 +3337,10 @@ function closePosModal(){
     fillFromDB(item.dataset.ticker);
   });
   tickerInp.addEventListener('blur',()=>setTimeout(()=>acList.classList.add('hidden'),200));
-  tickerInp.addEventListener('change',()=>fillFromDB(tickerInp.value.trim().toUpperCase()));
+  tickerInp.addEventListener('change',()=>{
+    const tk=tickerInp.value.trim().toUpperCase();
+    if(!fillFromDB(tk)) resolveAndFill(tk);
+  });
 })();
 
 document.getElementById('pos-modal-bg').addEventListener('click',closePosModal);
@@ -3910,6 +3947,44 @@ function applyTheme(theme) {
 // ═══════════════════════════════════════════════
 const PROXY_URL = 'https://patrimoine-prices.al-the-best.workers.dev';
 
+// Cache session des titres résolus en ligne (hors SECURITIES_DB)
+const _tickerMeta = {}; // ticker → {name, currency, type, price}
+
+// Résout un ticker absent de la base via le proxy (route ?symbols= déjà déployée).
+// Renvoie {name, currency, type, price} ou null. Best-effort, silencieux.
+async function resolveTickerOnline(ticker){
+  if(!ticker || SECURITIES_DB[ticker]) return null;
+  if(_tickerMeta[ticker]) return _tickerMeta[ticker];
+  try{
+    const r = await fetch(PROXY_URL + '?symbols=' + encodeURIComponent(yahooSymbolFor(ticker)),
+      { signal: AbortSignal.timeout(12000) });  // 12 s : absorbe le cold-start du worker (auth crumb Yahoo)
+    if(!r.ok) return null;
+    const data = await r.json();
+    const q = data?.quoteResponse?.result?.find(x => x.regularMarketPrice);
+    if(!q) return null;
+    const qt = (q.quoteType||'').toUpperCase();
+    const info = {
+      name:     q.longName || q.shortName || ticker,
+      currency: (q.currency||'EUR').toUpperCase(),
+      type:     qt==='ETF' ? 'ETF' : qt==='CRYPTOCURRENCY' ? 'Crypto' : 'Action',
+      price:    q.regularMarketPrice,
+    };
+    _tickerMeta[ticker] = info;
+    return info;
+  }catch(_){ return null; }
+}
+
+// Affecte une valeur à un <select>, en créant l'option si absente (ex: devise CAD/JPY).
+function setSelectValue(sel, val, label){
+  if(!sel) return;
+  if(![...sel.options].some(o => o.value === val)){
+    const o = document.createElement('option');
+    o.value = val; o.textContent = label || val;
+    sel.appendChild(o);
+  }
+  sel.value = val;
+}
+
 let _fetching = false;
 let _tdRateLimited = 0;
 let _fxUpdatedAt = null;
@@ -3985,7 +4060,7 @@ let _tickerFetching = false;
 async function fetchTickerPrice(ticker, accId, holdingId) {
   if (_tickerFetching) return;
   _tickerFetching = true;
-  const yhSym = YAHOO_MAP[ticker];
+  const yhSym = yahooSymbolFor(ticker);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _tickerFetching=false; return; }
 
@@ -4078,7 +4153,7 @@ async function fetchTickerHistory(ticker, accId, holdingId) {
   const acc = S.accounts.find(a => a.id === accId);
   const h   = acc?.holdings.find(h => h.id === holdingId);
   if (!h) return;
-  const yhSym = YAHOO_MAP[ticker];
+  const yhSym = yahooSymbolFor(ticker);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
 
@@ -4112,7 +4187,7 @@ async function fetchWatchHistory(ticker) {
   if (_watchHistFetching) return;
   const w = S.watchlist.find(w => w.ticker === ticker);
   if (!w) return;
-  const yhSym = YAHOO_MAP[ticker];
+  const yhSym = yahooSymbolFor(ticker);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
 
@@ -4139,7 +4214,7 @@ let _watchFetching = false;
 async function fetchWatchPrice(ticker) {
   if (_watchFetching) return;
   _watchFetching = true;
-  const yhSym = YAHOO_MAP[ticker];
+  const yhSym = yahooSymbolFor(ticker);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _watchFetching=false; return; }
 
@@ -4216,10 +4291,13 @@ async function fetchLivePrices() {
   // Taux de change live (avant recalcHolding pour que valueRef soit correct)
   await fetchFxRates();
 
-  // Tickers uniques : comptes + watchlist (sauf crypto)
-  const watchSymbols = S.watchlist.map(w=>YAHOO_MAP[w.ticker]).filter(Boolean);
+  // Tickers uniques : comptes + watchlist (sauf crypto).
+  // Fallback yahooSymbolFor → titres hors base envoyés avec leur ticker brut.
+  const watchSymbols = S.watchlist
+    .filter(w => !CG_IDS[w.ticker])           // crypto suivie → gérée par CoinGecko
+    .map(w => yahooSymbolFor(w.ticker));
   const yahooSymbols = [...new Set([
-    ...allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean),
+    ...allH.filter(h=>h.type!=='Crypto').map(h=>yahooSymbolFor(h.ticker)),
     ...watchSymbols,
   ])];
   const cgIds = [...new Set(
@@ -4277,13 +4355,22 @@ async function fetchLivePrices() {
         const ticker = yahooRev[q.symbol] || q.symbol;
         const price  = q.regularMarketPrice;
         if (!price) return;
+        // Titre hors base : la devise Yahoo fait foi (le défaut EUR n'était qu'une supposition)
+        const known = !!SECURITIES_DB[ticker];
+        const qCur  = q.currency ? q.currency.toUpperCase() : null;
         // Mettre à jour les holdings
-        allH.filter(h => h.ticker === ticker).forEach(h => { h.currentPrice = price; recalcHolding(h); updated++; });
+        allH.filter(h => h.ticker === ticker).forEach(h => {
+          h.currentPrice = price;
+          if (!known && qCur) h.currency = qCur;
+          recalcHolding(h);
+          updated++;
+        });
         // Mettre à jour la watchlist
         const wItem = S.watchlist.find(w => w.ticker === ticker);
         if (wItem) {
           wItem.price    = price;
           wItem.change1d = q.regularMarketChangePercent || wItem.change1d;
+          if (!known && qCur) wItem.currency = qCur;
         }
         prices[ticker] = price;
       });
@@ -4336,7 +4423,7 @@ async function fetchLivePrices() {
       const dot = document.getElementById('js-fresh-dot');
       if (dot) dot.style.background = 'var(--gain)';
     });
-    const total = allH.filter(h=>h.type!=='Crypto').map(h=>YAHOO_MAP[h.ticker]).filter(Boolean).length
+    const total = allH.filter(h=>h.type!=='Crypto').length
                 + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
     const partial = updated < total ? ` (${updated}/${total})` : '';
     toast(errors.length
