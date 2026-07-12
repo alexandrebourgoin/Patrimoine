@@ -5,11 +5,13 @@
    - Everything else → network-first with cache fallback
 */
 
-const CACHE = 'patrimoine-v72';
+const CACHE = 'patrimoine-v75';
 const SHELL = [
+  './index.html',
   './mon-patrimoine.html',
   './mon-patrimoine.css',
   './mon-patrimoine.js',
+  './utils.js',
   './manifest.json',
   './icon.svg'
 ];
@@ -43,6 +45,10 @@ self.addEventListener('fetch', e => {
     e.respondWith(cacheFirst(e.request));
     return;
   }
+
+  /* Cross-origin (proxy prix, CoinGecko, FMP…) – réseau direct, jamais de cache.
+     Le test path==='' matchait le proxy (pathname '/') → cours servis avec un cycle de retard */
+  if (url.origin !== self.location.origin) return;
 
   /* App shell files – stale-while-revalidate */
   const path = url.pathname.split('/').pop();

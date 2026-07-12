@@ -20,12 +20,7 @@ const S = {
   _histCache: {},
   srchQuery: '',
   srchMode: 'titres',   // 'titres' | 'mouvements'
-  watchlist: [
-    { ticker: 'OR',   name: "L'Oréal",       price: 412.35, change1d:  0.68 },
-    { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
-    { ticker: 'MSFT', name: 'Microsoft',      price: 378.50, change1d:  1.15 },
-    { ticker: 'TSLA', name: 'Tesla',          price: 248.20, change1d: -2.45 },
-  ],
+  watchlist: genDemoWatchlist(),
   lastPriceUpdate: null,
   isDemo: true,   // true = données démo (jamais sauvegardées)
   watchTicker: null,
@@ -50,11 +45,30 @@ const STORE_ACCOUNTS_REAL = 'patrimoine-accounts-real'; // slot backup mode rée
 const STORE_SETTINGS = 'patrimoine-settings'; // thème, devise, clé API, préférences
 const STORE_PRICES   = 'patrimoine-prices';   // cache cours (inchangé)
 const STORE_HISTORY  = 'patrimoine-history';  // séries historiques réelles par ticker
+const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la valeur totale du patrimoine
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.1';
 const CHANGELOG = {
+  '1.7.1': [
+    { type:'fix',     text:'Apports/retraits : un cashflow ajouté n\'était pas sauvegardé et disparaissait au rechargement.' },
+    { type:'fix',     text:'Import CSV en mode démo : l\'import basculait silencieusement en mode réel et pouvait écraser vos vraies données. L\'import reste désormais dans le mode courant.' },
+    { type:'fix',     text:'Ajouter un ordre : le patrimoine total restait faux jusqu\'à la prochaine actualisation (valeur convertie non recalculée).' },
+    { type:'fix',     text:'Écran Analyse : le total et les répartitions mélangeaient les devises (USD comptés comme EUR) ; poids des lignes corrigé de la même façon.' },
+    { type:'fix',     text:'Cours toujours frais : le service worker servait les prix du refresh précédent (cache supprimé pour les appels externes).' },
+    { type:'fix',     text:'Devises : taux JPY hors-ligne corrigé (était inversé) ; les devises inhabituelles (CAD, AUD…) sont désormais récupérées automatiquement au lieu d\'être comptées à parité avec l\'euro.' },
+    { type:'fix',     text:'Historique : les clôtures étaient enregistrées à la veille (décalage de fuseau horaire) — graphiques, marqueurs d\'achats/ventes et backfill du patrimoine réalignés.' },
+    { type:'fix',     text:'Mode confidentialité : les montants restaient visibles sur la carte Évolution, l\'écran Analyse, les mouvements d\'un titre et la recherche.' },
+    { type:'fix',     text:'Bascule démo → réel : la watchlist et les objectifs du mode démo ne fuient plus dans le mode réel.' },
+    { type:'fix',     text:'Cryptos en liste de suivi (sans position) : leurs cours sont désormais actualisés.' },
+    { type:'improve', text:'Écran titre : la tuile "Effet change" (valeur non calculable, toujours trompeuse) est remplacée par le P&L latent converti dans la devise de l\'appli.' },
+    { type:'improve', text:'Robustesse : pull-to-refresh ne se déclenche plus en double, spinners ne restent plus bloqués après une erreur, protections contre les % infinis/NaN, noms et recherches avec caractères spéciaux affichés sans casser la page.' },
+  ],
+  '1.7.0': [
+    { type:'new',     text:'Évolution du patrimoine : la courbe du dashboard est désormais réelle — reconstituée à partir de vos cours historiques et de vos transactions, puis enregistrée chaque jour. Indicateur "● réel / ○ estimé" comme sur les graphiques de titres.' },
+    { type:'improve', text:'Assistant IA : une pastille rouge sur l\'icône ✨ indique le nombre de points importants détectés, recalculée après chaque actualisation des cours.' },
+  ],
   '1.6.0': [
     { type:'new',     text:'Titres hors base reconnus automatiquement (ex: HOOD, AMD…) : saisissez un ticker absent de la liste et l\'appli récupère en ligne son nom, sa devise et son prix. Les cours et l\'historique de ces titres se mettent désormais à jour comme les autres.' },
   ],
@@ -110,7 +124,19 @@ function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, curren
   const pnlRef   = +toRefCcy(pnl,   currency).toFixed(2);
   return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency, valueRef, pnlRef };
 }
-function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
+// ── Délégations vers utils.js (namespace PU, chargé avant ce fichier) ──
+// Une seule implémentation, partagée avec les tests vitest ; les wrappers injectent S/FX_RATES.
+function mkTx(date, type, qty, price) { return PU.mkTx(date, type, qty, price); }
+
+// Watchlist d'exemple (mode démo) — déclaration hoistée, utilisée aussi par l'init de S
+function genDemoWatchlist() {
+  return [
+    { ticker: 'OR',   name: "L'Oréal",       price: 412.35, change1d:  0.68 },
+    { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
+    { ticker: 'MSFT', name: 'Microsoft',      price: 378.50, change1d:  1.15 },
+    { ticker: 'TSLA', name: 'Tesla',          price: 248.20, change1d: -2.45 },
+  ];
+}
 
 function genDemo() {
   const pea = [
@@ -133,7 +159,7 @@ function genDemo() {
     mkH('PAEEM','PAEEM','Amundi EM ESG',40,42.1,45.8,'ETF','Émergents','Diversifié',[mkTx('2022-03-15','BUY',25,40.2),mkTx('2023-07-20','BUY',15,45.1)]),
     mkH('SAN','SAN','Sanofi',25,88.5,94.2,'Action','France','Santé',[mkTx('2023-09-05','BUY',25,88.5)]),
   ];
-  function val(hs){ return hs.reduce((s,h)=>s+h.value,0); }
+  function val(hs){ return hs.reduce((s,h)=>s+(h.valueRef ?? h.value),0); }
   return [
     { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', value:val(pea), change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:15000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:5000,note:'Versement annuel'}] },
     { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', value:val(ct),  change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:20000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:8000,note:'Renforcement'}] },
@@ -145,68 +171,33 @@ function genDemo() {
 // FORMATTING
 // ═══════════════════════════════════════════════
 function fmtCur(v) {
-  return new Intl.NumberFormat('fr-FR',{style:'currency',currency:S.currency,minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
+  return PU.fmtCur(v, S.currency);
 }
-function fmtPct(v) { return (v>=0?'+':'')+v.toFixed(2).replace('.',',')+' %'; }
-function fmtDate(s) { return new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
-function initials(n) { return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function fmtPct(v) { return PU.fmtPct(v); }
+function fmtDate(s) { return PU.fmtDate(s); }
+function initials(n) { return PU.initials(n); }
 // Observer accounts excluded from total wealth
 function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value,0); }
 
 // Approximate FX rates for P/L produit display only
-const FX_RATES = { EUR:1, USD:1.08, GBP:1.16, CHF:1.05, JPY:0.0066 };
+const FX_RATES = { EUR:1, USD:1.08, GBP:1.16, CHF:1.05, JPY:163 };
 
-function fmtNative(v, cur) {
-  return new Intl.NumberFormat('fr-FR',{style:'currency',currency:cur||'EUR',minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
-}
-
+function fmtNative(v, cur) { return PU.fmtNative(v, cur); }
 
 // Convert amount from native currency to app currency using FX_RATES
 // FX_RATES[X] = "units of X per EUR", so to convert X→EUR: amount / FX_RATES[X]
-function toRefCcy(amount, fromCcy) {
-  const fromFx = FX_RATES[fromCcy || 'EUR'] || 1;
-  const toFx   = FX_RATES[S.currency || 'EUR'] || 1;
-  return amount * toFx / fromFx;
-}
+function toRefCcy(amount, fromCcy) { return PU.toRefCcy(amount, fromCcy, FX_RATES, S.currency); }
 // Sum holdings values converted to app currency
-function accSum(holdings) {
-  return holdings.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
-}
+function accSum(holdings) { return PU.accSum(holdings); }
 
-function computeRealizedPnL(h) {
-  let runQty=0, runCost=0, realized=0;
-  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
-    if(tx.type==='BUY'){
-      runCost+=tx.qty*tx.price;
-      runQty+=tx.qty;
-    } else if(tx.type==='SELL' && runQty>0){
-      const avgCost=runCost/runQty;
-      realized+=(tx.price-avgCost)*tx.qty;
-      const remQty=Math.max(0,runQty-tx.qty);
-      runCost=avgCost*remQty;
-      runQty=remQty;
-    }
-  });
-  return realized;
-}
+function computeRealizedPnL(h) { return PU.computeRealizedPnL(h); }
 
-function recalcHolding(h) {
-  let qty=0, costBasis=0;
-  [...h.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(tx=>{
-    if(tx.type==='BUY'){costBasis+=tx.qty*tx.price;qty+=tx.qty;}
-    else if(tx.type==='SELL'&&qty>0){const avg=costBasis/qty;costBasis=avg*Math.max(0,qty-tx.qty);qty=Math.max(0,qty-tx.qty);}
-  });
-  h.quantity=+qty.toFixed(8);
-  h.avgBuyPrice=qty>0?costBasis/qty:0;
-  h.value=+(h.quantity*h.currentPrice).toFixed(2);
-  h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
-  h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
-  h.valueRef=+toRefCcy(h.value, h.currency).toFixed(2);
-  h.pnlRef  =+toRefCcy(h.pnl,   h.currency).toFixed(2);
-}
+function recalcHolding(h) { return PU.recalcHolding(h, FX_RATES, S.currency); }
 
 function masked(v) { return S.privacy?'<span class="prv">● ● ●</span>':fmtCur(v); }
 function maskedNative(v,cur) { return S.privacy?'<span class="prv">● ● ●</span>':fmtNative(v,cur); }
+// Échappement innerHTML — implémentation dans utils.js
+function esc(s) { return PU.esc(s); }
 
 // ─── Securities database for autocomplete ───
 const SECURITIES_DB = {
@@ -405,9 +396,35 @@ function donutSvg(segs, size=108, sw=16) {
 // ═══════════════════════════════════════════════
 function genHistData(period) {
   const w = totalWealth();
+  const n = { '1S': 7, '1M': 30, '3M': 90, '1A': 365 }[period] || 30;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // ── Série réelle si des snapshots existent → forward-fill jour par jour (mode réel uniquement) ──
+  const wl = S.isDemo ? [] : loadWealth();
+  if (wl.length >= 2) {
+    const byDay = {};
+    wl.forEach(p => { byDay[p.d] = p.v; });
+    const startKey = _dayKey(today.getTime() - (n-1)*86400000);
+    let last = null;
+    for (const p of wl) { if (p.d < startKey) last = p.v; else break; } // dernière valeur avant la fenêtre
+    const pts = new Array(n);
+    let anyReal = false;
+    for (let i = 0; i < n; i++) {
+      const key = _dayKey(today.getTime() - (n-1-i)*86400000);
+      if (byDay[key] != null) { last = byDay[key]; anyReal = true; }
+      pts[i] = last;
+    }
+    if (w > 0) pts[n-1] = w; // ancrer le dernier point sur la valeur live courante
+    if (pts[0] == null) {    // combler le début si aucune donnée avant la fenêtre
+      const firstKnown = pts.find(v => v != null) ?? w;
+      for (let i = 0; i < n && pts[i] == null; i++) pts[i] = firstKnown;
+    }
+    if (anyReal && pts.every(v => v != null)) { pts.real = true; return pts; }
+  }
+
+  // ── Fallback synthétique déterministe (marche aléatoire) ──
   const key = period + '_' + Math.round(w / 100);
   if (S._histCache[key]) return S._histCache[key];
-  const n = { '1S': 7, '1M': 30, '3M': 90, '1A': 252 }[period] || 30;
   const pts = new Array(n);
   pts[n - 1] = w;
   for (let i = n - 2; i >= 0; i--) {
@@ -487,11 +504,11 @@ function _ptsFromRealSeries(hist, startDate, days, anchorPrice) {
   const byDay = {};
   hist.series.forEach(p => { byDay[p.d] = p.c; });
   let last = null;
-  const startKey = startDate.toISOString().slice(0,10);
+  const startKey = _dayKey(startDate);
   for (const p of hist.series) { if (p.d < startKey) last = p.c; else break; }
   const pts = new Array(days);
   for (let i = 0; i < days; i++) {
-    const key = new Date(startDate.getTime() + i*86400000).toISOString().slice(0,10);
+    const key = _dayKey(startDate.getTime() + i*86400000);
     if (byDay[key] != null) last = byDay[key];
     pts[i] = last;
   }
@@ -926,7 +943,7 @@ function renderTopBar(extraBtns='') {
     <div class="top-bar-title">Mon patrimoine</div>
     <div class="row gap8">
       ${extraBtns}
-      ${S.assistantEnabled ? `<div id="js-assistant-btn" class="top-btn tap" title="Assistant IA" style="color:var(--accent)">${_SVG_ASSISTANT}</div>` : ''}
+      ${S.assistantEnabled ? (() => { const _n = assistantAlertCount(); return `<div id="js-assistant-btn" class="top-btn tap" title="Assistant IA${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''}`:''}" style="color:var(--accent);position:relative">${_SVG_ASSISTANT}${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`; })() : ''}
       <div id="js-settings-btn" class="top-btn tap" title="Réglages">${_SVG_SETTINGS}</div>
     </div>
   </div>`;
@@ -936,7 +953,7 @@ function renderTopBar(extraBtns='') {
 function renderDash() {
   const w=totalWealth();
   const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+(a.change1d??0)*(a.value/w),0):0;
-  const allH=S.accounts.flatMap(a=>a.holdings);
+  const allH=S.accounts.filter(a=>!a.observer).flatMap(a=>a.holdings); // cohérent avec totalWealth()
   const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
   const totInv=allH.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
   const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
@@ -993,7 +1010,7 @@ function renderComptes() {
         <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
         <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
-            <div style="font-size:15px;font-weight:700">${a.name}</div>${obsTag}
+            <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
           <div class="t-sm">${a.type} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
         </div>
@@ -1031,7 +1048,7 @@ function renderRecherche() {
     <div style="position:relative">
     <div class="search-box" id="js-srch-box">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-      <input type="text" id="js-srch-inp" placeholder="${ph}" autocomplete="off" spellcheck="false" value="${S.srchQuery||''}">
+      <input type="text" id="js-srch-inp" placeholder="${ph}" autocomplete="off" spellcheck="false" value="${esc(S.srchQuery||'')}">
       ${S.srchQuery?`<div class="search-clear" id="js-srch-clr">✕</div>`:''}
     </div>
     <div id="js-srch-ac" style="display:none;position:absolute;top:44px;left:0;right:0;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;z-index:20;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.15)"></div>
@@ -1054,7 +1071,7 @@ function srchResults(q, mode) {
       if(!acc.holdings.length) return '';
       const rows=acc.holdings.map(h=>srchRow(h,acc)).join('');
       return `<div style="margin-bottom:6px">
-        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${acc.icon} ${acc.name}</div>
+        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${acc.icon} ${esc(acc.name)}</div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">${rows}</div>
       </div>`;
     }).join('');
@@ -1067,7 +1084,7 @@ function srchResults(q, mode) {
   );
   if(!results.length) return `<div style="text-align:center;padding:40px 20px;color:var(--text2)">
     <div style="font-size:32px;margin-bottom:10px">🔍</div>
-    <div style="font-size:14px">Aucun résultat pour <strong>${q}</strong></div>
+    <div style="font-size:14px">Aucun résultat pour <strong>${esc(q)}</strong></div>
   </div>`;
   return `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">
     ${results.map(({h,acc})=>srchRow(h,acc)).join('')}
@@ -1079,11 +1096,11 @@ function srchRow(h, acc) {
     <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
     <div class="hold-item-body">
       <div class="hold-item-top">
-        <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
+        <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.name)}</div>
         <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.valueRef??h.value)}</div>
       </div>
       <div class="hold-item-bot">
-        <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.name} · ${h.type}</div>
+        <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)} · ${h.type}</div>
         <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
       </div>
     </div>
@@ -1115,7 +1132,7 @@ function srchTxResults(q) {
     if (!ql) return `<div style="text-align:center;padding:40px 20px;color:var(--text2);font-size:13px">Aucun mouvement enregistré</div>`;
     return `<div style="text-align:center;padding:40px 20px;color:var(--text2)">
       <div style="font-size:32px;margin-bottom:10px">🔍</div>
-      <div style="font-size:14px">Aucun résultat pour <strong>${q}</strong></div>
+      <div style="font-size:14px">Aucun résultat pour <strong>${esc(q)}</strong></div>
     </div>`;
   }
 
@@ -1129,11 +1146,11 @@ function srchTxResults(q) {
       <div class="tx-dot ${cls}" style="flex-shrink:0">${dot}</div>
       <div class="hold-item-body">
         <div class="hold-item-top">
-          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.ticker} · ${h.name}</div>
-          <div style="font-size:13px;font-weight:800;flex-shrink:0" class="t-num ${isBuy?'t-loss':'t-gain'}">${isBuy?'-':'+'}${fmtNative(total,hCur)}</div>
+          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.ticker)} · ${esc(h.name)}</div>
+          <div style="font-size:13px;font-weight:800;flex-shrink:0" class="t-num ${isBuy?'t-loss':'t-gain'}">${isBuy?'-':'+'}${maskedNative(total,hCur)}</div>
         </div>
         <div class="hold-item-bot">
-          <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${acc.name} · ${fmtDate(tx.date)}</div>
+          <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)} · ${fmtDate(tx.date)}</div>
           <div class="t-sm" style="flex-shrink:0">${tx.qty} × ${fmtNative(tx.price,hCur)}</div>
         </div>
       </div>
@@ -1167,7 +1184,7 @@ function renderWatchlistCard() {
     return `<div class="watch-item tap" data-watch="${w.ticker}">
       <div class="watch-tick">${w.ticker.slice(0,4)}</div>
       <div class="flex1 col gap4" style="min-width:0">
-        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
         <div class="t-sm">${fmtNative(w.price, cur)}</div>
       </div>
       <div class="col right gap4" style="align-items:flex-end">
@@ -1204,9 +1221,11 @@ function renderHistCard() {
   const chartW = Math.min(window.innerWidth, 480) - 72;
   const pct = ((pts[pts.length-1] - pts[0]) / pts[0] * 100);
   const color = pct >= 0 ? 'var(--gain)' : 'var(--loss)';
+  const _real = !!pts.real;
+  const _chip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_real?'var(--gain)':'var(--text3)'}" title="${_real?'Historique réel — reconstitué à partir de vos cours et transactions, affiné chaque jour':'Courbe estimée — récupérez l’historique de vos titres pour la fiabiliser'}">${_real?'● réel':'○ estimé'}</span>`;
   return `<div class="hist-card anim">
     <div class="hist-head">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Évolution du patrimoine</div>
+      <div class="row gap8" style="align-items:center"><div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Évolution du patrimoine</div>${_chip}</div>
       <div class="hist-periods">${pills}</div>
     </div>
     <div class="hist-wrap" id="js-hist-wrap">
@@ -1214,9 +1233,9 @@ function renderHistCard() {
       <div class="hist-tip" id="js-hist-tip"></div>
     </div>
     <div class="hist-range">
-      <span>${fmtCur(pts[0])}</span>
+      <span>${masked(pts[0])}</span>
       <span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span>
-      <span>${fmtCur(pts[pts.length-1])}</span>
+      <span>${masked(pts[pts.length-1])}</span>
     </div>
   </div>`;
 }
@@ -1247,7 +1266,7 @@ function renderAccount() {
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
       <div style="font-size:26px">${acc.icon}</div>
-      <div style="font-size:20px;font-weight:800;letter-spacing:-.5px;flex:1">${acc.name}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
+      <div style="font-size:20px;font-weight:800;letter-spacing:-.5px;flex:1">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${masked(acc.value)}</div>
     <div class="stat-row">
@@ -1269,7 +1288,7 @@ function renderAccount() {
   <div class="search-wrap">
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-      <input type="text" id="js-search" placeholder="Rechercher une valeur…" value="${S.search}" autocomplete="off" spellcheck="false">
+      <input type="text" id="js-search" placeholder="Rechercher une valeur…" value="${esc(S.search)}" autocomplete="off" spellcheck="false">
       ${S.search?`<div class="search-clear" id="js-clr">✕</div>`:''}
     </div>
   </div>
@@ -1307,13 +1326,13 @@ function renderHoldsHTML(acc) {
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
       const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
-      const weight  = acc.value > 0 ? (h.value / acc.value * 100).toFixed(1) : '0';
+      const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
       return `
       <div class="hold-item" data-hid="${h.id}">
         <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
         <div class="hold-item-body">
           <div class="hold-item-top">
-            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${h.name}</div>
+            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.name)}</div>
             <div class="col right" style="gap:1px;flex-shrink:0">
               <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.valueRef??h.value)}</div>
               <div style="font-size:10px;color:var(--text3);text-align:right">${weight}%</div>
@@ -1407,7 +1426,7 @@ function applyRefresh(accId) {
       h.valueRef=+toRefCcy(h.value,h.currency).toFixed(2);
       h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
       h.pnlRef=+toRefCcy(h.pnl,h.currency).toFixed(2);
-      h.pnlPct=((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100;
+      h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
     });
     acc.value=accSum(acc.holdings);
     acc.change1d=+(Math.random()*4-1).toFixed(2);
@@ -1415,23 +1434,29 @@ function applyRefresh(accId) {
 }
 
 function initPTR(screenEl, onRefresh) {
+  // Le callback est rafraîchi à chaque render (closure fraîche), mais les listeners ne sont
+  // attachés qu'une fois : l'élément écran persiste et les ré-attacher les empilait (double refresh,
+  // rendu des positions de l'ancien compte).
+  screenEl._ptrRefresh = onRefresh;
+  if (screenEl._ptrBound) return;
+  screenEl._ptrBound = true;
   let y0=0,pulling=false,dist=0;
-  const bar=screenEl.querySelector('#js-ptr'); if(!bar) return;
+  const bar=()=>screenEl.querySelector('#js-ptr'); // re-query : le bar est recréé à chaque render
   screenEl.addEventListener('touchstart',e=>{
-    if(e.target.closest('.hold-item')) return;
+    if(!bar()||e.target.closest('.hold-item')) return;
     if(screenEl.scrollTop===0){y0=e.touches[0].clientY;pulling=false;dist=0;}
   },{passive:true});
   screenEl.addEventListener('touchmove',e=>{
-    if(screenEl.scrollTop>2) return;
+    const b=bar(); if(!b||screenEl.scrollTop>2) return;
     const dy=e.touches[0].clientY-y0;
-    if(dy>12){pulling=true;dist=dy;bar.classList.add('open');bar.textContent=dy>60?'↑ Relâchez pour actualiser':'↓ Tirez pour actualiser';}
+    if(dy>12){pulling=true;dist=dy;b.classList.add('open');b.textContent=dy>60?'↑ Relâchez pour actualiser':'↓ Tirez pour actualiser';}
   },{passive:true});
   screenEl.addEventListener('touchend',()=>{
-    if(!pulling) return;
+    const b=bar(); if(!b||!pulling) return;
     if(dist>60){
-      bar.innerHTML='<span class="ptr-spin">↻</span> Actualisation…';
-      setTimeout(()=>{onRefresh();bar.classList.remove('open');},900);
-    } else {bar.classList.remove('open');}
+      b.innerHTML='<span class="ptr-spin">↻</span> Actualisation…';
+      setTimeout(()=>{screenEl._ptrRefresh();b.classList.remove('open');},900);
+    } else {b.classList.remove('open');}
     pulling=false; dist=0;
   },{passive:true});
 }
@@ -1454,9 +1479,9 @@ function renderStock() {
   // P/L produit (FX-neutral, in native currency)
   const showProduit=hCur!==S.currency;
   const pnlProduit=(h.currentPrice-h.avgBuyPrice)*h.quantity; // in native currency
-  const fx=FX_RATES[hCur]||1;
-  const pnlProduitEur=pnlProduit/fx;
-  const fxEffect=pnl-pnlProduitEur;
+  // Note : sans FX historique aux dates d'achat, un « effet change » n'est pas calculable
+  // (pnl et pnlProduit sont identiques par construction) — on affiche le P&L converti à la place.
+  const pnlRefDisp=h.pnlRef ?? toRefCcy(pnlProduit,hCur);
 
   const txs=[...h.transactions].map((tx,idx)=>({tx,idx})).reverse().map(({tx,idx})=>{
     const tot=tx.qty*tx.price;
@@ -1475,7 +1500,7 @@ function renderStock() {
         <div class="t-sm">${subLabel}</div>
       </div>
       <div class="col right gap4" style="margin-right:8px">
-        <div style="font-size:14px;font-weight:800" class="${valCls} t-num">${sign}${fmtNative(tot,hCur)}</div>
+        <div style="font-size:14px;font-weight:800" class="${valCls} t-num">${sign}${maskedNative(tot,hCur)}</div>
         <div class="t-sm">${typeLabel}</div>
       </div>
       <div class="tx-edit-btn tap" data-txidx="${idx}" title="Modifier">✏️</div>
@@ -1488,13 +1513,13 @@ function renderStock() {
   const _histChip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_hist?'var(--gain)':'var(--text3)'}" title="${_hist?('Historique réel · '+timeSince(_hist.fetchedAt)):'Courbe estimée — touchez l’icône historique pour récupérer les vrais cours'}">${_hist?'● réel':'○ estimé'}</span>`;
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    ${acc.name}
+    ${esc(acc.name)}
   </div>
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <div>
-        <div class="stock-ticker-badge">${h.ticker}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
-        <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${h.name}</div>
+        <div class="stock-ticker-badge">${esc(h.ticker)}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
+        <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${esc(h.name)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;margin-top:4px">
         <div id="js-edit-holding" class="tap" style="width:36px;height:36px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2)" title="Modifier ce titre">
@@ -1541,34 +1566,15 @@ function renderStock() {
     <div class="metric"><div class="t-label">P&amp;L latent (${hCur})</div><div class="metric-val ${pnlProduit>=0?'t-gain':'t-loss'} t-num">${pnlProduit>=0?'+':''}${fmt(pnlProduit)}</div></div>
     <div class="metric"><div class="t-label">Valeur (${hCur})</div><div class="metric-val t-num">${fmt(h.quantity*h.currentPrice)}</div></div>
     <div class="metric"><div class="t-label">P&amp;L latent %</div><div class="metric-val ${pnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(pnlPct)}</div></div>
-    ${realizedPnL!==0?`<div class="metric"><div class="t-label">P&amp;L réalisé (${hCur})</div><div class="metric-val ${realizedPnL>=0?'t-gain':'t-loss'} t-num">${realizedPnL>=0?'+':''}${fmtNative(realizedPnL,hCur)}</div></div>`:''}
-    ${showProduit?`<div class="metric"><div class="t-label">Effet change (${S.currency})</div><div class="metric-val ${fxEffect>=0?'t-gain':'t-loss'} t-num">${fxEffect>=0?'+':''}${fmtCur(fxEffect)}</div></div>`:''}
-    ${divTotal>0?`<div class="metric" style="grid-column:1/-1"><div class="t-label">Dividendes perçus (${hCur})</div><div class="metric-val t-gain t-num">+${fmtNative(divTotal,hCur)}</div></div>`:''}
+    ${realizedPnL!==0?`<div class="metric"><div class="t-label">P&amp;L réalisé (${hCur})</div><div class="metric-val ${realizedPnL>=0?'t-gain':'t-loss'} t-num">${realizedPnL>=0?'+':''}${maskedNative(realizedPnL,hCur)}</div></div>`:''}
+    ${showProduit?`<div class="metric"><div class="t-label">P&amp;L latent (${S.currency})</div><div class="metric-val ${pnlRefDisp>=0?'t-gain':'t-loss'} t-num">${pnlRefDisp>=0?'+':''}${fmtE(pnlRefDisp)}</div></div>`:''}
+    ${divTotal>0?`<div class="metric" style="grid-column:1/-1"><div class="t-label">Dividendes perçus (${hCur})</div><div class="metric-val t-gain t-num">+${maskedNative(divTotal,hCur)}</div></div>`:''}
   </div>
   <div class="row" style="padding:4px 20px 10px;justify-content:space-between;align-items:center">
     <div class="t-section">Mouvements</div>
     <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
   </div>
   <div id="js-tx-list">${txs}</div>`;
-}
-
-function simResults(price, qty, pru, isPea) {
-  const gross = (price - pru) * qty;
-  const netPfu = gross > 0 ? gross * 0.70 : gross;
-  const netPea = gross; // 0% tax in PEA (exonéré)
-  const gColor = gross >= 0 ? 'var(--gain)' : 'var(--loss)';
-  return `<div class="sim-res-row">
-    <div class="sim-res-lbl">Gain brut</div>
-    <div class="sim-res-val t-num" style="color:${gColor}">${gross>=0?'+':''}${fmtCur(gross)}</div>
-  </div>
-  <div class="sim-res-row">
-    <div class="sim-res-lbl">Net après PFU (30%)</div>
-    <div class="sim-res-val t-num" style="color:${gColor}">${netPfu>=0?'+':''}${fmtCur(netPfu)}</div>
-  </div>
-  ${isPea?`<div class="sim-res-row">
-    <div class="sim-res-lbl">Net PEA <span style="font-size:10px;color:var(--gain)">exonéré</span></div>
-    <div class="sim-res-val t-num" style="color:${gColor}">${netPea>=0?'+':''}${fmtCur(netPea)}</div>
-  </div>`:''}`;
 }
 
 // ── TARGETS BLOCK ──
@@ -1617,13 +1623,13 @@ function buildSegs(obj, colors) {
   return Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
     name, value,
     color: colors[name]||colors[i%colors.length],
-    pct: (value/tot*100).toFixed(1)
+    pct: tot>0?(value/tot*100).toFixed(1):'0.0'
   }));
 }
 function donutBlock(title, segs) {
   const legend=segs.map(s=>`<div class="legend-row">
     <div class="leg-dot" style="background:${s.color}"></div>
-    <div class="leg-name">${s.name}</div>
+    <div class="leg-name">${esc(s.name)}</div>
     <div class="leg-pct" style="color:${s.color}">${s.pct}%</div>
   </div>`).join('');
   return `<div class="donut-block anim">
@@ -1634,7 +1640,7 @@ function donutBlock(title, segs) {
 
 function renderAnalysis() {
   const all=S.accounts.flatMap(a=>a.holdings);
-  const tot=all.reduce((s,h)=>s+h.value,0);
+  const tot=all.reduce((s,h)=>s+(h.valueRef??h.value),0); // devise appli — h.value est en devise native
   if(!all.length) return `<div class="analysis-top"><div class="t-title">Analyse</div></div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
@@ -1642,12 +1648,13 @@ function renderAnalysis() {
     </div>`;
   const byType={}, byGeo={}, bySec={};
   all.forEach(h=>{
-    byType[h.type]=(byType[h.type]||0)+h.value;
-    byGeo[h.country]=(byGeo[h.country]||0)+h.value;
-    bySec[h.sector]=(bySec[h.sector]||0)+h.value;
+    const v=h.valueRef??h.value;
+    byType[h.type]=(byType[h.type]||0)+v;
+    byGeo[h.country]=(byGeo[h.country]||0)+v;
+    bySec[h.sector]=(bySec[h.sector]||0)+v;
   });
   return `<div class="analysis-top anim">
-    ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${fmtCur(tot)}</span>`)}
+    ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${masked(tot)}</span>`)}
   </div>
   <div style="height:10px"></div>
   <div class="t-section px" style="padding-bottom:10px">Objectifs d'allocation</div>
@@ -1751,6 +1758,14 @@ function analyzePortfolio(S) {
   return recos;
 }
 
+// Nombre de recommandations « importantes » (sévérité 3) — pour la pastille du bouton ✨.
+// Recalculé à chaque rendu de la barre (donc après chaque refreshMain / actualisation des cours).
+function assistantAlertCount() {
+  if (!S.assistantEnabled) return 0;
+  try { return analyzePortfolio(S).filter(r => r.sev === 3).length; }
+  catch(e) { return 0; }
+}
+
 function renderAssistant() {
   const recos  = analyzePortfolio(S);
   const hasData = S.accounts.some(a => a.holdings.length);
@@ -1787,8 +1802,8 @@ function renderAssistant() {
       return `<div class="s-item ${clickable ? 'tap js-reco' : ''}" ${clickable ? `data-acc="${r.accId}" data-hold="${r.holdId}"` : ''}>
         <div class="s-ico" style="background:${sv.bg};font-size:18px">${r.icon}</div>
         <div class="flex1 col gap4">
-          <div class="s-name" style="color:${sv.col}">${r.title}</div>
-          <div class="s-sub">${r.detail}</div>
+          <div class="s-name" style="color:${sv.col}">${esc(r.title)}</div>
+          <div class="s-sub">${esc(r.detail)}</div>
         </div>
         ${clickable ? `<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>` : ''}
       </div>`;
@@ -1805,20 +1820,7 @@ function renderAssistant() {
 }
 
 // ── SETTINGS ──
-function fxSubText() {
-  const appCcy = S.currency || 'EUR';
-  const appFx  = FX_RATES[appCcy] || 1;
-  const ALL = [
-    { ccy:'USD', sym:'$' }, { ccy:'EUR', sym:'€' },
-    { ccy:'GBP', sym:'£' }, { ccy:'CHF', sym:'Fr' }, { ccy:'JPY', sym:'¥' }
-  ];
-  if (!_fxUpdatedAt) return 'Valeurs approximatives';
-  const top2 = ALL.filter(p => p.ccy !== appCcy).slice(0, 2);
-  return top2.map(p => {
-    const r = (FX_RATES[p.ccy]||1) / appFx;
-    return `1 ${appCcy} = ${r >= 10 ? r.toFixed(2) : r.toFixed(4)} ${p.sym}`;
-  }).join(' · ');
-}
+function fxSubText() { return PU.fxSubText(FX_RATES, S.currency || 'EUR', _fxUpdatedAt); }
 
 function renderFxModalRows() {
   const appCcy = S.currency || 'EUR';
@@ -1870,7 +1872,7 @@ function renderSettings() {
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
       </div>
       <div class="flex1 col gap4"><div class="s-name">Nom</div></div>
-      <input class="s-input" id="js-name" value="${S.user.name}" placeholder="Votre nom">
+      <input class="s-input" id="js-name" value="${esc(S.user.name)}" placeholder="Votre nom">
     </div>
   </div>
   <div class="s-section">Données</div>
@@ -2050,7 +2052,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Juin 2026 · Suivi de patrimoine</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Juillet 2026 · Suivi de patrimoine</div></div>
     </div>
     <div class="s-item tap" id="js-open-changelog" style="cursor:pointer">
       <div class="s-ico" style="background:rgba(255,200,50,.13)">
@@ -2132,8 +2134,8 @@ function renderWatchStock() {
   </div>
 
   <div class="stock-hero" style="padding-bottom:10px;border-bottom:none">
-    <div class="stock-ticker-badge">${watch.ticker}</div>
-    <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${watch.name}</div>
+    <div class="stock-ticker-badge">${esc(watch.ticker)}</div>
+    <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${esc(watch.name)}</div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="stock-price t-num" style="margin:0">${fmtNative(watch.price, wCur)}</div>
       <div id="js-watch-ticker-refresh" class="tap" style="width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0" title="Actualiser ce titre">
@@ -2204,7 +2206,7 @@ function bindEvents(id, el) {
       const pct=((pts[pts.length-1]-pts[0])/pts[0]*100);
       const color=pct>=0?'var(--gain)':'var(--loss)';
       const rangeEl=el.querySelector('.hist-range');
-      if(rangeEl) rangeEl.innerHTML=`<span>${fmtCur(pts[0])}</span><span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span><span>${fmtCur(pts[pts.length-1])}</span>`;
+      if(rangeEl) rangeEl.innerHTML=`<span>${masked(pts[0])}</span><span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span><span>${masked(pts[pts.length-1])}</span>`;
       initHistChart(el.querySelector('.hist-card'), pts);
       attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
     }));
@@ -2231,10 +2233,10 @@ function bindEvents(id, el) {
                            : 'var(--text3)';
     }
     updateFreshDot();
-    const _freshTimer = setInterval(updateFreshDot, 60*1000);
-    // Nettoyer le timer quand on quitte l'écran
-    const _cleanFresh = () => { clearInterval(_freshTimer); document.removeEventListener('visibilitychange', _cleanFresh); };
-    document.addEventListener('visibilitychange', _cleanFresh);
+    // Un seul intervalle, remplacé à chaque re-render (l'ancien visibilitychange tuait le timer
+    // au premier changement d'onglet et chaque render en empilait un nouveau)
+    clearInterval(el._freshTimer);
+    el._freshTimer = setInterval(updateFreshDot, 60*1000);
 
     // ── Supprimer un titre suivi ──
     el.querySelectorAll('[data-wdel]').forEach(btn => {
@@ -2265,6 +2267,8 @@ function bindEvents(id, el) {
       renderScreen('comptes');
       renderScreen('account');
       renderScreen('stock');
+      renderScreen('analysis');
+      renderScreen('recherche');
     });
   }
   if(id==='comptes') {
@@ -2492,9 +2496,9 @@ function bindEvents(id, el) {
       S.targets[inp.dataset.type] = Math.max(0, Math.min(100, parseFloat(inp.value) || 0));
       // Refresh bars + totals in-place without losing focus
       const all = S.accounts.flatMap(a => a.holdings);
-      const tot = all.reduce((s, h) => s + h.value, 0);
+      const tot = all.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
       const byType = {};
-      all.forEach(h => { byType[h.type] = (byType[h.type] || 0) + h.value; });
+      all.forEach(h => { byType[h.type] = (byType[h.type] || 0) + (h.valueRef ?? h.value); });
       ['Action','ETF','Obligation','Cash'].forEach(t => {
         const actual = tot > 0 ? (byType[t] || 0) / tot * 100 : 0;
         const target = S.targets[t] || 0;
@@ -2535,17 +2539,14 @@ function bindEvents(id, el) {
         // Démo → réel : sauvegarde le slot démo, charge le slot réel
         localStorage.setItem(STORE_ACCOUNTS_DEMO, localStorage.getItem(STORE_ACCOUNTS)||'{}');
         const rawReal = localStorage.getItem(STORE_ACCOUNTS_REAL);
-        if(rawReal){
-          try{
-            const d=JSON.parse(rawReal);
-            S.accounts  = d.accounts  || [];
-            if(d.watchlist) S.watchlist = d.watchlist;
-            if(d.targets)   S.targets   = d.targets;
-            if(d.user)      S.user      = d.user;
-          }catch(e){ S.accounts=[]; }
-        } else {
-          S.accounts=[];
-        }
+        // Toujours réaffecter watchlist/targets : sinon les données démo restent dans S
+        // et sont sauvegardées comme données réelles au premier passage
+        let d=null;
+        if(rawReal){ try{ d=JSON.parse(rawReal); }catch(e){} }
+        S.accounts  = d?.accounts  || [];
+        S.watchlist = d?.watchlist || [];
+        S.targets   = d?.targets   || { Action: 60, ETF: 25, Obligation: 10, Cash: 5 };
+        if(d?.user) S.user = d.user;
         S.isDemo=false;
         saveAccounts();
         toast('Mode réel chargé');
@@ -2553,17 +2554,12 @@ function bindEvents(id, el) {
         // Réel → démo : sauvegarde le slot réel, charge le slot démo
         localStorage.setItem(STORE_ACCOUNTS_REAL, localStorage.getItem(STORE_ACCOUNTS)||'{}');
         const rawDemo = localStorage.getItem(STORE_ACCOUNTS_DEMO);
-        if(rawDemo){
-          try{
-            const d=JSON.parse(rawDemo);
-            S.accounts  = d.accounts  || [];
-            if(d.watchlist) S.watchlist = d.watchlist;
-            if(d.targets)   S.targets   = d.targets;
-            if(d.user)      S.user      = d.user;
-          }catch(e){ S.accounts=genDemo(); }
-        } else {
-          S.accounts=genDemo();
-        }
+        let d=null;
+        if(rawDemo){ try{ d=JSON.parse(rawDemo); }catch(e){} }
+        S.accounts  = d?.accounts  || genDemo();
+        S.watchlist = d?.watchlist || genDemoWatchlist();
+        S.targets   = d?.targets   || { Action: 60, ETF: 25, Obligation: 10, Cash: 5 };
+        if(d?.user) S.user = d.user;
         S.isDemo=true;
         saveAccounts();
         toast('Mode démo chargé ✓');
@@ -2629,6 +2625,7 @@ function bindEvents(id, el) {
         localStorage.removeItem(STORE_ACCOUNTS_DEMO);
         localStorage.removeItem(STORE_ACCOUNTS_REAL);
         localStorage.removeItem(STORE_PRICES);
+        localStorage.removeItem(STORE_WEALTH);
         location.reload();
       });
     });
@@ -2914,7 +2911,7 @@ function openImportPreview(rows, format, unknownTickers) {
   const divs  = valid.filter(r => r.type === 'DIV').length;
 
   const accountOptions = S.accounts.map(a =>
-    `<option value="${a.id}">${a.icon||'🏦'} ${a.name}</option>`
+    `<option value="${a.id}">${a.icon||'🏦'} ${esc(a.name)}</option>`
   ).join('');
 
   const preview = valid.slice(0, 8).map(r => {
@@ -2926,8 +2923,8 @@ function openImportPreview(rows, format, unknownTickers) {
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
       <div class="tx-dot ${cls}" style="width:32px;height:32px;font-size:10px;flex-shrink:0">${dot}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.ticker}${unk} · ${r.name||r.ticker}</div>
-        <div style="font-size:11px;color:var(--text2)">${r.date} · ${r.qty} × ${r.price.toLocaleString('fr-FR')}</div>
+        <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.ticker)}${unk} · ${esc(r.name||r.ticker)}</div>
+        <div style="font-size:11px;color:var(--text2)">${esc(r.date)} · ${r.qty} × ${r.price.toLocaleString('fr-FR')}</div>
       </div>
     </div>`;
   }).join('');
@@ -2945,7 +2942,7 @@ function openImportPreview(rows, format, unknownTickers) {
       ${divs  ? `<span style="background:rgba(245,158,11,.12);color:#F59E0B;border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700">${divs} div.</span>` : ''}
     </div>
     ${unknownTickers.size ? `<div style="background:var(--loss-dim);border:1px solid var(--loss);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--loss)">
-      ⚠ ${unknownTickers.size} ticker${unknownTickers.size>1?'s':''} non reconnu${unknownTickers.size>1?'s':''} : ${[...unknownTickers].join(', ')}
+      ⚠ ${unknownTickers.size} ticker${unknownTickers.size>1?'s':''} non reconnu${unknownTickers.size>1?'s':''} : ${esc([...unknownTickers].join(', '))}
     </div>` : ''}
     <div style="margin-bottom:14px;border-radius:10px;overflow:hidden;border:1px solid var(--border);padding:0 12px">
       ${preview}${moreLabel}
@@ -3072,7 +3069,8 @@ function confirmImport() {
   });
 
   targetAcc.value = accSum(targetAcc.holdings);
-  if (S.isDemo) { S.isDemo = false; }
+  // L'import reste dans le mode courant : basculer S.isDemo=false ici transformait les
+  // comptes démo en « données réelles » et écrasait le slot réel au toggle suivant
   saveData();
   refreshMain();
   closeCsvModal();
@@ -3459,6 +3457,7 @@ document.getElementById('cf-submit').addEventListener('click',()=>{
   acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
   closeCfModal();
   renderScreen('account');
+  refreshMain(); // persiste le cashflow (saveData) — sans ça l'apport disparaissait au rechargement
   toast((_cfType==='DEP'?'Apport':'Retrait')+' enregistré ✓');
 });
 
@@ -3496,11 +3495,12 @@ function closeAccMenu(){
 }
 document.getElementById('acc-action-bg').addEventListener('click',closeAccMenu);
 document.getElementById('acc-action-obs').addEventListener('click',()=>{
-  const acc=S.accounts.find(a=>a.id===_menuAccId); if(!acc) return;
+  const id=_menuAccId; // closeAccMenu() nullifie _menuAccId — capturer avant
+  const acc=S.accounts.find(a=>a.id===id); if(!acc) return;
   acc.observer=!acc.observer;
   closeAccMenu();
   refreshMain();
-  if(S.screen==='account'&&S.accountId===_menuAccId) renderScreen('account');
+  if(S.screen==='account'&&S.accountId===id) renderScreen('account');
   toast(acc.observer?'Mode observateur activé':'Mode observateur désactivé');
 });
 document.getElementById('acc-action-rename').addEventListener('click',()=>{
@@ -3650,16 +3650,9 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   const h=acc?.holdings.find(h=>h.id===_mHoldId);
   if(!h){toast('Position introuvable');return;}
   h.transactions.push({date,type:_mType,qty,price});
-  if(_mType==='BUY'){
-    const nq=h.quantity+qty;
-    h.avgBuyPrice=(h.avgBuyPrice*h.quantity+price*qty)/nq;
-    h.quantity=nq;
-  } else if(_mType==='SELL'){
-    h.quantity=Math.max(0,h.quantity-qty);
-  }
-  h.value=+(h.quantity*h.currentPrice).toFixed(2);
-  h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
-  h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+  // recalcHolding recompute tout (dont valueRef/pnlRef, que le calcul manuel oubliait :
+  // accSum lit valueRef → patrimoine faux jusqu'au prochain fetch), comme edit-tx-submit
+  recalcHolding(h);
   acc.value=accSum(acc.holdings);
   closeModal();
   const accEl=document.getElementById('s-account');
@@ -3738,14 +3731,7 @@ function toast(msg) {
 // PERSISTENCE
 // ═══════════════════════════════════════════════
 
-function timeSince(ts) {
-  const m=Math.floor((Date.now()-ts)/60000);
-  if(m<1) return "à l'instant";
-  if(m<60) return `il y a ${m} min`;
-  const h=Math.floor(m/60);
-  if(h<24) return `il y a ${h}h`;
-  return `il y a ${Math.floor(h/24)}j`;
-}
+function timeSince(ts) { return PU.timeSince(ts); }
 
 // ── Sauvegarde données financières ──
 function saveAccounts() {
@@ -3892,6 +3878,77 @@ function saveHistory(ticker, series, currency) {
 function getHistorySeries(ticker) {
   const h = loadHistory()[ticker];
   return (h && Array.isArray(h.series) && h.series.length >= 2) ? h : null;
+}
+
+// ── Historique réel du patrimoine (snapshots quotidiens de la valeur totale) ──
+// Format stocké : [{ d:'YYYY-MM-DD', v: valeur_en_devise_appli }] trié par date croissante.
+// Clé jour en date LOCALE (toISOString décalait d'un jour en fuseau UTC+) — implémentation dans utils.js
+function _dayKey(d) { return PU.dayKey(d); }
+function loadWealth() {
+  try { const a = JSON.parse(localStorage.getItem(STORE_WEALTH) || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e) { return []; }
+}
+function saveWealth(arr) { try { localStorage.setItem(STORE_WEALTH, JSON.stringify(arr)); } catch(e) {} }
+// Enregistre (ou écrase) le point du jour avec la valeur totale courante. No-op en mode démo.
+function snapshotWealth() {
+  if (S.isDemo) return;
+  const w = totalWealth();
+  if (!(w > 0)) return;
+  const key = _dayKey(Date.now());
+  const arr = loadWealth().filter(p => p.d !== key);
+  arr.push({ d: key, v: +w.toFixed(2) });
+  arr.sort((a,b) => a.d.localeCompare(b.d));
+  const overflow = arr.length - 800; // ~2 ans de points max
+  if (overflow > 0) arr.splice(0, overflow);
+  saveWealth(arr);
+}
+// Quantité détenue par un holding à une date donnée (cumul des transactions <= dayKey).
+function _qtyOnDay(h, dayKey) {
+  if (!h.transactions || !h.transactions.length) return h.quantity ?? 0;
+  let q = 0;
+  for (const tx of h.transactions) {
+    if (tx.date > dayKey) continue;
+    if (tx.type === 'BUY') q += tx.qty;
+    else if (tx.type === 'SELL') q = Math.max(0, q - tx.qty);
+  }
+  return q;
+}
+// Reconstruit (approximativement) la valeur totale du patrimoine à une date passée :
+// quantité détenue ce jour-là × dernière clôture connue <= ce jour (série réelle si dispo,
+// sinon cours actuel), convertie en devise appli avec les taux FX courants.
+function reconstructWealthOnDay(dayKey) {
+  let tot = 0;
+  S.accounts.filter(a => !a.observer).forEach(a => {
+    a.holdings.forEach(h => {
+      const qty = _qtyOnDay(h, dayKey);
+      if (qty <= 0) return;
+      const hist = getHistorySeries(h.ticker);
+      let price = h.currentPrice;
+      if (hist) {
+        let c = null;
+        for (const p of hist.series) { if (p.d <= dayKey) c = p.c; else break; }
+        if (c != null) price = c;
+      }
+      tot += toRefCcy(qty * price, h.currency);
+    });
+  });
+  return +tot.toFixed(2);
+}
+// Comble les jours passés manquants du store par reconstruction (idempotent : ne touche jamais
+// aux vrais snapshots déjà enregistrés, ni au jour courant réservé au snapshot live).
+function backfillWealthHistory(days = 365) {
+  if (S.isDemo) return;
+  const arr = loadWealth();
+  const have = new Set(arr.map(p => p.d));
+  const today = new Date(); today.setHours(0,0,0,0);
+  let added = 0;
+  for (let i = days; i >= 1; i--) {
+    const key = _dayKey(today.getTime() - i*86400000);
+    if (have.has(key)) continue;
+    const v = reconstructWealthOnDay(key);
+    if (v > 0) { arr.push({ d: key, v }); added++; }
+  }
+  if (added) { arr.sort((a,b) => a.d.localeCompare(b.d)); saveWealth(arr); }
 }
 
 function applyPrices(priceData) {
@@ -4120,8 +4177,7 @@ async function _fetchYahooHistory(yhSym, range) {
   const byDay = {};
   for (let i = 0; i < ts.length; i++) {
     if (vals[i] == null) continue;
-    const dt = new Date(ts[i]*1000); dt.setHours(0,0,0,0);
-    byDay[dt.toISOString().slice(0,10)] = +vals[i].toFixed(4);
+    byDay[_dayKey(ts[i]*1000)] = +vals[i].toFixed(4); // clé jour locale (toISOString décalait de -1j en UTC+)
   }
   dbgLog('[OK]', `Yahoo history ${Object.keys(byDay).length} jours`);
   return _histSeriesFromByDay(byDay);
@@ -4140,8 +4196,7 @@ async function _fetchCryptoHistory(cgId, days) {
   if (!Array.isArray(d?.prices)) return null;
   const byDay = {};
   d.prices.forEach(([ms, price]) => {
-    const dt = new Date(ms); dt.setHours(0,0,0,0);
-    byDay[dt.toISOString().slice(0,10)] = +price.toFixed(6);
+    byDay[_dayKey(ms)] = +price.toFixed(6); // clé jour locale, cohérente avec _dayKey partout
   });
   dbgLog('[OK]', `CoinGecko history ${Object.keys(byDay).length} jours`);
   return _histSeriesFromByDay(byDay);
@@ -4161,8 +4216,8 @@ async function fetchTickerHistory(ticker, accId, holdingId) {
   const btn = document.querySelector('#js-ticker-history svg');
   if (btn) btn.classList.add('spin');
 
-  // Profondeur adaptée à la 1ère transaction du titre
-  const txMs = h.transactions.map(t => new Date(t.date+'T00:00:00').getTime());
+  // Profondeur adaptée à la 1ère transaction du titre (transactions peut manquer sur données importées)
+  const txMs = (h.transactions||[]).map(t => new Date(t.date+'T00:00:00').getTime());
   const first = txMs.length ? Math.min(...txMs) : Date.now() - 365*86400000;
   const cryptoDays = Math.ceil((Date.now() - first)/86400000) + 5;
 
@@ -4241,9 +4296,22 @@ async function fetchWatchPrice(ticker) {
 }
 
 // FX pairs to fetch: EURUSD=X → regularMarketPrice = USD per EUR = FX_RATES.USD
-const FX_PAIRS = ['EURUSD=X','EURGBP=X','EURCHF=X','EURJPY=X'];
+// Base fixe + toutes les devises réellement présentes (un titre résolu en ligne peut être
+// en CAD/AUD/SEK… — sans son taux, toRefCcy retombait silencieusement sur la parité 1:1)
+function fxPairsNeeded() {
+  const ccys = new Set(['USD','GBP','CHF','JPY']);
+  if (S.currency) ccys.add(S.currency);
+  S.accounts.forEach(a => {
+    if (a.currency) ccys.add(a.currency);
+    a.holdings.forEach(h => { if (h.currency) ccys.add(h.currency); });
+  });
+  S.watchlist.forEach(w => { if (w.currency) ccys.add(w.currency); });
+  ccys.delete('EUR');
+  return [...ccys].map(c => `EUR${c}=X`);
+}
 
 async function fetchFxRates() {
+  const FX_PAIRS = fxPairsNeeded();
   dbgLog('[INF]', `FX → ${FX_PAIRS.join(', ')}`);
   try {
     const url = PROXY_URL + '?symbols=' + FX_PAIRS.join(',');
@@ -4286,7 +4354,9 @@ async function fetchLivePrices() {
   if (btnSvg) btnSvg.classList.add('spin');
 
   const allH = S.accounts.flatMap(a => a.holdings);
-  if (!allH.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+  // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
+  if (!allH.length && !S.watchlist.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+  try {
 
   // Taux de change live (avant recalcHolding pour que valueRef soit correct)
   await fetchFxRates();
@@ -4300,9 +4370,11 @@ async function fetchLivePrices() {
     ...allH.filter(h=>h.type!=='Crypto').map(h=>yahooSymbolFor(h.ticker)),
     ...watchSymbols,
   ])];
-  const cgIds = [...new Set(
-    allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean)
-  )];
+  // Cryptos des comptes ET de la watchlist (une crypto suivie sans position n'était jamais rafraîchie)
+  const cgIds = [...new Set([
+    ...allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]),
+    ...S.watchlist.map(w=>CG_IDS[w.ticker]),
+  ].filter(Boolean))];
 
   // Map inverse : symbole Yahoo → ticker app
   const yahooRev = {};
@@ -4411,6 +4483,7 @@ async function fetchLivePrices() {
   if (updated > 0) {
     S.accounts.forEach(a=>{ a.value=accSum(a.holdings); });
     savePrices(prices);
+    snapshotWealth(); // fige la valeur totale du jour avec les cours fraîchement mis à jour
     refreshMain();
     // Animation wealth card + montants clés
     requestAnimationFrame(() => {
@@ -4433,8 +4506,12 @@ async function fetchLivePrices() {
     toast(errors.length ? `Erreur : ${errors.join(', ')}` : 'Aucun cours trouvé');
   }
 
-  _fetching = false;
-  if (btnSvg) btnSvg.classList.remove('spin');
+  } finally {
+    // Toujours réarmer, même si le rendu lève une exception : sinon _fetching restait
+    // bloqué à true et tout refresh ultérieur sortait silencieusement
+    _fetching = false;
+    if (btnSvg) btnSvg.classList.remove('spin');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -4457,6 +4534,8 @@ if(_priceCache?.fxRates) {
   _fxUpdatedAt = _priceCache.fxUpdatedAt || null;
 }
 if(_priceCache && !S.isDemo) applyPrices(_priceCache);
+// Historique du patrimoine : reconstruire le passé manquant puis figer le point du jour (mode réel)
+if(!S.isDemo) { backfillWealthHistory(); snapshotWealth(); }
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
 // Suivre les changements du thème système (uniquement en mode auto)

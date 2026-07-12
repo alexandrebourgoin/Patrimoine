@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
+// utils.js est un script classique (pas d'exports ES) : il expose globalThis.PU,
+// exactement comme dans le navigateur — les tests testent donc le VRAI code de prod.
+import './utils.js';
+const {
   toRefCcy, accSum, recalcHolding, computeRealizedPnL,
-  fmtPct, timeSince, initials, mkTx, fxSubText,
-} from './utils.js';
+  fmtPct, timeSince, initials, mkTx, fxSubText, esc, dayKey,
+} = globalThis.PU;
 
 // Standard FX table used across tests: FX_RATES[X] = units of X per EUR
 const FX = { EUR: 1, USD: 1.08, GBP: 1.16, CHF: 1.05, JPY: 163 };
@@ -30,6 +33,9 @@ describe('toRefCcy', () => {
   it('USD → GBP (cross rate)', () => {
     // 108 USD → EUR → GBP: 108/1.08 * 1.16 = 116
     expect(toRefCcy(108, 'USD', FX, 'GBP')).toBeCloseTo(116, 4);
+  });
+  it('JPY → EUR uses "units per EUR" convention (divides by ~163)', () => {
+    expect(toRefCcy(163, 'JPY', FX, 'EUR')).toBeCloseTo(1, 4);
   });
   it('unknown currency defaults to 1 (treated as EUR)', () => {
     expect(toRefCcy(100, 'XXX', FX, 'EUR')).toBeCloseTo(100, 4);
@@ -103,7 +109,7 @@ describe('recalcHolding', () => {
     expect(h.pnlRef).toBeCloseTo(0, 1);
   });
 
-  it('zero quantity when all shares sold', () => {
+  it('zero quantity when all shares sold — no NaN/Infinity', () => {
     const h = {
       currentPrice: 200, currency: 'EUR',
       transactions: [mkTx('2023-01-01', 'BUY', 5, 100), mkTx('2023-06-01', 'SELL', 5, 150)],
@@ -112,6 +118,7 @@ describe('recalcHolding', () => {
     expect(h.quantity).toBe(0);
     expect(h.value).toBe(0);
     expect(h.pnl).toBe(0);
+    expect(h.pnlPct).toBe(0);
   });
 
   it('DIV transactions are ignored in quantity/cost calculation', () => {
@@ -160,14 +167,52 @@ describe('computeRealizedPnL', () => {
 
 // ─── fmtPct ────────────────────────────────────────────────────────────────
 describe('fmtPct', () => {
+  const NNBSP = ' '; // espace fine insécable, comme l'implémentation historique
   it('positive value shows "+"', () => {
-    expect(fmtPct(5.5)).toBe('+5,50 %');
+    expect(fmtPct(5.5)).toBe(`+5,50${NNBSP}%`);
   });
   it('negative value no "+"', () => {
-    expect(fmtPct(-3.14)).toBe('-3,14 %');
+    expect(fmtPct(-3.14)).toBe(`-3,14${NNBSP}%`);
   });
   it('zero shows "+"', () => {
-    expect(fmtPct(0)).toBe('+0,00 %');
+    expect(fmtPct(0)).toBe(`+0,00${NNBSP}%`);
+  });
+});
+
+// ─── esc ───────────────────────────────────────────────────────────────────
+describe('esc', () => {
+  it('escapes HTML special chars', () => {
+    expect(esc('<img src=x onerror=alert(1)>')).toBe('&lt;img src=x onerror=alert(1)&gt;');
+  });
+  it('escapes quotes (safe inside attributes)', () => {
+    expect(esc(`"><b>'`)).toBe('&quot;&gt;&lt;b&gt;&#39;');
+  });
+  it('escapes ampersand first (no double-escaping)', () => {
+    expect(esc('A & B')).toBe('A &amp; B');
+    expect(esc('&lt;')).toBe('&amp;lt;');
+  });
+  it('null/undefined → empty string', () => {
+    expect(esc(null)).toBe('');
+    expect(esc(undefined)).toBe('');
+  });
+  it('numbers are stringified', () => {
+    expect(esc(42)).toBe('42');
+  });
+});
+
+// ─── dayKey ────────────────────────────────────────────────────────────────
+describe('dayKey', () => {
+  it('uses LOCAL date components (not UTC)', () => {
+    // Construit en heure locale : la clé doit rester le même jour quel que soit le fuseau
+    expect(dayKey(new Date(2026, 6, 10))).toBe('2026-07-10');
+    expect(dayKey(new Date(2026, 6, 10, 23, 59, 59))).toBe('2026-07-10');
+    expect(dayKey(new Date(2026, 6, 10, 0, 0, 0))).toBe('2026-07-10');
+  });
+  it('accepts a timestamp (ms)', () => {
+    expect(dayKey(new Date(2026, 0, 5).getTime())).toBe('2026-01-05');
+  });
+  it('pads month and day with zeros', () => {
+    expect(dayKey(new Date(2026, 2, 3))).toBe('2026-03-03');
   });
 });
 
@@ -219,8 +264,6 @@ describe('fxSubText', () => {
   });
 
   it('JPY rate >= 10 → displayed with 2 decimal places', () => {
-    // 1 EUR = 163 JPY (>= 10), so toFixed(2) is used
-    // Build a simple FX where appCcy is EUR and first non-EUR is JPY
     const jpyFX = { EUR: 1, JPY: 163 };
     const text = fxSubText(jpyFX, 'EUR', 1_700_000_000);
     expect(text).toContain('163.00');
