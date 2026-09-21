@@ -380,3 +380,30 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .chart-fs-close{width:34px;height:34px;border-radius:50%;background:var(--card2);border:1px solid var(--border);color:var(--text2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;flex-shrink:0;padding:0}
 .chart-fs-close:active{background:var(--accent);border-color:var(--accent);color:#fff}
 .chart-fs-body{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:8px;user-select:none;overflow:hidden}
+
+/* ═══════════════════════════════════════════════
+   ÉCRAN DE VERROUILLAGE (code PIN / biométrie)
+   ═══════════════════════════════════════════════ */
+#lock-overlay{position:fixed;inset:0;z-index:99999;background:var(--bg);display:none;align-items:center;justify-content:center;padding:24px;overscroll-behavior:none;user-select:none}
+html.locked #lock-overlay{display:flex}
+html.locked{overflow:hidden}
+.lock-box{width:100%;max-width:300px;display:flex;flex-direction:column;align-items:center}
+.lock-logo{width:56px;height:56px;border-radius:17px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.lock-logo svg{width:28px;height:28px;fill:var(--accent)}
+.lock-title{font-size:19px;font-weight:800;color:var(--text);text-align:center}
+.lock-sub{font-size:13px;color:var(--text2);margin-top:6px;text-align:center;min-height:18px}
+.lock-dots{display:flex;gap:15px;margin-top:26px}
+.lock-dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--border2);transition:background .15s,border-color .15s,transform .15s}
+.lock-dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.15)}
+.lock-err{min-height:17px;margin-top:11px;font-size:12px;font-weight:600;color:var(--loss);text-align:center}
+#lock-overlay.shake .lock-dots{animation:lockShake .38s}
+@keyframes lockShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-9px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}
+.lock-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:12px;width:100%;max-width:252px}
+.lock-key{height:60px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:600;color:var(--text);cursor:pointer}
+.lock-key:active{background:var(--accent-dim);border-color:var(--accent)}
+.lock-key-alt{background:transparent;border-color:transparent}
+.lock-key-alt svg{width:25px;height:25px;fill:var(--text2)}
+#lock-bio svg{fill:var(--accent)}
+.lock-key.off,.lock-cancel.off{visibility:hidden;pointer-events:none}
+.lock-pad.busy{opacity:.4;pointer-events:none}
+.lock-cancel{margin-top:18px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer}

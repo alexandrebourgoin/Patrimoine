@@ -15,6 +15,16 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="mon-patrimoine.css">
+<script>
+/* Pré-boot : arme l'écran de verrouillage et applique le thème AVANT le premier paint
+   (sinon les données s'affichent une fraction de seconde avant le verrou). */
+(function(){try{
+  var s = JSON.parse(localStorage.getItem('patrimoine-settings') || '{}');
+  var dark = s.theme === 'dark' || (s.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if (dark) document.documentElement.setAttribute('data-theme','dark');
+  if (s.lockEnabled && s.lockHash) document.documentElement.classList.add('locked');
+}catch(e){}})();
+</script>
 </head>
 <body>
 <div id="app">
@@ -531,6 +541,38 @@
       </div>
     </div>
     <button class="form-submit" id="eh-submit">Enregistrer</button>
+  </div>
+</div>
+
+<!-- ═══ ÉCRAN DE VERROUILLAGE (sécurité) ═══ -->
+<div id="lock-overlay">
+  <div class="lock-box">
+    <div class="lock-logo">
+      <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm3 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+    </div>
+    <div class="lock-title" id="lock-title">Mon patrimoine</div>
+    <div class="lock-sub" id="lock-sub">Saisissez votre code</div>
+    <div class="lock-dots" id="lock-dots"></div>
+    <div class="lock-err" id="lock-err"></div>
+    <div class="lock-pad" id="lock-pad">
+      <div class="lock-key tap" data-k="1">1</div>
+      <div class="lock-key tap" data-k="2">2</div>
+      <div class="lock-key tap" data-k="3">3</div>
+      <div class="lock-key tap" data-k="4">4</div>
+      <div class="lock-key tap" data-k="5">5</div>
+      <div class="lock-key tap" data-k="6">6</div>
+      <div class="lock-key tap" data-k="7">7</div>
+      <div class="lock-key tap" data-k="8">8</div>
+      <div class="lock-key tap" data-k="9">9</div>
+      <div class="lock-key lock-key-alt tap off" id="lock-bio" data-k="bio" title="Déverrouiller par empreinte">
+        <svg viewBox="0 0 24 24"><path d="M17.81 4.47a.75.75 0 0 1-.38-.1A15.9 15.9 0 0 0 12 2.75c-1.9 0-3.72.42-5.43 1.25a.75.75 0 1 1-.66-1.35A17.4 17.4 0 0 1 12 1.25c2.13 0 4.19.47 6.13 1.4a.75.75 0 0 1-.32 1.42zM3.5 9.72a.75.75 0 0 1-.6-1.2c1-1.37 2.27-2.45 3.79-3.2A11.3 11.3 0 0 1 12 4.2c1.87 0 3.7.42 5.31 1.13 1.5.66 2.8 1.66 3.88 2.98a.75.75 0 1 1-1.16.95c-.95-1.16-2.08-2.03-3.37-2.6A11.2 11.2 0 0 0 12 5.7c-1.57 0-3.1.33-4.55.99-1.3.64-2.4 1.57-3.27 2.75a.75.75 0 0 1-.68.28zM9.75 22.1a.75.75 0 0 1-.53-.22c-.82-.82-1.27-1.35-1.9-2.5A9.2 9.2 0 0 1 6.2 15c0-2.9 2.6-5.27 5.8-5.27s5.8 2.37 5.8 5.27a.75.75 0 0 1-1.5 0c0-2.08-1.93-3.77-4.3-3.77S7.7 12.92 7.7 15c0 1.48.28 2.54.99 3.66.52.83.86 1.19 1.6 1.93a.75.75 0 0 1-.54 1.28zm6.62-1.7c-1.13 0-2.13-.28-2.95-.84-1.42-.96-2.27-2.5-2.27-4.14a.75.75 0 0 1 1.5 0c0 1.15.58 2.2 1.61 2.9.6.4 1.3.59 2.11.59.2 0 .53-.02.86-.08a.75.75 0 0 1 .26 1.48c-.47.08-.88.09-1.12.09zM13.98 23c-.06 0-.14-.01-.21-.03-1.35-.37-2.23-.87-3.15-1.78a7.4 7.4 0 0 1-2.19-5.27c0-1.66 1.42-3.02 3.17-3.02s3.17 1.36 3.17 3.02c0 1.1.96 1.99 2.15 1.99s2.15-.89 2.15-1.99c0-3.88-3.35-7.03-7.47-7.03-2.93 0-5.61 1.63-6.8 4.15-.4.83-.6 1.8-.6 2.88 0 .81.07 2.09.7 3.75a.75.75 0 0 1-1.4.53c-.51-1.37-.79-2.73-.79-4.28 0-1.31.24-2.47.72-3.53 1.44-3.03 4.63-5 8.17-5 4.95 0 8.97 3.82 8.97 8.53 0 1.93-1.63 3.49-3.65 3.49s-3.65-1.56-3.65-3.49c0-.83-.75-1.52-1.67-1.52s-1.67.69-1.67 1.52c0 1.6.6 3.1 1.7 4.2.8.8 1.56 1.22 2.76 1.55a.75.75 0 0 1-.2 1.47z"/></svg>
+      </div>
+      <div class="lock-key tap" data-k="0">0</div>
+      <div class="lock-key lock-key-alt tap" data-k="del" title="Effacer">
+        <svg viewBox="0 0 24 24"><path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z"/></svg>
+      </div>
+    </div>
+    <div class="lock-cancel tap off" id="lock-cancel">Annuler</div>
   </div>
 </div>
 

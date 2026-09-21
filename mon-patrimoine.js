@@ -32,6 +32,15 @@ const S = {
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
   priceApiKey: '',    // clé Twelve Data (US stocks)
   fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
+  // ── Sécurité (verrouillage d'accès) ──
+  lockEnabled: false, // verrou par code activé
+  lockHash:   '',     // dérivé PBKDF2 du code (le code lui-même n'est jamais stocké)
+  lockSalt:   '',     // sel aléatoire du dérivé
+  lockBio:    false,  // déverrouillage biométrique activé
+  lockBioId:  '',     // id du credential WebAuthn (base64url)
+  lockDelay:  60,     // secondes en arrière-plan avant re-verrouillage (0 = immédiat)
+  lockFails:  0,      // essais ratés consécutifs
+  lockUntil:  0,      // fin du blocage anti-force brute (timestamp ms)
   _debugLog: [],      // non persisté
   _tdOffset:  0,      // rotation Twelve Data (non persisté)
 };
@@ -49,8 +58,14 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.8.0';
 const CHANGELOG = {
+  '1.8.0': [
+    { type:'new',     text:'Verrouillage de l\'application : un code à 6 chiffres peut désormais être exigé à l\'ouverture. Activation dans Réglages → Sécurité.' },
+    { type:'new',     text:'Déverrouillage par empreinte ou reconnaissance faciale (biométrie du téléphone), avec le code en secours.' },
+    { type:'new',     text:'Re-verrouillage automatique au retour depuis l\'arrière-plan : immédiat, après 1 min ou après 5 min, au choix.' },
+    { type:'improve', text:'Sécurité : le code n\'est jamais enregistré tel quel, et les essais répétés sont temporairement bloqués après 5 erreurs.' },
+  ],
   '1.7.1': [
     { type:'fix',     text:'Apports/retraits : un cashflow ajouté n\'était pas sauvegardé et disparaissait au rechargement.' },
     { type:'fix',     text:'Import CSV en mode démo : l\'import basculait silencieusement en mode réel et pouvait écraser vos vraies données. L\'import reste désormais dans le mode courant.' },
@@ -2022,6 +2037,58 @@ function renderSettings() {
     </div>
   </div>
 
+  <div class="s-section">Sécurité</div>
+  <div class="s-group">
+    <div class="s-item tap" id="js-lock-tog">
+      <div class="s-ico" style="background:rgba(0,214,143,.12)">
+        <svg viewBox="0 0 24 24" fill="var(--gain)"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm3 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Verrouillage par code</div>
+        <div class="s-sub">${cryptoOk() ? `Code à ${LOCK_LEN} chiffres demandé à l'ouverture` : 'Indisponible : nécessite une connexion HTTPS'}</div>
+      </div>
+      <div class="toggle ${S.lockEnabled ? 'on' : ''}" id="js-lock-inner"><div class="toggle-thumb"></div></div>
+    </div>
+    ${lockArmed() ? `
+    <div class="s-item tap" id="js-lock-change">
+      <div class="s-ico" style="background:var(--accent-dim)">
+        <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Changer le code</div>
+      </div>
+      <div style="color:var(--text3);font-size:18px">›</div>
+    </div>
+    ${_bioOk ? `
+    <div class="s-item tap" id="js-lock-bio">
+      <div class="s-ico" style="background:rgba(167,139,250,.12)">
+        <svg viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 1a11 11 0 0 0-5.5 1.47.75.75 0 0 0 .75 1.3A9.5 9.5 0 0 1 12 2.5c1.9 0 3.75.55 5.32 1.57a.75.75 0 1 0 .82-1.26A11 11 0 0 0 12 1zm0 3.7c-3.9 0-7.3 2.4-8.6 6a.75.75 0 1 0 1.41.5A7.68 7.68 0 0 1 12 6.2c4.24 0 7.7 3.3 7.7 7.35 0 1.5-1.27 2.7-2.85 2.7s-2.85-1.2-2.85-2.7c0-1.1-.98-2-2.18-2s-2.17.9-2.17 2c0 2.03.79 3.93 2.23 5.37a.75.75 0 1 0 1.06-1.06 6.07 6.07 0 0 1-1.79-4.31c0-.27.3-.5.67-.5s.68.23.68.5c0 2.32 1.95 4.2 4.35 4.2s4.35-1.88 4.35-4.2C21.2 8.66 17.06 4.7 12 4.7zm0 3.05c-2.55 0-4.77 1.55-5.7 3.85-.3.74-.45 1.55-.45 2.4 0 1.42.25 2.6.8 4.06a.75.75 0 1 0 1.4-.53c-.49-1.29-.7-2.3-.7-3.53 0-.66.11-1.27.34-1.84A4.65 4.65 0 0 1 12 9.25c.35 0 .7.04 1.03.11a.75.75 0 1 0 .32-1.46A6.4 6.4 0 0 0 12 7.75zm-2.7 1.9a.75.75 0 0 0-.4.12A4.2 4.2 0 0 0 7.1 13.3c0 .9.14 1.72.43 2.5a.75.75 0 1 0 1.4-.52 5.6 5.6 0 0 1-.33-1.98c0-.95.48-1.8 1.25-2.28a.75.75 0 0 0-.55-1.37zm7.2 8.9c-.2 0-.4.01-.55.04-1.5.26-2.9-.3-3.83-1.42a.75.75 0 1 0-1.15.96 5.1 5.1 0 0 0 5.24 1.94.75.75 0 0 0-.14-1.49l.43-.03zm-6.98 1.5a.75.75 0 0 0-.53 1.28c.86.86 1.8 1.4 3.06 1.75a.75.75 0 1 0 .4-1.45c-1.03-.28-1.76-.7-2.4-1.35a.75.75 0 0 0-.53-.22z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Empreinte / Face</div>
+        <div class="s-sub">Déverrouiller avec la biométrie du téléphone</div>
+      </div>
+      <div class="toggle ${S.lockBio ? 'on' : ''}" id="js-lock-bio-inner"><div class="toggle-thumb"></div></div>
+    </div>` : ''}
+    <div class="s-item">
+      <div class="s-ico" style="background:rgba(245,158,11,.12)">
+        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Verrouiller après</div>
+        <div class="s-sub">Délai passé en arrière-plan</div>
+      </div>
+      <div class="cur-opts">
+        <div class="cur-opt tap ${S.lockDelay === 0 ? 'on' : ''}" data-lockdelay="0">Imm.</div>
+        <div class="cur-opt tap ${S.lockDelay === 60 ? 'on' : ''}" data-lockdelay="60">1 min</div>
+        <div class="cur-opt tap ${S.lockDelay === 300 ? 'on' : ''}" data-lockdelay="300">5 min</div>
+      </div>
+    </div>` : ''}
+  </div>
+  <div style="margin:8px 20px 0;font-size:11px;color:var(--text3);line-height:1.5">
+    Le verrou bloque l'accès à l'application. Il ne chiffre pas les données stockées sur l'appareil.
+  </div>
+
   <div class="s-section">Préférences</div>
   <div class="s-group">
     <div class="s-item">
@@ -2052,7 +2119,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Juillet 2026 · Suivi de patrimoine</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Septembre 2026 · Suivi de patrimoine</div></div>
     </div>
     <div class="s-item tap" id="js-open-changelog" style="cursor:pointer">
       <div class="s-ico" style="background:rgba(255,200,50,.13)">
@@ -2643,6 +2710,36 @@ function bindEvents(id, el) {
       ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
       toast('Assistant IA ' + (S.assistantEnabled ? 'activé' : 'masqué'));
     });
+    el.querySelector('#js-lock-tog')?.addEventListener('click', () => {
+      if (!cryptoOk()) { toast('Le verrouillage nécessite une connexion HTTPS'); return; }
+      const done = () => renderScreen('settings');
+      if (S.lockEnabled) lockDisable(done); else lockEnable(done);
+    });
+    el.querySelector('#js-lock-change')?.addEventListener('click', () => lockChange(() => renderScreen('settings')));
+    el.querySelector('#js-lock-bio')?.addEventListener('click', async () => {
+      if (S.lockBio) {
+        S.lockBio = false; S.lockBioId = ''; saveSettings();
+        renderScreen('settings');
+        toast('Déverrouillage biométrique désactivé');
+        return;
+      }
+      try {
+        S.lockBioId = await bioRegister();
+        S.lockBio = true; saveSettings();
+        renderScreen('settings');
+        toast('Biométrie activée ✓');
+      } catch (e) {
+        toast(e && (e.name === 'NotAllowedError' || e.name === 'AbortError')
+          ? 'Enregistrement annulé'
+          : 'Biométrie indisponible sur cet appareil');
+      }
+    });
+    el.querySelectorAll('[data-lockdelay]').forEach(b => b.addEventListener('click', () => {
+      S.lockDelay = +b.dataset.lockdelay;
+      saveSettings();
+      renderScreen('settings');
+      toast(S.lockDelay ? 'Verrouillage après ' + (S.lockDelay / 60) + ' min' : 'Verrouillage immédiat');
+    }));
     el.querySelector('#js-fx-row')?.addEventListener('click', openFxModal);
     el.querySelector('#js-open-changelog')?.addEventListener('click', openChangelogModal);
     el.querySelector('#js-price-key')?.addEventListener('change', e => {
@@ -3760,6 +3857,14 @@ function saveSettings() {
       autoRefresh: S.autoRefresh,
       assistantEnabled: S.assistantEnabled,
       priceApiKey: S.priceApiKey,
+      lockEnabled: S.lockEnabled,
+      lockHash:    S.lockHash,
+      lockSalt:    S.lockSalt,
+      lockBio:     S.lockBio,
+      lockBioId:   S.lockBioId,
+      lockDelay:   S.lockDelay,
+      lockFails:   S.lockFails,
+      lockUntil:   S.lockUntil,
       fmpApiKey:   S.fmpApiKey,
     }));
   } catch(e) {}
@@ -3826,6 +3931,14 @@ function loadData() {
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
       if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
+      if (s.lockEnabled !== undefined) S.lockEnabled = s.lockEnabled;
+      if (s.lockHash)                  S.lockHash    = s.lockHash;
+      if (s.lockSalt)                  S.lockSalt    = s.lockSalt;
+      if (s.lockBio !== undefined)     S.lockBio     = s.lockBio;
+      if (s.lockBioId)                 S.lockBioId   = s.lockBioId;
+      if (s.lockDelay !== undefined)   S.lockDelay   = s.lockDelay;
+      if (s.lockFails !== undefined)   S.lockFails   = s.lockFails;
+      if (s.lockUntil !== undefined)   S.lockUntil   = s.lockUntil;
       if (s.fmpApiKey)              S.fmpApiKey   = s.fmpApiKey;
     }
     return true;
@@ -4520,6 +4633,291 @@ async function fetchLivePrices() {
 function haptic(ms=8) { try { navigator.vibrate?.(ms); } catch(_) {} }
 
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// SÉCURITÉ — verrouillage par code PIN + biométrie (WebAuthn)
+//
+// Portée : c'est un VERROU D'ACCÈS, pas un chiffrement. Il empêche
+// quelqu'un qui a le téléphone déverrouillé d'ouvrir l'appli ; les
+// données restent en clair dans localStorage.
+// Le code n'est jamais stocké : seul un dérivé PBKDF2-SHA256 (150k
+// itérations, sel aléatoire de 16 octets) l'est. crypto.subtle n'existe
+// qu'en contexte sécurisé (https / localhost) → le verrou y est conditionné.
+// ═══════════════════════════════════════════════
+const LOCK_LEN  = 6;         // longueur du code
+const LOCK_ITER = 150000;    // itérations PBKDF2
+
+let _lockedNow  = false;     // l'appli est-elle verrouillée maintenant ?
+let _lockState  = null;      // session de saisie en cours : { mode, buf, first, after }
+let _lockHidTs  = 0;         // horodatage du passage en arrière-plan
+let _lockTimer  = null;      // timer du compte à rebours de pénalité
+let _lockPending = null;     // action différée jusqu'au déverrouillage
+let _bioOk      = false;     // capteur biométrique disponible (sondé à l'init)
+
+function cryptoOk()  { return !!(window.crypto && window.crypto.subtle && window.isSecureContext); }
+function lockArmed() { return !!(S.lockEnabled && S.lockHash && S.lockSalt); }
+function isLocked()  { return _lockedNow; }
+
+// ── Helpers crypto ──
+function _hex(buf) { return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join(''); }
+function _randHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return _hex(a); }
+async function _pinHash(pin, saltHex) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(saltHex), iterations: LOCK_ITER, hash: 'SHA-256' }, key, 256);
+  return _hex(bits);
+}
+// Comparaison à temps constant (les deux dérivés font la même longueur)
+function _eqConst(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+// ── Helpers WebAuthn (biométrie) ──
+function _b64u(buf) {
+  const a = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function _unb64u(str) {
+  const b = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  const a = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+  return a;
+}
+async function bioAvailable() {
+  try {
+    if (!window.PublicKeyCredential || !window.isSecureContext) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch (e) { return false; }
+}
+// Enregistre une clé liée au capteur de l'appareil. Renvoie l'id du credential.
+async function bioRegister() {
+  const ch  = new Uint8Array(32); crypto.getRandomValues(ch);
+  const uid = new Uint8Array(16); crypto.getRandomValues(uid);
+  const cred = await navigator.credentials.create({ publicKey: {
+    challenge: ch,
+    rp:   { name: 'Mon patrimoine', id: location.hostname },
+    user: { id: uid, name: 'patrimoine', displayName: (S.user && S.user.name) || 'Moi' },
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+    timeout: 60000, attestation: 'none',
+  }});
+  if (!cred) throw new Error('no-credential');
+  return _b64u(cred.rawId);
+}
+// Demande une empreinte / un visage. Le navigateur ne rend une assertion que si
+// la vérification utilisateur a réussi → assertion obtenue = déverrouillage.
+async function bioVerify() {
+  if (!S.lockBioId) return false;
+  const ch = new Uint8Array(32); crypto.getRandomValues(ch);
+  const a = await navigator.credentials.get({ publicKey: {
+    challenge: ch, rpId: location.hostname,
+    allowCredentials: [{ type: 'public-key', id: _unb64u(S.lockBioId), transports: ['internal'] }],
+    userVerification: 'required', timeout: 60000,
+  }});
+  return !!a;
+}
+
+// ── Pénalité anti-force brute (persistée : un rechargement ne la remet pas à zéro) ──
+function _lockPenalty(fails) {
+  if (fails < 5) return 0;
+  if (fails < 7) return 30;
+  if (fails < 9) return 60;
+  return 300;
+}
+function _lockBlockedFor() {
+  const left = Math.ceil(((S.lockUntil || 0) - Date.now()) / 1000);
+  return left > 0 ? left : 0;
+}
+
+// ── Rendu de l'overlay ──
+const _LOCK_TEXTS = {
+  unlock:  ['Mon patrimoine', 'Saisissez votre code'],
+  current: ['Code actuel',    'Saisissez votre code actuel'],
+  create:  ['Nouveau code',   'Choisissez un code à ' + LOCK_LEN + ' chiffres'],
+  confirm: ['Nouveau code',   'Saisissez-le à nouveau'],
+};
+function _lockPaint(err) {
+  const st = _lockState; if (!st) return;
+  const t = _LOCK_TEXTS[st.mode] || _LOCK_TEXTS.unlock;
+  document.getElementById('lock-title').textContent = t[0];
+  document.getElementById('lock-sub').textContent   = t[1];
+  document.getElementById('lock-dots').innerHTML =
+    Array.from({ length: LOCK_LEN }, (_, i) => '<div class="lock-dot' + (i < st.buf.length ? ' on' : '') + '"></div>').join('');
+  document.getElementById('lock-err').textContent = err || '';
+  // Empreinte : uniquement pour déverrouiller l'appli
+  document.getElementById('lock-bio')
+    .classList.toggle('off', !(st.mode === 'unlock' && S.lockBio && S.lockBioId && _bioOk));
+  // Annuler : partout sauf sur le verrou d'ouverture (on ne peut pas y échapper)
+  document.getElementById('lock-cancel').classList.toggle('off', st.mode === 'unlock');
+}
+function _lockShake(msg) {
+  const ov = document.getElementById('lock-overlay');
+  ov.classList.add('shake');
+  setTimeout(() => ov.classList.remove('shake'), 400);
+  haptic(40);
+  if (_lockState) { _lockState.buf = ''; _lockPaint(msg); }
+}
+function _lockBusy(on) { document.getElementById('lock-pad').classList.toggle('busy', !!on); }
+
+// Compte à rebours pendant un blocage
+function _lockTick() {
+  clearTimeout(_lockTimer);
+  const left = _lockBlockedFor();
+  if (!left) { _lockBusy(false); if (_lockState) _lockPaint(''); return; }
+  _lockBusy(true);
+  if (_lockState) _lockPaint('Trop d\'essais — réessayez dans ' + left + ' s');
+  _lockTimer = setTimeout(_lockTick, 1000);
+}
+
+// ── Ouverture / fermeture d'une session de saisie ──
+// mode : 'unlock' (verrou d'ouverture) | 'current' | 'create' | 'confirm'
+// after(ok) : rappelé à la fermeture des sessions lancées depuis les Réglages
+function _lockOpen(mode, after, next) {
+  _lockState = { mode, buf: '', first: '', after: after || null, next: next || null };
+  document.documentElement.classList.add('locked');
+  _lockPaint('');
+  _lockTick();
+  if (mode === 'unlock' && S.lockBio && S.lockBioId && _bioOk) setTimeout(_lockBio, 400);
+}
+function _lockClose(ok) {
+  const after = _lockState && _lockState.after;
+  _lockState = null;
+  clearTimeout(_lockTimer);
+  if (!_lockedNow) document.documentElement.classList.remove('locked');
+  if (after) after(!!ok);
+}
+
+function lockApp() {
+  if (!lockArmed() || _lockedNow) return;
+  _lockedNow = true;
+  _lockOpen('unlock');
+}
+function unlockApp() {
+  _lockedNow = false;
+  S.lockFails = 0; S.lockUntil = 0; saveSettings();
+  _lockClose(true);
+  document.documentElement.classList.remove('locked');
+  haptic(12);
+  const p = _lockPending; _lockPending = null;
+  if (p) setTimeout(p, 400);
+}
+
+// ── Saisie ──
+async function _lockKey(k) {
+  const st = _lockState; if (!st || _lockBlockedFor()) return;
+  if (k === 'bio') { _lockBio(); return; }
+  if (k === 'del') { st.buf = st.buf.slice(0, -1); _lockPaint(''); haptic(5); return; }
+  if (!/^[0-9]$/.test(k) || st.buf.length >= LOCK_LEN) return;
+  st.buf += k; haptic(6); _lockPaint('');
+  if (st.buf.length === LOCK_LEN) await _lockSubmit();
+}
+
+async function _lockSubmit() {
+  const st = _lockState; if (!st) return;
+  const pin = st.buf;
+  _lockBusy(true);
+  try {
+    // Vérification du code existant (ouverture de l'appli, ou étape préalable
+    // avant de changer / désactiver le verrou depuis les Réglages)
+    if (st.mode === 'unlock' || st.mode === 'current') {
+      const h = await _pinHash(pin, S.lockSalt);
+      if (_eqConst(h, S.lockHash)) {
+        if (st.mode === 'unlock') { unlockApp(); return; }
+        if (st.next === 'off') { _lockClose(true); return; }   // désactivation
+        st.mode = 'create'; st.buf = ''; _lockPaint('');       // changement de code
+        return;
+      }
+      S.lockFails = (S.lockFails || 0) + 1;
+      const pen = _lockPenalty(S.lockFails);
+      S.lockUntil = pen ? Date.now() + pen * 1000 : 0;
+      saveSettings();
+      _lockShake('Code incorrect');
+      if (pen) _lockTick();
+      return;
+    }
+    // Définition d'un nouveau code
+    if (st.mode === 'create') { st.first = pin; st.mode = 'confirm'; st.buf = ''; _lockPaint(''); return; }
+    if (st.mode === 'confirm') {
+      if (pin !== st.first) { st.mode = 'create'; st.first = ''; _lockShake('Les codes ne correspondent pas'); return; }
+      const salt = _randHex(16);
+      S.lockSalt    = salt;
+      S.lockHash    = await _pinHash(pin, salt);
+      S.lockEnabled = true;
+      S.lockFails   = 0; S.lockUntil = 0;
+      saveSettings();
+      _lockClose(true);
+      return;
+    }
+  } catch (e) {
+    _lockShake('Erreur de sécurité');
+  } finally {
+    _lockBusy(!!_lockBlockedFor());
+  }
+}
+
+async function _lockBio() {
+  if (!_lockState || _lockState.mode !== 'unlock') return;
+  if (!S.lockBio || !S.lockBioId || _lockBlockedFor()) return;
+  _lockBusy(true);
+  try {
+    if (await bioVerify()) { unlockApp(); return; }
+    _lockPaint('Empreinte non reconnue');
+  } catch (e) {
+    // Abandon volontaire (l'utilisateur ferme la fenêtre système) → pas de message
+    if (e && e.name !== 'NotAllowedError' && e.name !== 'AbortError') _lockPaint('Biométrie indisponible');
+  } finally {
+    _lockBusy(!!_lockBlockedFor());
+  }
+}
+
+// ── Actions depuis les Réglages ──
+function lockEnable(done) {
+  _lockOpen('create', ok => { if (ok) toast('Verrouillage activé ✓'); done && done(ok); });
+}
+function lockChange(done) {
+  _lockOpen('current', ok => { if (ok) toast('Code modifié ✓'); done && done(ok); }, 'new');
+}
+function lockDisable(done) {
+  _lockOpen('current', ok => {
+    if (ok) {
+      S.lockEnabled = false; S.lockHash = ''; S.lockSalt = '';
+      S.lockBio = false; S.lockBioId = '';
+      S.lockFails = 0; S.lockUntil = 0;
+      saveSettings();
+      toast('Verrouillage désactivé');
+    }
+    done && done(ok);
+  }, 'off');
+}
+
+// ── Événements de l'overlay (attachés une seule fois) ──
+document.getElementById('lock-pad').addEventListener('click', e => {
+  const key = e.target.closest('.lock-key'); if (!key) return;
+  _lockKey(key.dataset.k);
+});
+document.getElementById('lock-cancel').addEventListener('click', () => {
+  if (_lockState && _lockState.mode !== 'unlock') _lockClose(false);
+});
+// Clavier physique (desktop)
+document.addEventListener('keydown', e => {
+  if (!_lockState) return;
+  if (/^[0-9]$/.test(e.key))      { e.preventDefault(); _lockKey(e.key); }
+  else if (e.key === 'Backspace') { e.preventDefault(); _lockKey('del'); }
+  else if (e.key === 'Escape' && _lockState.mode !== 'unlock') { e.preventDefault(); _lockClose(false); }
+}, true);
+
+// ── Re-verrouillage au retour d'arrière-plan ──
+document.addEventListener('visibilitychange', () => {
+  if (!lockArmed()) return;
+  if (document.hidden) { _lockHidTs = Date.now(); return; }
+  if (_lockedNow || !_lockHidTs) return;
+  if (Date.now() - _lockHidTs >= (S.lockDelay || 0) * 1000) lockApp();
+});
+
 const _hasData=loadData();
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
 if(!_hasData || S.isDemo) S.accounts=genDemo();
@@ -4538,6 +4936,16 @@ if(_priceCache && !S.isDemo) applyPrices(_priceCache);
 if(!S.isDemo) { backfillWealthHistory(); snapshotWealth(); }
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
 document.getElementById('nav').classList.remove('hidden');
+// Sécurité : sonder le capteur biométrique, puis armer le verrou s'il est configuré
+bioAvailable().then(v => {
+  _bioOk = v;
+  if (_lockState) {                    // overlay déjà affiché → révéler le bouton empreinte
+    _lockPaint('');
+    if (_lockState.mode === 'unlock' && S.lockBio && S.lockBioId) _lockBio();
+  }
+});
+if (lockArmed()) lockApp();
+else document.documentElement.classList.remove('locked');
 // Suivre les changements du thème système (uniquement en mode auto)
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
   if(S.theme==='auto') applyTheme('auto');
@@ -4550,7 +4958,9 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
 // Popup changelog si nouvelle version
 try {
   if (localStorage.getItem(STORE_VERSION) !== APP_VERSION) {
-    setTimeout(() => openChangelogModal(true), 600);
+    const _showCl = () => openChangelogModal(true);
+    if (isLocked()) _lockPending = _showCl;   // différé jusqu'au déverrouillage
+    else setTimeout(_showCl, 600);
   }
 } catch(e) {}
 
@@ -4574,6 +4984,9 @@ try {
   window.addEventListener('popstate', () => {
     // Re-push immediately to always maintain a forward entry.
     history.pushState({ appNav: true, depth: 2 }, '');
+
+    // Verrouillé : le bouton retour ne doit rien faire d'autre que rester sur le verrou
+    if (isLocked()) return;
 
     // Debounce : si deux popstate arrivent en moins de 250 ms
     // (double-tap Android), on absorbe le second silencieusement.
@@ -4619,6 +5032,7 @@ try {
 // KEYBOARD SHORTCUTS (desktop)
 // ═══════════════════════════════════════════════
 document.addEventListener('keydown', e => {
+  if (_lockState) return;   // l'overlay de verrouillage gère ses propres touches
   if (e.key === 'Escape') {
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
