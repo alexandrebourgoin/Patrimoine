@@ -194,6 +194,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .s-group{margin:0 20px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
 .s-item{display:flex;align-items:center;gap:14px;padding:15px 16px;transition:background .12s;cursor:pointer;border-bottom:1px solid var(--border)}
 .s-item:last-child{border-bottom:none}
+/* Ligne à options nombreuses : les puces passent sur une 2e ligne, sinon le sous-titre
+   et les puces se chevauchent en 375 px et le tap n'atteint plus la bonne puce. */
+.s-item.stack{flex-wrap:wrap}
+.s-item.stack .cur-opts{flex-basis:100%;margin-left:48px;margin-top:10px}
 .s-item:active{background:var(--card2)}
 .s-ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .s-ico svg{width:18px;height:18px}
