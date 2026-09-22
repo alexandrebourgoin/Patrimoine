@@ -62,6 +62,7 @@ const APP_VERSION = '1.9.0';
 const CHANGELOG = {
   '1.9.0': [
     { type:'fix',     text:'Apports et retraits pris en compte dans le solde : un compte vaut désormais ses titres PLUS ses liquidités non investies (apports − retraits − achats + ventes + dividendes). Le détail « titres / liquidités » s\'affiche sur l\'écran du compte.' },
+    { type:'new',     text:"Relevé des mouvements sur l'écran d'un compte : achats, ventes, dividendes et apports/retraits réunis par ordre chronologique, sous le portefeuille. On ne voyait jusqu'ici que les positions." },
     { type:'new',     text:'Liste des apports/retraits enregistrés, avec suppression, directement dans la fenêtre « Apports / Retraits ».' },
     { type:'new',     text:'Type de compte : choix dans une liste (PEA, CTO, assurance-vie, PER, livrets, SCPI, crypto…) ou saisie libre, et surtout modifiable après coup via « Modifier ».' },
     { type:'improve', text:'« Modifier le compte » permet aussi de changer l\'icône. Le type du compte est rappelé sous son nom.' },
@@ -1277,6 +1278,7 @@ const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
 
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
+  _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
   const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
   const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
   const cash=accCash(acc);                    // liquidités non investies
@@ -1344,7 +1346,17 @@ function renderAccount() {
       </div>
     </div>
   </div>
-  <div id="js-holds"></div>`;
+  <div id="js-holds"></div>
+  <div class="row" style="padding:20px 20px 6px;justify-content:space-between;align-items:center">
+    <div class="t-section">Mouvements</div>
+    <div class="row gap8" style="align-items:center">
+      <div id="js-mcnt" style="font-size:12px;font-weight:600;color:var(--text2)"></div>
+      <div class="hold-add-btn" id="js-add-move" title="Ajouter un apport / retrait">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div id="js-moves"></div>`;
 }
 
 // ── HOLDS HELPERS ──
@@ -1363,7 +1375,7 @@ function renderHoldsHTML(acc) {
   const cnt=document.getElementById('js-hcnt');
   const hs=getFilteredHoldings(acc);
   if(cnt) cnt.textContent=`${hs.length} valeur${hs.length!==1?'s':''}`;
-  if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;return;}
+  if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;renderMovesHTML(acc);return;}
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
       const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
@@ -1434,6 +1446,91 @@ function renderHoldsHTML(acc) {
     e.stopPropagation();
     deleteHolding(S.accountId,b.dataset.del);
   }));
+  renderMovesHTML(acc); // le relevé suit toujours l'état des positions
+}
+
+// ── MOUVEMENTS DU COMPTE ──
+// Relevé unifié : ordres sur titres (achat/vente/dividende) + apports/retraits,
+// tous comptes de dates confondus, du plus récent au plus ancien.
+const MOVES_PAGE = 15;
+let _movesAll = false;
+
+function getAccountMoves(acc) {
+  const mv = [];
+  (acc.holdings||[]).forEach(h => {
+    (h.transactions||[]).forEach((tx, idx) => {
+      mv.push({
+        date: tx.date, kind: tx.type, holdId: h.id, txIdx: idx,
+        label: h.name || h.ticker, ticker: h.ticker,
+        detail: `${tx.qty} × ${fmtNative(tx.price, h.currency||'EUR')}`,
+        amount: (+tx.qty||0)*(+tx.price||0), ccy: h.currency||'EUR',
+      });
+    });
+  });
+  (acc.cashflows||[]).forEach(c => {
+    mv.push({
+      date: c.date, kind: c.type, cfId: c.id,
+      label: c.type==='WIT' ? 'Retrait' : 'Apport',
+      detail: c.note || '', amount: +c.amount||0, ccy: acc.currency||S.currency,
+    });
+  });
+  mv.sort((a,b) => b.date.localeCompare(a.date)); // du plus récent au plus ancien
+  if (!S.search) return mv;
+  const q = S.search.toLowerCase();
+  return mv.filter(m => (m.label||'').toLowerCase().includes(q)
+                     || (m.ticker||'').toLowerCase().includes(q)
+                     || (m.detail||'').toLowerCase().includes(q));
+}
+
+const MOVE_STYLE = {
+  BUY:  { dot:'ACH', cls:'buy',  type:'Achat',      sign:'−', val:'t-loss' },
+  SELL: { dot:'VTE', cls:'sell', type:'Vente',      sign:'+', val:'t-gain' },
+  DIV:  { dot:'DIV', cls:'div',  type:'Dividende',  sign:'+', val:'t-gain' },
+  DEP:  { dot:'AP',  cls:'buy',  type:'Apport',     sign:'+', val:'t-gain' },
+  WIT:  { dot:'RE',  cls:'sell', type:'Retrait',    sign:'−', val:'t-loss' },
+};
+
+function renderMovesHTML(acc) {
+  const el=document.getElementById('js-moves'); if(!el) return;
+  const all=getAccountMoves(acc);
+  const cnt=document.getElementById('js-mcnt');
+  if(cnt) cnt.textContent=`${all.length} mouvement${all.length!==1?'s':''}`;
+  if(!all.length){
+    el.innerHTML=`<div style="text-align:center;padding:26px 20px;color:var(--text2);font-size:13px">
+      ${S.search?'Aucun mouvement pour cette recherche':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
+    </div>`;
+    return;
+  }
+  const shown=_movesAll?all:all.slice(0,MOVES_PAGE);
+  el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
+    shown.map(m=>{
+      const st=MOVE_STYLE[m.kind]||MOVE_STYLE.BUY;
+      const nav=m.holdId?`data-mvhold="${esc(m.holdId)}"`:`data-mvcf="1"`;
+      return `<div class="tx-item tap" ${nav} style="cursor:pointer">
+        <div class="tx-dot ${st.cls}">${st.dot}</div>
+        <div class="flex1 col gap4" style="min-width:0">
+          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)}</div>
+          <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtDate(m.date)}${m.detail?' · '+esc(m.detail):''}</div>
+        </div>
+        <div class="col right gap4" style="flex-shrink:0">
+          <div style="font-size:13px;font-weight:800" class="${st.val} t-num">${st.sign}${maskedNative(m.amount,m.ccy)}</div>
+          <div class="t-sm">${st.type}</div>
+        </div>
+      </div>`;
+    }).join('')+
+  `</div>`+
+  (all.length>MOVES_PAGE?`<div class="row" style="justify-content:center;padding:12px 20px 0">
+    <div class="tap" id="js-moves-more" style="padding:6px 16px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2);cursor:pointer">${_movesAll?'Réduire':`Voir les ${all.length} mouvements`}</div>
+  </div>`:'');
+  // Un ordre renvoie vers l'écran du titre, un apport/retrait ouvre la fenêtre de saisie
+  el.querySelectorAll('[data-mvhold]').forEach(r=>r.addEventListener('click',()=>{
+    S.holdingId=r.dataset.mvhold; go('stock');
+  }));
+  el.querySelectorAll('[data-mvcf]').forEach(r=>r.addEventListener('click',()=>openCfModal(acc.id)));
+  el.querySelector('#js-moves-more')?.addEventListener('click',()=>{
+    _movesAll=!_movesAll;
+    renderMovesHTML(acc);
+  });
 }
 
 
@@ -2465,6 +2562,7 @@ function bindEvents(id, el) {
 
     // Cashflows button
     el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
+    el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{

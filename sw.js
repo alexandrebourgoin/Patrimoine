@@ -5,7 +5,7 @@
    - Everything else → network-first with cache fallback
 */
 
-const CACHE = 'patrimoine-v77';
+const CACHE = 'patrimoine-v78';
 const SHELL = [
   './index.html',
   './mon-patrimoine.html',
