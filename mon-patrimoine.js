@@ -31,7 +31,6 @@ const S = {
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
   bgPrivacy: true,    // masque l'écran quand l'appli passe en arrière-plan
-  _reorder: false,    // mode réorganisation des comptes (non persisté)
   priceApiKey: '',    // clé Twelve Data (US stocks)
   fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
   // ── Sécurité (verrouillage d'accès) ──
@@ -64,8 +63,8 @@ const APP_VERSION = '1.10.0';
 const CHANGELOG = {
   '1.10.0': [
     { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
-    { type:'new',     text:"Réorganisation des comptes : le menu ⋮ d'un compte propose « Réorganiser les comptes ». Des flèches apparaissent alors sur chaque carte pour la monter ou la descendre, et ✓ en haut de l'écran termine. L'ordre choisi s'applique aussi au tableau de bord." },
-    { type:'new',     text:"Confidentialité : l'écran est masqué dès que l'application passe en arrière-plan, donc les montants n'apparaissent plus dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan »." },
+    { type:'new',     text:"Réorganisation des comptes : maintenez un compte appuyé, la carte se décolle et suit votre doigt ; relâchez à la bonne place et l'ordre est enregistré. Il s'applique aussi au tableau de bord." },
+    { type:'new',     text:"Confidentialité : l'écran est masqué dès que l'application passe en arrière-plan, pour que les montants n'apparaissent plus dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan »." },
   ],
   '1.9.0': [
     { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
@@ -909,7 +908,6 @@ const NAV_SCREENS=['dashboard','comptes','recherche','analysis'];
 // dir: 'back' | 'forward' | null (null = auto-detect from stack for hierarchical nav)
 function go(target, dir=null) {
   if(target===S.screen) return;
-  if(target!=='comptes') S._reorder=false;   // mode réorganisation = transitoire
   const prevEl=document.getElementById('s-'+S.screen);
   const nextEl=document.getElementById('s-'+target);
 
@@ -1036,9 +1034,7 @@ function renderDash() {
 // ── COMPTES ──
 function renderComptes() {
   const w=totalWealth();
-  const ro=!!S._reorder&&S.accounts.length>1;   // mode réorganisation
-  const last=S.accounts.length-1;
-  const accs=S.accounts.map((a,i)=>{
+  const accs=S.accounts.map(a=>{
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
     const totInv=a.holdings.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
@@ -1048,35 +1044,24 @@ function renderComptes() {
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    // En mode réorganisation, les zones ne sont plus cliquables (pas de navigation)
-    const nav=ro?'':` data-acc="${a.id}"`;
-    const tap=ro?'':' tap';
-    const cur=ro?'':'cursor:pointer';
-    return `<div class="acc-card${ro?' reorder':' anim'}"${nav} style="${a.observer?'opacity:.72':''}">
+    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
-        <div class="acc-icon${tap}"${nav} style="background:${a.iconBg};${cur}">${a.icon}</div>
-        <div class="flex1 col gap4${tap}"${nav} style="min-width:0;${cur}">
+        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
+        <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
           <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
         </div>
-        <div class="col right gap4${tap}"${nav} style="${cur}">
+        <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
           <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
         </div>
-        ${ro?`<div class="col" style="gap:4px;margin-left:4px">
-          <div class="acc-mv-btn tap${i===0?' off':''}" data-mv="up" data-mvacc="${a.id}" title="Monter">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
-          </div>
-          <div class="acc-mv-btn tap${i===last?' off':''}" data-mv="down" data-mvacc="${a.id}" title="Descendre">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.41l6-6L16.59 8 12 12.58 7.41 8 6 9.41z"/></svg>
-          </div>
-        </div>`:`<div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
+        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-        </div>`}
+        </div>
       </div>
-      ${!a.observer?`<div class="acc-bar${tap}"${nav} style="${cur}"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
+      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
   }).join('');
   const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">
@@ -1084,16 +1069,13 @@ function renderComptes() {
     <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
     <div style="font-size:13px">Ajoutez un compte pour commencer</div>
   </div>`:'';
-  const hint=ro?`<div style="text-align:center;font-size:12px;color:var(--text2);padding:2px 4px 2px">Déplacez les comptes avec les flèches</div>`:'';
   return `${renderTopBar(`
     <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
-    ${ro?`<div class="top-btn tap" id="js-acc-reorder" title="Terminer" style="color:var(--accent)">
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-    </div>`:`<div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
+    <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-    </div>`}
+    </div>
   `)}
-  <div class="col gap12 px">${hint}${accs}${empty}</div>`;
+  <div class="col gap12 px" id="js-acc-list">${accs}${empty}</div>`;
 }
 
 // ── RECHERCHE ──
@@ -1611,6 +1593,7 @@ function initPTR(screenEl, onRefresh) {
   },{passive:true});
   screenEl.addEventListener('touchmove',e=>{
     const b=bar(); if(!b||screenEl.scrollTop>2) return;
+    if(_drag?.active) return;   // glissement d'une carte de compte : pas de pull-to-refresh
     const dy=e.touches[0].clientY-y0;
     if(dy>12){pulling=true;dist=dy;b.classList.add('open');b.textContent=dy>60?'↑ Relâchez pour actualiser':'↓ Tirez pour actualiser';}
   },{passive:true});
@@ -2514,19 +2497,8 @@ function bindEvents(id, el) {
     });
   }
   if(id==='comptes') {
-    if(S._reorder&&S.accounts.length>1) {
-      el.querySelectorAll('[data-mvacc]').forEach(b=>b.addEventListener('click',e=>{
-        e.stopPropagation();
-        moveAccount(b.dataset.mvacc, b.dataset.mv==='up'?-1:1);
-      }));
-    } else {
-      _bindAccCards(el);
-    }
-    el.querySelector('#js-acc-reorder')?.addEventListener('click', ()=>{
-      S._reorder=!S._reorder;
-      renderScreen('comptes');
-      if(!S._reorder) toast('Ordre enregistré ✓');
-    });
+    _bindAccCards(el);
+    bindAccDrag(el.querySelector('#js-acc-list'));
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
@@ -2902,6 +2874,7 @@ function bindEvents(id, el) {
     el.querySelector('#js-bgpriv-tog')?.addEventListener('click', () => {
       S.bgPrivacy = !S.bgPrivacy;
       el.querySelector('#js-bgpriv-inner')?.classList.toggle('on', S.bgPrivacy);
+      _bgPrivacySync();
       if (!S.bgPrivacy) _bgShield(false);   // retirer un voile déjà posé
       saveSettings();
       toast('Masquage en arrière-plan ' + (S.bgPrivacy ? 'activé' : 'désactivé'));
@@ -3914,20 +3887,104 @@ function deleteAccount(accId){
 }
 
 // ═══════════════════════════════════════════════
-// RÉORGANISATION DES COMPTES
+// RÉORGANISATION DES COMPTES (appui long + glissement)
 // ═══════════════════════════════════════════════
 // L'ordre de S.accounts est l'ordre d'affichage partout (comptes + dashboard).
-function moveAccount(accId, delta){
-  const i=S.accounts.findIndex(a=>a.id===accId); if(i<0) return;
-  const j=i+delta; if(j<0||j>=S.accounts.length) return;
-  const [acc]=S.accounts.splice(i,1);
-  S.accounts.splice(j,0,acc);
+// Appui maintenu sur une carte → elle se décolle et suit le doigt ; au relâché
+// l'ordre est enregistré. Aucun mode persistant : tout tient dans le geste.
+const DRAG_HOLD=380;    // ms d'appui avant décollage
+const DRAG_SLOP=10;     // px de mouvement qui annulent l'appui long (= l'utilisateur défile)
+const DRAG_GAP=12;      // gap12 entre les cartes
+let _dragSuppressClick=false;   // empêche la navigation au clic qui suit un glissement
+
+let _drag=null;   // {list, card, y0, pid, timer, active, cards, rects, from, to}
+
+function _dragReset(){
+  const st=_drag; if(!st) return;
+  _drag=null;
+  if(st.timer) clearTimeout(st.timer);
+  if(!st.active) return;
+  document.documentElement.classList.remove('dragging-acc');
+  st.cards.forEach(c=>{c.style.transform='';c.classList.remove('drag-lift','drag-shift');});
+  try{ st.card.releasePointerCapture(st.pid); }catch(e){}
+  // Le clic qui suit le relâché ne doit pas ouvrir le compte (il n'arrive pas toujours)
+  _dragSuppressClick=true;
+  setTimeout(()=>{_dragSuppressClick=false;},400);
+}
+
+function _dragActivate(){
+  const st=_drag; if(!st) return;
+  st.cards=[...st.list.querySelectorAll('.acc-card')];
+  st.from=st.cards.indexOf(st.card);
+  if(st.from<0||st.cards.length<2){ _drag=null; return; }
+  st.rects=st.cards.map(c=>c.getBoundingClientRect());
+  st.to=st.from; st.active=true;
+  document.documentElement.classList.add('dragging-acc');
+  st.cards.forEach((c,i)=>{ if(i!==st.from) c.classList.add('drag-shift'); });
+  st.card.classList.add('drag-lift');
+  try{ st.card.setPointerCapture(st.pid); }catch(e){}
+  navigator.vibrate?.(20);
+}
+
+function _dragMove(y){
+  const st=_drag; if(!st?.active) return;
+  const dy=y-st.y0;
+  const h=st.rects[st.from].height, span=h+DRAG_GAP;
+  const cy=st.rects[st.from].top+dy+h/2;
+  let to=st.from;
+  for(let i=0;i<st.from;i++){ if(cy<st.rects[i].top+st.rects[i].height/2){ to=i; break; } }
+  if(to===st.from) for(let i=st.rects.length-1;i>st.from;i--){ if(cy>st.rects[i].top+st.rects[i].height/2){ to=i; break; } }
+  st.to=to;
+  st.cards.forEach((c,i)=>{
+    if(i===st.from){ c.style.transform=`translateY(${dy}px)`; return; }
+    const shift=(i>st.from&&i<=to)?-span:(i<st.from&&i>=to)?span:0;
+    c.style.transform=shift?`translateY(${shift}px)`:'';
+  });
+}
+
+function _dragDrop(){
+  const st=_drag; if(!st) return;
+  const {active,from,to}=st;
+  _dragReset();
+  if(!active||to===from) return;
+  const [acc]=S.accounts.splice(from,1);
+  S.accounts.splice(to,0,acc);
   saveAccounts();
   renderScreen('comptes');
   renderScreen('dashboard');
-  // Garder le compte déplacé sous les yeux
-  document.querySelector(`#s-comptes [data-mvacc="${accId}"]`)
-    ?.closest('.acc-card')?.scrollIntoView({block:'nearest'});
+  navigator.vibrate?.(12);
+}
+
+// Suivi et relâché au niveau du document : le doigt peut sortir de la liste.
+// Attachés une seule fois (renderComptes re-crée la liste à chaque rafraîchissement).
+document.addEventListener('pointermove',e=>{
+  const st=_drag; if(!st) return;
+  if(!st.active){   // bouger avant le décollage = l'utilisateur défile
+    if(Math.abs(e.clientY-st.y0)>DRAG_SLOP) _dragReset();
+    return;
+  }
+  _dragMove(e.clientY);
+});
+document.addEventListener('pointerup',_dragDrop);
+document.addEventListener('pointercancel',_dragReset);
+
+// Par rendu : seuls les écouteurs liés à la liste elle-même
+function bindAccDrag(list){
+  if(!list) return;
+  list.addEventListener('pointerdown',e=>{
+    if(e.button>0) return;                       // clic droit / molette
+    if(e.target.closest('[data-menu]')) return;  // le bouton ⋮ garde son clic
+    const card=e.target.closest('.acc-card'); if(!card) return;
+    _dragReset();
+    _drag={list,card,y0:e.clientY,pid:e.pointerId,active:false};
+    _drag.timer=setTimeout(_dragActivate,DRAG_HOLD);
+  });
+  // Une fois la carte décollée, le doigt ne doit plus faire défiler l'écran
+  list.addEventListener('touchmove',e=>{ if(_drag?.active) e.preventDefault(); },{passive:false});
+  // Neutralise le clic de fin de glissement avant qu'il n'atteigne les cartes
+  list.addEventListener('click',e=>{
+    if(_dragSuppressClick){ e.stopPropagation(); _dragSuppressClick=false; }
+  },true);
 }
 
 // ═══════════════════════════════════════════════
@@ -3965,12 +4022,11 @@ document.getElementById('acc-action-rename').addEventListener('click',()=>{
   closeAccMenu();
   openRenameAcc(id, acc.name);
 });
+// Pas de mode dédié : l'entrée du menu ne fait que rappeler le geste
 document.getElementById('acc-action-order').addEventListener('click',()=>{
   closeAccMenu();
-  if(S.accounts.length<2){toast('Il faut au moins deux comptes');return;}
-  S._reorder=true;
-  renderScreen('comptes');
-  if(S.screen!=='comptes') go('comptes');
+  toast(S.accounts.length<2?'Il faut au moins deux comptes'
+                           :'Maintenez un compte appuyé, puis glissez-le');
 });
 document.getElementById('acc-action-del').addEventListener('click',()=>{
   const id=_menuAccId;
@@ -5360,20 +5416,13 @@ document.addEventListener('visibilitychange', () => {
 // ═══════════════════════════════════════════════
 // VOILE DE CONFIDENTIALITÉ EN ARRIÈRE-PLAN
 // ═══════════════════════════════════════════════
-// Android photographie la fenêtre pour l'aperçu du sélecteur d'applications :
-// on masque l'écran AVANT qu'elle ne passe en arrière-plan, et on le redécouvre
-// au retour. `visibilitychange` couvre le sélecteur d'apps et le verrouillage
-// de l'écran, `blur` couvre le volet de notifications et le multi-fenêtres.
-function _bgShield(on) {
-  if (on && !S.bgPrivacy) return;
-  document.documentElement.classList.toggle('bgshield', !!on);
-}
-document.addEventListener('visibilitychange', () => _bgShield(document.hidden));
-window.addEventListener('pagehide', () => _bgShield(true));
-window.addEventListener('blur',  () => _bgShield(true));
-window.addEventListener('focus', () => _bgShield(false));
+// Les écouteurs et la bascule vivent dans le pré-script du <head> (armés avant le
+// parsing de ce fichier). Ici on ne fait que synchroniser le réglage utilisateur.
+function _bgShield(on) { window.__bgShield?.(on); }
+function _bgPrivacySync() { window.__bgPrivacy = !!S.bgPrivacy; }
 
 const _hasData=loadData();
+_bgPrivacySync();   // le pré-script a lu localStorage ; on repart de l'état chargé
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
 if(!_hasData || S.isDemo) S.accounts=genDemo();
 // Première ouverture : sauvegarder les préférences par défaut

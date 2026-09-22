@@ -24,6 +24,27 @@
   if (dark) document.documentElement.setAttribute('data-theme','dark');
   if (s.lockEnabled && s.lockHash) document.documentElement.classList.add('locked');
 }catch(e){}})();
+
+/* Voile de confidentialité : posé AVANT que la fenêtre ne parte en arrière-plan.
+   Le voile est déjà peint (opacity:0 + will-change) → l'afficher n'est qu'un
+   changement de couche côté compositeur, seule opération qui a une chance d'être
+   reprise dans la miniature du sélecteur d'applications Android. Les écouteurs sont
+   ici (et pas dans mon-patrimoine.js) pour être armés avant le parsing du gros script.
+   ⚠️ 'blur'/'focus' SANS capture : en capture, le window recevrait aussi les blur
+   des champs de saisie et voilerait l'écran à chaque perte de focus d'un input. */
+(function(){
+  var st = {}; try { st = JSON.parse(localStorage.getItem('patrimoine-settings') || '{}') || {}; } catch(e){}
+  window.__bgPrivacy = st.bgPrivacy !== false;   // défaut : activé
+  var h = document.documentElement;
+  window.__bgShield = function(on){
+    if (on && !window.__bgPrivacy) return;
+    h.classList.toggle('bgshield', !!on);
+  };
+  window.addEventListener('blur',    function(){ window.__bgShield(true);  });
+  window.addEventListener('focus',   function(){ window.__bgShield(false); });
+  window.addEventListener('pagehide',function(){ window.__bgShield(true);  });
+  document.addEventListener('visibilitychange', function(){ window.__bgShield(document.hidden); });
+})();
 </script>
 </head>
 <body>
@@ -277,7 +298,7 @@
     </div>
     <div class="col gap4 flex1">
       <div class="acc-action-label">Réorganiser les comptes</div>
-      <div class="acc-action-sublabel">Changer l'ordre d'affichage de la liste</div>
+      <div class="acc-action-sublabel">Maintenez un compte appuyé, puis glissez-le</div>
     </div>
   </div>
   <div class="acc-action-item" id="acc-action-del">

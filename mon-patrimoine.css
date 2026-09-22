@@ -420,16 +420,16 @@ html.locked{overflow:hidden}
 .icon-opt:active{background:var(--card2)}
 .icon-opt.sel{border-color:var(--accent);background:var(--accent-dim)}
 
-/* ═══ RÉORGANISATION DES COMPTES ═══ */
-.acc-mv-btn{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;color:var(--text2);background:var(--card2);border:1px solid var(--border);transition:opacity .15s,background .15s;-webkit-tap-highlight-color:transparent}
-.acc-mv-btn:active{background:var(--accent-dim);color:var(--accent)}
-.acc-mv-btn.off{opacity:.28;pointer-events:none}
-.acc-mv-btn svg{width:16px;height:16px;pointer-events:none}
-.acc-card.reorder{cursor:default}
+/* ═══ RÉORGANISATION DES COMPTES (appui long + glissement) ═══ */
+.acc-card.drag-lift{box-shadow:0 10px 28px rgba(0,0,0,.18);position:relative;z-index:6;opacity:.98;cursor:grabbing}
+.acc-card.drag-shift{transition:transform .17s cubic-bezier(.4,0,.2,1)}
+html.dragging-acc{user-select:none;-webkit-user-select:none}
+/* .anim est en animation-fill-mode:both : son transform final ecraserait le translateY du glissement */
+html.dragging-acc .acc-card{animation:none}
 
 /* ═══ VOILE DE CONFIDENTIALITÉ EN ARRIÈRE-PLAN ═══ */
-#bg-shield{position:fixed;inset:0;z-index:99998;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;user-select:none}
-html.bgshield #bg-shield{display:flex}
+#bg-shield{position:fixed;inset:0;z-index:99998;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;user-select:none;opacity:0;pointer-events:none;will-change:opacity}
+html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .bg-shield-logo svg{width:34px;height:34px}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
