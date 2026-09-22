@@ -59,12 +59,17 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.10.0';
+// Le 3e chiffre EST la version du cache du service worker : 1.10.84 ↔ patrimoine-v84.
+// Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
+// dans Réglages → À propos, qui affiche le cache réellement servi.
+const APP_VERSION = '1.10.84';
+const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
-  '1.10.0': [
+  '1.10.84': [
     { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
     { type:'new',     text:"Réorganisation des comptes : maintenez un compte appuyé, la carte se décolle et suit votre doigt ; relâchez à la bonne place et l'ordre est enregistré. Il s'applique aussi au tableau de bord." },
-    { type:'new',     text:"Confidentialité : l'écran est masqué dès que l'application passe en arrière-plan, pour que les montants n'apparaissent plus dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan »." },
+    { type:'new',     text:"Confidentialité : l'écran se masque quand l'application passe en arrière-plan, pour que les montants n'apparaissent pas dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan ». Selon l'appareil, Android peut photographier la fenêtre avant le masquage : le journal de diagnostic (Réglages → Débogage) indique ce qui s'est réellement passé." },
+    { type:'fix',     text:"Déplacer un compte ne déclenche plus le « tirer pour actualiser » : un geste qui démarre sur une carte n'arme plus le rafraîchissement." },
   ],
   '1.9.0': [
     { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
@@ -1034,6 +1039,7 @@ function renderDash() {
 // ── COMPTES ──
 function renderComptes() {
   const w=totalWealth();
+  const anim=_skipAccAnim?'':' anim';   // remis à faux en fin de fonction
   const accs=S.accounts.map(a=>{
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
@@ -1044,7 +1050,7 @@ function renderComptes() {
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+    return `<div class="acc-card${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
         <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
         <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
@@ -1069,6 +1075,7 @@ function renderComptes() {
     <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
     <div style="font-size:13px">Ajoutez un compte pour commencer</div>
   </div>`:'';
+  _skipAccAnim=false;
   return `${renderTopBar(`
     <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
     <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
@@ -1585,15 +1592,23 @@ function initPTR(screenEl, onRefresh) {
   screenEl._ptrRefresh = onRefresh;
   if (screenEl._ptrBound) return;
   screenEl._ptrBound = true;
-  let y0=0,pulling=false,dist=0;
+  let y0=0,pulling=false,dist=0,armed=false;
   const bar=()=>screenEl.querySelector('#js-ptr'); // re-query : le bar est recréé à chaque render
   screenEl.addEventListener('touchstart',e=>{
-    if(!bar()||e.target.closest('.hold-item')) return;
-    if(screenEl.scrollTop===0){y0=e.touches[0].clientY;pulling=false;dist=0;}
+    // `armed` doit être réévalué à CHAQUE geste : sans lui, un geste ignoré laissait
+    // y0 obsolète et le touchmove suivant pouvait déclencher un tirage fantôme.
+    // .acc-card = surface de glisser-déposer (réordonnancement) : elle n'arme jamais le
+    // pull-to-refresh, sinon amorcer un déplacement déclenche une actualisation.
+    armed=false; pulling=false; dist=0;
+    if(!bar()||e.target.closest('.hold-item')||e.target.closest('.acc-card')) return;
+    if(screenEl.scrollTop===0){y0=e.touches[0].clientY;armed=true;}
   },{passive:true});
   screenEl.addEventListener('touchmove',e=>{
-    const b=bar(); if(!b||screenEl.scrollTop>2) return;
-    if(_drag?.active) return;   // glissement d'une carte de compte : pas de pull-to-refresh
+    const b=bar(); if(!b||!armed||screenEl.scrollTop>2) return;
+    if(_drag?.active){   // une carte vient de décoller : on annule un tirage en cours
+      if(pulling){pulling=false;dist=0;b.classList.remove('open');}
+      return;
+    }
     const dy=e.touches[0].clientY-y0;
     if(dy>12){pulling=true;dist=dy;b.classList.add('open');b.textContent=dy>60?'↑ Relâchez pour actualiser':'↓ Tirez pour actualiser';}
   },{passive:true});
@@ -2158,6 +2173,17 @@ function renderSettings() {
         <div class="tap" id="js-debug-clear" style="font-size:12px;color:var(--text3)">Effacer ↺</div>
       </div>
     </div>` : ''}
+    ${S.debug ? `
+    <div style="padding:12px 16px;border-top:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Arrière-plan — ce que déclenche l'appareil</div>
+      <div id="js-bg-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;font-family:monospace;line-height:1.7;color:var(--text2);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all">${
+        (window.__bgLog||[]).length ? esc((window.__bgLog||[]).join('\n'))
+        : 'Aucun événement. Passez l\'appli en arrière-plan puis revenez ici.'}</div>
+      <div style="display:flex;justify-content:flex-end;gap:14px;margin-top:8px">
+        <div class="tap" id="js-bg-copy" style="font-size:12px;color:var(--accent);font-weight:600">Copier 📋</div>
+        <div class="tap" id="js-bg-clear" style="font-size:12px;color:var(--text3)">Effacer ↺</div>
+      </div>
+    </div>` : ''}
   </div>
 
   <div class="s-section">Assistant IA</div>
@@ -2277,7 +2303,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Septembre 2026 · Suivi de patrimoine</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Mon patrimoine</div><div class="s-sub">Version ${APP_VERSION} — Septembre 2026<span id="js-cache-state"></span></div></div>
     </div>
     <div class="s-item tap" id="js-open-changelog" style="cursor:pointer">
       <div class="s-ico" style="background:rgba(255,200,50,.13)">
@@ -2928,6 +2954,24 @@ function bindEvents(id, el) {
       saveData();
       toast('Mode débogage ' + (S.debug ? 'activé' : 'désactivé'));
       if (S.debug) renderScreen('settings'); // rafraîchit pour afficher le log
+    });
+    // Cache réellement servi : c'est lui qui décide du code exécuté, pas APP_VERSION.
+    // Un écart = le service worker n'a pas encore basculé sur la nouvelle version.
+    const cacheEl = el.querySelector('#js-cache-state');
+    if (cacheEl) caches?.keys?.().then(ks => {
+      const mine = ks.filter(k => k.startsWith('patrimoine-v'));
+      if (!mine.length) { cacheEl.textContent = ' · sans cache hors ligne'; return; }
+      const ok = mine.length === 1 && mine[0] === CACHE_NAME;
+      cacheEl.textContent = ok ? ` · cache ${CACHE_NAME} ✓` : ` · ⚠ cache ${mine.join(' + ')}`;
+      if (!ok) cacheEl.style.color = 'var(--loss)';
+    }).catch(()=>{});
+    el.querySelector('#js-bg-copy')?.addEventListener('click',()=>{
+      _copyText((window.__bgLog||[]).join('\n'));
+    });
+    el.querySelector('#js-bg-clear')?.addEventListener('click',()=>{
+      window.__bgLog=[];
+      try{ localStorage.removeItem('patrimoine-bglog'); }catch(e){}
+      renderScreen('settings');
     });
     el.querySelector('#js-debug-copy')?.addEventListener('click',()=>{
       const txt = S._debugLog.slice().reverse().join('\n');
@@ -3892,10 +3936,11 @@ function deleteAccount(accId){
 // L'ordre de S.accounts est l'ordre d'affichage partout (comptes + dashboard).
 // Appui maintenu sur une carte → elle se décolle et suit le doigt ; au relâché
 // l'ordre est enregistré. Aucun mode persistant : tout tient dans le geste.
-const DRAG_HOLD=380;    // ms d'appui avant décollage
-const DRAG_SLOP=10;     // px de mouvement qui annulent l'appui long (= l'utilisateur défile)
+const DRAG_HOLD=330;    // ms d'appui avant décollage
+const DRAG_SLOP=14;     // px de mouvement qui annulent l'appui long (= l'utilisateur défile)
 const DRAG_GAP=12;      // gap12 entre les cartes
 let _dragSuppressClick=false;   // empêche la navigation au clic qui suit un glissement
+let _skipAccAnim=false;         // saute la cascade d'apparition au rendu qui suit un déplacement
 
 let _drag=null;   // {list, card, y0, pid, timer, active, cards, rects, from, to}
 
@@ -3920,6 +3965,10 @@ function _dragActivate(){
   st.rects=st.cards.map(c=>c.getBoundingClientRect());
   st.to=st.from; st.active=true;
   document.documentElement.classList.add('dragging-acc');
+  // .anim est en animation-fill-mode:both : tant qu'elle est là, son transform final
+  // écrase le translateY du glissement, et la neutraliser par CSS la ferait REJOUER
+  // en cascade à la fin du geste (effet « l'écran se rafraîchit »). On la retire.
+  st.cards.forEach(c=>c.classList.remove('anim'));
   st.cards.forEach((c,i)=>{ if(i!==st.from) c.classList.add('drag-shift'); });
   st.card.classList.add('drag-lift');
   try{ st.card.setPointerCapture(st.pid); }catch(e){}
@@ -3950,25 +3999,34 @@ function _dragDrop(){
   const [acc]=S.accounts.splice(from,1);
   S.accounts.splice(to,0,acc);
   saveAccounts();
+  _skipAccAnim=true;          // pas de cascade d'apparition après un déplacement
   renderScreen('comptes');
   renderScreen('dashboard');
   navigator.vibrate?.(12);
 }
 
-// Suivi et relâché au niveau du document : le doigt peut sortir de la liste.
-// Attachés une seule fois (renderComptes re-crée la liste à chaque rafraîchissement).
-document.addEventListener('pointermove',e=>{
+// Un seul point d'entrée pour la position, quel que soit le type d'événement
+function _dragPoint(y){
   const st=_drag; if(!st) return;
   if(!st.active){   // bouger avant le décollage = l'utilisateur défile
-    if(Math.abs(e.clientY-st.y0)>DRAG_SLOP) _dragReset();
+    if(Math.abs(y-st.y0)>DRAG_SLOP) _dragReset();
     return;
   }
-  _dragMove(e.clientY);
-});
-document.addEventListener('pointerup',_dragDrop);
-document.addEventListener('pointercancel',_dragReset);
+  _dragMove(y);
+}
 
-// Par rendu : seuls les écouteurs liés à la liste elle-même
+// Souris (bureau) : le pointeur peut sortir de la liste → écouteurs sur document,
+// attachés une seule fois (renderComptes re-crée la liste à chaque rafraîchissement).
+document.addEventListener('pointermove',e=>{ if(e.pointerType!=='touch') _dragPoint(e.clientY); });
+document.addEventListener('pointerup',_dragDrop);
+// ⚠️ pointercancel : Android l'envoie dès qu'il décide que le geste est un défilement
+// (html,body sont en touch-action:pan-y). Il ne doit PAS tuer un glissement déjà en
+// cours — les touchmove ci-dessous continuent de le piloter.
+document.addEventListener('pointercancel',()=>{ if(!_drag?.active) _dragReset(); });
+
+// Par rendu : les écouteurs liés à la liste elle-même.
+// Les événements tactiles restent adressés à la cible du touchstart pendant tout le
+// geste : les attacher à la liste suffit même si le doigt en sort.
 function bindAccDrag(list){
   if(!list) return;
   list.addEventListener('pointerdown',e=>{
@@ -3979,8 +4037,15 @@ function bindAccDrag(list){
     _drag={list,card,y0:e.clientY,pid:e.pointerId,active:false};
     _drag.timer=setTimeout(_dragActivate,DRAG_HOLD);
   });
-  // Une fois la carte décollée, le doigt ne doit plus faire défiler l'écran
-  list.addEventListener('touchmove',e=>{ if(_drag?.active) e.preventDefault(); },{passive:false});
+  list.addEventListener('touchmove',e=>{
+    const t=e.touches[0]; if(!t||!_drag) return;
+    // Non passif : tant que le défilement n'a pas démarré (l'appui long impose
+    // 330 ms d'immobilité), preventDefault empêche Chrome de s'emparer du geste.
+    if(_drag.active&&e.cancelable) e.preventDefault();
+    _dragPoint(t.clientY);
+  },{passive:false});
+  list.addEventListener('touchend',_dragDrop);
+  list.addEventListener('touchcancel',_dragDrop);
   // Neutralise le clic de fin de glissement avant qu'il n'atteigne les cartes
   list.addEventListener('click',e=>{
     if(_dragSuppressClick){ e.stopPropagation(); _dragSuppressClick=false; }
@@ -5419,6 +5484,20 @@ document.addEventListener('visibilitychange', () => {
 // Les écouteurs et la bascule vivent dans le pré-script du <head> (armés avant le
 // parsing de ce fichier). Ici on ne fait que synchroniser le réglage utilisateur.
 function _bgShield(on) { window.__bgShield?.(on); }
+
+// Copie presse-papiers avec repli (clipboard API absente hors contexte sécurisé)
+function _copyText(txt) {
+  navigator.clipboard?.writeText(txt).then(()=>toast('Copié ✓')).catch(()=>_copyFallback(txt))
+    ?? _copyFallback(txt);
+}
+function _copyFallback(txt) {
+  const ta=document.createElement('textarea');
+  ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  toast('Copié ✓');
+}
 function _bgPrivacySync() { window.__bgPrivacy = !!S.bgPrivacy; }
 
 const _hasData=loadData();
@@ -5464,9 +5543,15 @@ if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'l
 // Popup changelog si nouvelle version
 try {
   if (localStorage.getItem(STORE_VERSION) !== APP_VERSION) {
-    const _showCl = () => openChangelogModal(true);
-    if (isLocked()) _lockPending = _showCl;   // différé jusqu'au déverrouillage
-    else setTimeout(_showCl, 600);
+    // La version suit le cache : un simple bump technique n'a pas forcément de notes.
+    // Sans entrée, on enregistre la version sans afficher une fenêtre vide.
+    if (!(CHANGELOG[APP_VERSION] || []).length) {
+      localStorage.setItem(STORE_VERSION, APP_VERSION);
+    } else {
+      const _showCl = () => openChangelogModal(true);
+      if (isLocked()) _lockPending = _showCl;   // différé jusqu'au déverrouillage
+      else setTimeout(_showCl, 600);
+    }
   }
 } catch(e) {}
 

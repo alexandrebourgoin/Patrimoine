@@ -36,14 +36,30 @@
   var st = {}; try { st = JSON.parse(localStorage.getItem('patrimoine-settings') || '{}') || {}; } catch(e){}
   window.__bgPrivacy = st.bgPrivacy !== false;   // défaut : activé
   var h = document.documentElement;
+  /* Journal de diagnostic : on ne peut pas savoir depuis le PC ce que le téléphone
+     déclenche réellement (blur ? visibilitychange ? rien ?). Ces lignes sont lisibles
+     dans Réglages → Débogage, section « Arrière-plan ». */
+  window.__bgLog = [];
+  function log(ev){
+    var d = new Date();
+    window.__bgLog.push(('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'
+      +('0'+d.getSeconds()).slice(-2)+'.'+('00'+d.getMilliseconds()).slice(-3)
+      +'  '+ev+'  hidden='+document.hidden+'  voile='+h.classList.contains('bgshield'));
+    if (window.__bgLog.length > 24) window.__bgLog.shift();
+    try { localStorage.setItem('patrimoine-bglog', JSON.stringify(window.__bgLog)); } catch(e){}
+  }
   window.__bgShield = function(on){
     if (on && !window.__bgPrivacy) return;
     h.classList.toggle('bgshield', !!on);
   };
-  window.addEventListener('blur',    function(){ window.__bgShield(true);  });
-  window.addEventListener('focus',   function(){ window.__bgShield(false); });
-  window.addEventListener('pagehide',function(){ window.__bgShield(true);  });
-  document.addEventListener('visibilitychange', function(){ window.__bgShield(document.hidden); });
+  function on(ev, val){ return function(){ window.__bgShield(val); log(ev); }; }
+  window.addEventListener('blur',    on('blur',    true));
+  window.addEventListener('focus',   on('focus',   false));
+  window.addEventListener('pagehide',on('pagehide',true));
+  document.addEventListener('visibilitychange', function(){
+    window.__bgShield(document.hidden); log('visibilitychange');
+  });
+  try { window.__bgLog = JSON.parse(localStorage.getItem('patrimoine-bglog') || '[]') || []; } catch(e){}
 })();
 </script>
 </head>
