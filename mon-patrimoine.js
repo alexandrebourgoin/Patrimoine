@@ -61,6 +61,7 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 const APP_VERSION = '1.9.0';
 const CHANGELOG = {
   '1.9.0': [
+    { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
     { type:'fix',     text:'Apports et retraits pris en compte dans le solde : un compte vaut désormais ses titres PLUS ses liquidités non investies (apports − retraits − achats + ventes + dividendes). Le détail « titres / liquidités » s\'affiche sur l\'écran du compte.' },
     { type:'new',     text:"Relevé des mouvements sur l'écran d'un compte : achats, ventes, dividendes et apports/retraits réunis par ordre chronologique, sous le portefeuille. On ne voyait jusqu'ici que les positions." },
     { type:'new',     text:'Liste des apports/retraits enregistrés, avec suppression, directement dans la fenêtre « Apports / Retraits ».' },
@@ -2188,6 +2189,17 @@ function renderSettings() {
       </div>
       <div style="color:var(--text3);font-size:18px">›</div>
     </div>
+    ${_bioOk && S.lockBio && S.lockBioId ? `
+    <div class="s-item tap" id="js-lock-reset">
+      <div class="s-ico" style="background:var(--loss-dim)">
+        <svg viewBox="0 0 24 24" fill="var(--loss)"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Réinitialiser le code</div>
+        <div class="s-sub">Tire un nouveau code au hasard après vérification biométrique</div>
+      </div>
+      <div style="color:var(--text3);font-size:18px">›</div>
+    </div>` : ''}
     ${_bioOk ? `
     <div class="s-item tap" id="js-lock-bio">
       <div class="s-ico" style="background:rgba(167,139,250,.12)">
@@ -2215,7 +2227,7 @@ function renderSettings() {
     </div>` : ''}
   </div>
   <div style="margin:8px 20px 0;font-size:11px;color:var(--text3);line-height:1.5">
-    Le verrou bloque l'accès à l'application. Il ne chiffre pas les données stockées sur l'appareil.
+    Le verrou bloque l'accès à l'application. Il ne chiffre pas les données stockées sur l'appareil.${_bioOk && S.lockBio && S.lockBioId ? ` En cas d'oubli, la réinitialisation tire un code au hasard et ne l'affiche qu'une fois : elle exige l'application déverrouillée et votre biométrie.` : ''}
   </div>
 
   <div class="s-section">Préférences</div>
@@ -2847,6 +2859,7 @@ function bindEvents(id, el) {
       if (S.lockEnabled) lockDisable(done); else lockEnable(done);
     });
     el.querySelector('#js-lock-change')?.addEventListener('click', () => lockChange(() => renderScreen('settings')));
+    el.querySelector('#js-lock-reset')?.addEventListener('click', () => lockResetCode(() => renderScreen('settings')));
     el.querySelector('#js-lock-bio')?.addEventListener('click', async () => {
       if (S.lockBio) {
         S.lockBio = false; S.lockBioId = ''; saveSettings();
@@ -5125,6 +5138,68 @@ function lockDisable(done) {
   }, 'off');
 }
 
+// ── Secours « code oublié » ────────────────────────────────────────────────
+// Tire un code ALÉATOIRE, l'affiche une seule fois, n'en garde que le hash.
+// Deux conditions cumulées : l'appli doit être DÉVERROUILLÉE (l'écran Réglages
+// n'est atteignable qu'après authentification) ET la biométrie doit répondre.
+// Lève aussi la pénalité anti-force brute, sinon le nouveau code resterait
+// inutilisable pendant le blocage.
+
+// Chiffres uniformes : on rejette les octets ≥ 250 pour éviter le biais du modulo.
+function _randomPin(len = LOCK_LEN) {
+  let out = '';
+  while (out.length < len) {
+    const b = new Uint8Array(32); crypto.getRandomValues(b);
+    for (const v of b) { if (v < 250) { out += String(v % 10); if (out.length === len) break; } }
+  }
+  return out;
+}
+
+// Le code n'existe que dans le DOM de cette feuille ; elle l'efface en se fermant.
+function showNewCode(pin) {
+  document.getElementById('newcode-digits').textContent = pin;
+  document.getElementById('newcode-bg').classList.add('show');
+  document.getElementById('newcode-sheet').classList.add('show');
+}
+function closeNewCode() {
+  document.getElementById('newcode-digits').textContent = '';
+  document.getElementById('newcode-bg').classList.remove('show');
+  document.getElementById('newcode-sheet').classList.remove('show');
+}
+// Pas de fermeture au clic sur le fond : le code disparaîtrait sur un tap distrait
+document.getElementById('newcode-done').addEventListener('click', closeNewCode);
+document.getElementById('newcode-change').addEventListener('click', () => {
+  closeNewCode();
+  // Directement à la saisie d'un nouveau code : la biométrie vient d'être vérifiée, et
+  // redemander le code actuel serait impossible puisqu'on vient d'effacer son affichage.
+  _lockOpen('create', ok => { if (ok) toast('Code modifié ✓'); renderScreen('settings'); });
+});
+
+async function lockResetCode(done) {
+  if (!lockArmed() || isLocked()) return;
+  if (!(_bioOk && S.lockBio && S.lockBioId)) { toast('Activez la biométrie pour pouvoir réinitialiser'); return; }
+  openConfirm('Tirer un nouveau code au hasard ? Votre empreinte ou votre visage sera demandé, puis le code s\'affichera une seule fois.', async () => {
+    try {
+      if (!(await bioVerify())) { toast('Biométrie non reconnue'); return; }
+    } catch (e) {
+      // Abandon volontaire de la fenêtre système → silence, comme au déverrouillage
+      if (!e || (e.name !== 'NotAllowedError' && e.name !== 'AbortError')) toast('Biométrie indisponible');
+      return;
+    }
+    let pin = _randomPin();
+    try {
+      const salt = _randHex(16);
+      S.lockSalt  = salt;
+      S.lockHash  = await _pinHash(pin, salt);
+      S.lockFails = 0; S.lockUntil = 0;
+      saveSettings();
+      showNewCode(pin);
+      done && done();
+    } catch (e) { toast('Erreur de sécurité'); }
+    finally { pin = null; }
+  });
+}
+
 // ── Événements de l'overlay (attachés une seule fois) ──
 document.getElementById('lock-pad').addEventListener('click', e => {
   const key = e.target.closest('.lock-key'); if (!key) return;
@@ -5231,12 +5306,12 @@ try {
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
                      'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet',
-                     'changelog-modal-sheet']
+                     'changelog-modal-sheet','newcode-sheet']
                     .some(id => document.getElementById(id)?.classList.contains('show'));
     if (anyOpen) {
       closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
       closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
-      closeChangelogModal();
+      closeChangelogModal(); closeNewCode();
       return;
     }
 
@@ -5270,12 +5345,12 @@ document.addEventListener('keydown', e => {
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
                      'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet',
-                     'changelog-modal-sheet']
+                     'changelog-modal-sheet','newcode-sheet']
                     .some(id => document.getElementById(id)?.classList.contains('show'));
     if (anyOpen) {
       closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
       closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
-      closeChangelogModal();
+      closeChangelogModal(); closeNewCode();
     } else if (S.stack.length > 1) {
       back();
     }
