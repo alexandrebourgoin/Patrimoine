@@ -31,6 +31,7 @@ const S = {
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
   bgPrivacy: true,    // masque l'écran quand l'appli passe en arrière-plan
+  bgIdle: 0,          // s d'inactivité avant masquage (0 = jamais)
   priceApiKey: '',    // clé Twelve Data (US stocks)
   fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
   // ── Sécurité (verrouillage d'accès) ──
@@ -59,17 +60,19 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-// Le 3e chiffre EST la version du cache du service worker : 1.10.84 ↔ patrimoine-v84.
+// Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.10.84';
+const APP_VERSION = '1.10.85';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
-  '1.10.84': [
+  '1.10.85': [
     { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
     { type:'new',     text:"Réorganisation des comptes : maintenez un compte appuyé, la carte se décolle et suit votre doigt ; relâchez à la bonne place et l'ordre est enregistré. Il s'applique aussi au tableau de bord." },
     { type:'new',     text:"Confidentialité : l'écran se masque quand l'application passe en arrière-plan, pour que les montants n'apparaissent pas dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan ». Selon l'appareil, Android peut photographier la fenêtre avant le masquage : le journal de diagnostic (Réglages → Débogage) indique ce qui s'est réellement passé." },
     { type:'fix',     text:"Déplacer un compte ne déclenche plus le « tirer pour actualiser » : un geste qui démarre sur une carte n'arme plus le rafraîchissement." },
+    { type:'new',     text:"Masquer après inactivité (Réglages → Sécurité) : au bout du délai choisi, l'écran se voile de lui-même pendant que l'application est encore ouverte — un toucher le retire. C'est le seul masquage qu'Android ne peut pas prendre de vitesse, l'aperçu du sélecteur d'applications montrant alors le voile et non les montants." },
+    { type:'improve', text:"Le numéro de version reprend celui du cache de l'application (1.10.85 = cache v85) et Réglages → À propos indique le cache réellement utilisé : on voit d'un coup d'œil si une ancienne version est encore servie." },
   ],
   '1.9.0': [
     { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
@@ -2268,6 +2271,21 @@ function renderSettings() {
       </div>
       <div class="toggle ${S.bgPrivacy ? 'on' : ''}" id="js-bgpriv-inner"><div class="toggle-thumb"></div></div>
     </div>
+    <div class="s-item">
+      <div class="s-ico" style="background:rgba(245,158,11,.12)">
+        <svg viewBox="0 0 24 24" fill="#F59E0B"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Masquer après inactivité</div>
+        <div class="s-sub">Voile posé pendant l'utilisation — un toucher le retire</div>
+      </div>
+      <div class="cur-opts">
+        <div class="cur-opt tap ${!S.bgIdle ? 'on' : ''}" data-bgidle="0">Jamais</div>
+        <div class="cur-opt tap ${S.bgIdle === 15 ? 'on' : ''}" data-bgidle="15">15 s</div>
+        <div class="cur-opt tap ${S.bgIdle === 30 ? 'on' : ''}" data-bgidle="30">30 s</div>
+        <div class="cur-opt tap ${S.bgIdle === 60 ? 'on' : ''}" data-bgidle="60">1 min</div>
+      </div>
+    </div>
   </div>
   <div style="margin:8px 20px 0;font-size:11px;color:var(--text3);line-height:1.5">
     Le verrou bloque l'accès à l'application. Il ne chiffre pas les données stockées sur l'appareil.${_bioOk && S.lockBio && S.lockBioId ? ` En cas d'oubli, la réinitialisation tire un code au hasard et ne l'affiche qu'une fois : elle exige l'application déverrouillée et votre biométrie.` : ''}
@@ -2905,6 +2923,14 @@ function bindEvents(id, el) {
       saveSettings();
       toast('Masquage en arrière-plan ' + (S.bgPrivacy ? 'activé' : 'désactivé'));
     });
+    el.querySelectorAll('[data-bgidle]').forEach(o => o.addEventListener('click', () => {
+      S.bgIdle = +o.dataset.bgidle;
+      el.querySelectorAll('[data-bgidle]').forEach(x => x.classList.toggle('on', x === o));
+      _idleReset();
+      saveSettings();
+      toast(S.bgIdle ? `Masquage après ${S.bgIdle < 60 ? S.bgIdle + ' s' : '1 min'} sans activité`
+                     : 'Masquage par inactivité désactivé');
+    }));
     el.querySelector('#js-lock-tog')?.addEventListener('click', () => {
       if (!cryptoOk()) { toast('Le verrouillage nécessite une connexion HTTPS'); return; }
       const done = () => renderScreen('settings');
@@ -4351,6 +4377,7 @@ function saveSettings() {
       autoRefresh: S.autoRefresh,
       assistantEnabled: S.assistantEnabled,
       bgPrivacy:   S.bgPrivacy,
+      bgIdle:      S.bgIdle,
       priceApiKey: S.priceApiKey,
       lockEnabled: S.lockEnabled,
       lockHash:    S.lockHash,
@@ -4426,6 +4453,7 @@ function loadData() {
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
       if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
       if (s.bgPrivacy !== undefined) S.bgPrivacy = s.bgPrivacy;
+      if (s.bgIdle !== undefined)    S.bgIdle    = s.bgIdle;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
       if (s.lockEnabled !== undefined) S.lockEnabled = s.lockEnabled;
       if (s.lockHash)                  S.lockHash    = s.lockHash;
@@ -5485,6 +5513,34 @@ document.addEventListener('visibilitychange', () => {
 // parsing de ce fichier). Ici on ne fait que synchroniser le réglage utilisateur.
 function _bgShield(on) { window.__bgShield?.(on); }
 
+// Le panneau de diagnostic n'était peint qu'au rendu de l'écran Réglages : les lignes
+// enregistrées pendant l'absence n'apparaissaient jamais (« rien ne s'ajoute »).
+function _bgLogPaint() {
+  const el = document.getElementById('js-bg-log'); if (!el) return;
+  const l = window.__bgLog || [];
+  el.textContent = l.length ? l.join('\n') : "Aucun événement. Passez l'appli en arrière-plan puis revenez ici.";
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(_bgLogPaint, 0); });
+window.addEventListener('focus', () => setTimeout(_bgLogPaint, 0));
+
+// ── Masquage après inactivité ──────────────────────────────────────────────
+// Seul levier réellement fiable : poser le voile PENDANT que l'appli est encore au
+// premier plan. Le journal montre que le voile est bien posé sur `blur`, 170 ms avant
+// `hidden` et page encore visible — et que la miniature Android montre quand même les
+// montants : le système photographie la fenêtre avant. Un masquage déclenché au départ
+// arrivera donc toujours trop tard sur cet appareil.
+let _idleTimer = null;
+function _shieldNow(on) { document.documentElement.classList.toggle('bgshield', !!on); }
+function _idleReset() {
+  clearTimeout(_idleTimer); _idleTimer = null;
+  if (!document.hidden && document.documentElement.classList.contains('bgshield')) _shieldNow(false);
+  const s = +S.bgIdle || 0;
+  if (s > 0 && !document.hidden) _idleTimer = setTimeout(() => _shieldNow(true), s * 1000);
+}
+['pointerdown','keydown','touchstart','wheel','scroll'].forEach(ev =>
+  document.addEventListener(ev, _idleReset, { passive: true, capture: true }));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _idleReset(); });
+
 // Copie presse-papiers avec repli (clipboard API absente hors contexte sécurisé)
 function _copyText(txt) {
   navigator.clipboard?.writeText(txt).then(()=>toast('Copié ✓')).catch(()=>_copyFallback(txt))
@@ -5502,6 +5558,7 @@ function _bgPrivacySync() { window.__bgPrivacy = !!S.bgPrivacy; }
 
 const _hasData=loadData();
 _bgPrivacySync();   // le pré-script a lu localStorage ; on repart de l'état chargé
+_idleReset();       // arme le masquage par inactivité (no-op si S.bgIdle=0)
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
 if(!_hasData || S.isDemo) S.accounts=genDemo();
 // Première ouverture : sauvegarder les préférences par défaut
