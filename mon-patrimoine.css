@@ -407,3 +407,29 @@ html.locked{overflow:hidden}
 .lock-key.off,.lock-cancel.off{visibility:hidden;pointer-events:none}
 .lock-pad.busy{opacity:.4;pointer-events:none}
 .lock-cancel{margin-top:18px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer}
+
+/* ═══ SÉLECTEUR D'ICÔNE DE COMPTE ═══ */
+.icon-pick{display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;padding:7px 8px;min-height:44px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:border-color .15s,background .15s}
+.icon-pick:active{border-color:var(--accent);background:var(--card2)}
+.icon-picker-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:340;opacity:0;pointer-events:none;transition:opacity .25s}
+.icon-picker-bg.show{opacity:1;pointer-events:auto}
+.icon-picker-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;padding-bottom:max(8px,env(safe-area-inset-bottom));z-index:341;transition:transform .32s cubic-bezier(.4,0,.2,1)}
+.icon-picker-sheet.show{transform:translateX(-50%) translateY(0)}
+.icon-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;max-height:44vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.icon-opt{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:22px;border-radius:10px;background:var(--card);border:1.5px solid transparent;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:border-color .12s,background .12s}
+.icon-opt:active{background:var(--card2)}
+.icon-opt.sel{border-color:var(--accent);background:var(--accent-dim)}
+
+/* ═══ RÉORGANISATION DES COMPTES ═══ */
+.acc-mv-btn{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;color:var(--text2);background:var(--card2);border:1px solid var(--border);transition:opacity .15s,background .15s;-webkit-tap-highlight-color:transparent}
+.acc-mv-btn:active{background:var(--accent-dim);color:var(--accent)}
+.acc-mv-btn.off{opacity:.28;pointer-events:none}
+.acc-mv-btn svg{width:16px;height:16px;pointer-events:none}
+.acc-card.reorder{cursor:default}
+
+/* ═══ VOILE DE CONFIDENTIALITÉ EN ARRIÈRE-PLAN ═══ */
+#bg-shield{position:fixed;inset:0;z-index:99998;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;user-select:none}
+html.bgshield #bg-shield{display:flex}
+.bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.bg-shield-logo svg{width:34px;height:34px}
+.bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}

@@ -30,6 +30,8 @@ const S = {
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
+  bgPrivacy: true,    // masque l'écran quand l'appli passe en arrière-plan
+  _reorder: false,    // mode réorganisation des comptes (non persisté)
   priceApiKey: '',    // clé Twelve Data (US stocks)
   fmpApiKey:   '',    // clé Financial Modeling Prep (actions EU + US)
   // ── Sécurité (verrouillage d'accès) ──
@@ -58,8 +60,13 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 const CHANGELOG = {
+  '1.10.0': [
+    { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
+    { type:'new',     text:"Réorganisation des comptes : le menu ⋮ d'un compte propose « Réorganiser les comptes ». Des flèches apparaissent alors sur chaque carte pour la monter ou la descendre, et ✓ en haut de l'écran termine. L'ordre choisi s'applique aussi au tableau de bord." },
+    { type:'new',     text:"Confidentialité : l'écran est masqué dès que l'application passe en arrière-plan, donc les montants n'apparaissent plus dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan »." },
+  ],
   '1.9.0': [
     { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
     { type:'fix',     text:'Apports et retraits pris en compte dans le solde : un compte vaut désormais ses titres PLUS ses liquidités non investies (apports − retraits − achats + ventes + dividendes). Le détail « titres / liquidités » s\'affiche sur l\'écran du compte.' },
@@ -902,6 +909,7 @@ const NAV_SCREENS=['dashboard','comptes','recherche','analysis'];
 // dir: 'back' | 'forward' | null (null = auto-detect from stack for hierarchical nav)
 function go(target, dir=null) {
   if(target===S.screen) return;
+  if(target!=='comptes') S._reorder=false;   // mode réorganisation = transitoire
   const prevEl=document.getElementById('s-'+S.screen);
   const nextEl=document.getElementById('s-'+target);
 
@@ -1028,7 +1036,9 @@ function renderDash() {
 // ── COMPTES ──
 function renderComptes() {
   const w=totalWealth();
-  const accs=S.accounts.map(a=>{
+  const ro=!!S._reorder&&S.accounts.length>1;   // mode réorganisation
+  const last=S.accounts.length-1;
+  const accs=S.accounts.map((a,i)=>{
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
     const totInv=a.holdings.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
@@ -1038,24 +1048,35 @@ function renderComptes() {
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    return `<div class="acc-card anim" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+    // En mode réorganisation, les zones ne sont plus cliquables (pas de navigation)
+    const nav=ro?'':` data-acc="${a.id}"`;
+    const tap=ro?'':' tap';
+    const cur=ro?'':'cursor:pointer';
+    return `<div class="acc-card${ro?' reorder':' anim'}"${nav} style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
-        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
-        <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
+        <div class="acc-icon${tap}"${nav} style="background:${a.iconBg};${cur}">${a.icon}</div>
+        <div class="flex1 col gap4${tap}"${nav} style="min-width:0;${cur}">
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
           <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
         </div>
-        <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
+        <div class="col right gap4${tap}"${nav} style="${cur}">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
           <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
         </div>
-        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
+        ${ro?`<div class="col" style="gap:4px;margin-left:4px">
+          <div class="acc-mv-btn tap${i===0?' off':''}" data-mv="up" data-mvacc="${a.id}" title="Monter">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
+          </div>
+          <div class="acc-mv-btn tap${i===last?' off':''}" data-mv="down" data-mvacc="${a.id}" title="Descendre">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 15.41l6-6L16.59 8 12 12.58 7.41 8 6 9.41z"/></svg>
+          </div>
+        </div>`:`<div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-        </div>
+        </div>`}
       </div>
-      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
+      ${!a.observer?`<div class="acc-bar${tap}"${nav} style="${cur}"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
   }).join('');
   const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">
@@ -1063,13 +1084,16 @@ function renderComptes() {
     <div style="font-size:15px;font-weight:600;margin-bottom:6px">Aucun compte</div>
     <div style="font-size:13px">Ajoutez un compte pour commencer</div>
   </div>`:'';
+  const hint=ro?`<div style="text-align:center;font-size:12px;color:var(--text2);padding:2px 4px 2px">Déplacez les comptes avec les flèches</div>`:'';
   return `${renderTopBar(`
     <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
-    <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
+    ${ro?`<div class="top-btn tap" id="js-acc-reorder" title="Terminer" style="color:var(--accent)">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+    </div>`:`<div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-    </div>
+    </div>`}
   `)}
-  <div class="col gap12 px">${accs}${empty}</div>`;
+  <div class="col gap12 px">${hint}${accs}${empty}</div>`;
 }
 
 // ── RECHERCHE ──
@@ -2225,6 +2249,16 @@ function renderSettings() {
         <div class="cur-opt tap ${S.lockDelay === 300 ? 'on' : ''}" data-lockdelay="300">5 min</div>
       </div>
     </div>` : ''}
+    <div class="s-item tap" id="js-bgpriv-tog">
+      <div class="s-ico" style="background:rgba(167,139,250,.12)">
+        <svg viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 6.5c2.76 0 5 2.24 5 5 0 .51-.1 1-.24 1.46l2.06 2.06c1.12-.92 2.01-2.11 2.54-3.52C20.27 7.61 16.47 5 12 5c-1.09 0-2.14.16-3.13.46l1.72 1.72c.46-.11.93-.18 1.41-.18zM2.71 3.16a.996.996 0 0 0 0 1.41l1.97 1.97A11.9 11.9 0 0 0 1 11.5C2.73 15.89 7 19 12 19c1.52 0 2.97-.3 4.31-.82l2.72 2.72a.996.996 0 1 0 1.41-1.41L4.13 3.16a.996.996 0 0 0-1.42 0zM12 16.5c-2.76 0-5-2.24-5-5 0-.77.18-1.5.49-2.14l1.57 1.57c-.03.18-.06.37-.06.57 0 1.66 1.34 3 3 3 .2 0 .38-.03.57-.07L14.14 16c-.65.32-1.37.5-2.14.5z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Masquer en arrière-plan</div>
+        <div class="s-sub">Cache les montants dans l'aperçu du sélecteur d'applications</div>
+      </div>
+      <div class="toggle ${S.bgPrivacy ? 'on' : ''}" id="js-bgpriv-inner"><div class="toggle-thumb"></div></div>
+    </div>
   </div>
   <div style="margin:8px 20px 0;font-size:11px;color:var(--text3);line-height:1.5">
     Le verrou bloque l'accès à l'application. Il ne chiffre pas les données stockées sur l'appareil.${_bioOk && S.lockBio && S.lockBioId ? ` En cas d'oubli, la réinitialisation tire un code au hasard et ne l'affiche qu'une fois : elle exige l'application déverrouillée et votre biométrie.` : ''}
@@ -2480,7 +2514,19 @@ function bindEvents(id, el) {
     });
   }
   if(id==='comptes') {
-    _bindAccCards(el);
+    if(S._reorder&&S.accounts.length>1) {
+      el.querySelectorAll('[data-mvacc]').forEach(b=>b.addEventListener('click',e=>{
+        e.stopPropagation();
+        moveAccount(b.dataset.mvacc, b.dataset.mv==='up'?-1:1);
+      }));
+    } else {
+      _bindAccCards(el);
+    }
+    el.querySelector('#js-acc-reorder')?.addEventListener('click', ()=>{
+      S._reorder=!S._reorder;
+      renderScreen('comptes');
+      if(!S._reorder) toast('Ordre enregistré ✓');
+    });
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
@@ -2852,6 +2898,13 @@ function bindEvents(id, el) {
       // Re-render des écrans à top-bar pour afficher/masquer le bouton immédiatement
       ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
       toast('Assistant IA ' + (S.assistantEnabled ? 'activé' : 'masqué'));
+    });
+    el.querySelector('#js-bgpriv-tog')?.addEventListener('click', () => {
+      S.bgPrivacy = !S.bgPrivacy;
+      el.querySelector('#js-bgpriv-inner')?.classList.toggle('on', S.bgPrivacy);
+      if (!S.bgPrivacy) _bgShield(false);   // retirer un voile déjà posé
+      saveSettings();
+      toast('Masquage en arrière-plan ' + (S.bgPrivacy ? 'activé' : 'désactivé'));
     });
     el.querySelector('#js-lock-tog')?.addEventListener('click', () => {
       if (!cryptoOk()) { toast('Le verrouillage nécessite une connexion HTTPS'); return; }
@@ -3490,12 +3543,65 @@ function readAccType(selId, otherInpId, fallback){
 }
 
 // ═══════════════════════════════════════════════
+// SÉLECTEUR D'ICÔNE DE COMPTE
+// ═══════════════════════════════════════════════
+const ICON_CHOICES=['🏦','💼','📊','📈','💰','💵','💶','💷',
+                    '🪙','₿','💳','🧾','🏧','🐷','🎯','🛡️',
+                    '🏠','🏡','🚗','✈️','🎓','👶','👨‍👩‍👧','❤️',
+                    '🌱','🌍','🇫🇷','🇺🇸','🇪🇺','🌏','🔒','🔑',
+                    '⭐','🚀','⚡','🎁','📦','🪴','🧊','🏆',
+                    '🔴','🟠','🟢','🔵','🟣','⚫','⚪','🟤'];
+let _iconTarget=null; // {inputId, btnId}
+
+// L'input caché garde la valeur (lue par les formulaires), le bouton l'affiche
+function setAccIcon(inputId,btnId,val){
+  const v=(val||'').trim()||'📊';
+  const inp=document.getElementById(inputId); if(inp) inp.value=v;
+  const btn=document.getElementById(btnId);   if(btn) btn.textContent=v;
+}
+function iconPickerOpen(){ return document.getElementById('icon-picker-sheet')?.classList.contains('show'); }
+function openIconPicker(inputId,btnId){
+  _iconTarget={inputId,btnId};
+  const cur=document.getElementById(inputId)?.value||'📊';
+  document.getElementById('icon-picker-grid').innerHTML=
+    ICON_CHOICES.map(e=>`<div class="icon-opt tap${e===cur?' sel':''}" data-ico="${e}">${e}</div>`).join('');
+  const free=document.getElementById('icon-picker-free'); if(free) free.value='';
+  document.getElementById('icon-picker-bg').classList.add('show');
+  document.getElementById('icon-picker-sheet').classList.add('show');
+}
+function closeIconPicker(){
+  document.getElementById('icon-picker-bg').classList.remove('show');
+  document.getElementById('icon-picker-sheet').classList.remove('show');
+  _iconTarget=null;
+}
+function _applyIcon(val){
+  const v=(val||'').trim();
+  if(!v){toast('Aucune icône choisie');return;}
+  if(_iconTarget) setAccIcon(_iconTarget.inputId,_iconTarget.btnId,v);
+  closeIconPicker();
+}
+document.getElementById('icon-picker-bg').addEventListener('click',closeIconPicker);
+document.getElementById('icon-picker-close').addEventListener('click',closeIconPicker);
+document.getElementById('icon-picker-grid').addEventListener('click',e=>{
+  const opt=e.target.closest('.icon-opt'); if(!opt) return;
+  _applyIcon(opt.dataset.ico);
+});
+document.getElementById('icon-picker-ok').addEventListener('click',()=>{
+  _applyIcon(document.getElementById('icon-picker-free').value);
+});
+document.getElementById('icon-picker-free').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();_applyIcon(e.target.value);}
+});
+document.getElementById('acc-icon-btn').addEventListener('click',()=>openIconPicker('acc-icon','acc-icon-btn'));
+document.getElementById('rename-acc-icon-btn').addEventListener('click',()=>openIconPicker('rename-acc-icon','rename-acc-icon-btn'));
+
+// ═══════════════════════════════════════════════
 // ADD ACCOUNT MODAL
 // ═══════════════════════════════════════════════
 let _accObserver=false;
 function openAccModal(){
   _accObserver=false;
-  document.getElementById('acc-icon').value='📊';
+  setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
   document.getElementById('acc-obs-tog').classList.remove('on');
@@ -3504,6 +3610,7 @@ function openAccModal(){
   setTimeout(()=>document.getElementById('acc-name').focus(),330);
 }
 function closeAccModal(){
+  closeIconPicker();
   document.getElementById('acc-modal-bg').classList.remove('show');
   document.getElementById('acc-modal-sheet').classList.remove('show');
 }
@@ -3807,6 +3914,23 @@ function deleteAccount(accId){
 }
 
 // ═══════════════════════════════════════════════
+// RÉORGANISATION DES COMPTES
+// ═══════════════════════════════════════════════
+// L'ordre de S.accounts est l'ordre d'affichage partout (comptes + dashboard).
+function moveAccount(accId, delta){
+  const i=S.accounts.findIndex(a=>a.id===accId); if(i<0) return;
+  const j=i+delta; if(j<0||j>=S.accounts.length) return;
+  const [acc]=S.accounts.splice(i,1);
+  S.accounts.splice(j,0,acc);
+  saveAccounts();
+  renderScreen('comptes');
+  renderScreen('dashboard');
+  // Garder le compte déplacé sous les yeux
+  document.querySelector(`#s-comptes [data-mvacc="${accId}"]`)
+    ?.closest('.acc-card')?.scrollIntoView({block:'nearest'});
+}
+
+// ═══════════════════════════════════════════════
 // ACCOUNT ACTION MENU
 // ═══════════════════════════════════════════════
 let _menuAccId=null;
@@ -3841,6 +3965,13 @@ document.getElementById('acc-action-rename').addEventListener('click',()=>{
   closeAccMenu();
   openRenameAcc(id, acc.name);
 });
+document.getElementById('acc-action-order').addEventListener('click',()=>{
+  closeAccMenu();
+  if(S.accounts.length<2){toast('Il faut au moins deux comptes');return;}
+  S._reorder=true;
+  renderScreen('comptes');
+  if(S.screen!=='comptes') go('comptes');
+});
 document.getElementById('acc-action-del').addEventListener('click',()=>{
   const id=_menuAccId;
   closeAccMenu();
@@ -3856,8 +3987,7 @@ function openRenameAcc(accId, currentName){
   const acc=S.accounts.find(a=>a.id===accId);
   const inp=document.getElementById('rename-acc-input');
   inp.value=currentName||'';
-  const icoInp=document.getElementById('rename-acc-icon');
-  if(icoInp) icoInp.value=acc?.icon||'📊';
+  setAccIcon('rename-acc-icon','rename-acc-icon-btn',acc?.icon||'📊');
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
@@ -3867,6 +3997,7 @@ function openRenameAcc(accId, currentName){
   setTimeout(()=>{inp.focus();inp.select();},330);
 }
 function closeRenameAcc(){
+  closeIconPicker();
   document.getElementById('rename-acc-bg').classList.remove('show');
   document.getElementById('rename-acc-sheet').classList.remove('show');
   _renameAccId=null;
@@ -4098,6 +4229,7 @@ function saveSettings() {
       debug:       S.debug,
       autoRefresh: S.autoRefresh,
       assistantEnabled: S.assistantEnabled,
+      bgPrivacy:   S.bgPrivacy,
       priceApiKey: S.priceApiKey,
       lockEnabled: S.lockEnabled,
       lockHash:    S.lockHash,
@@ -4172,6 +4304,7 @@ function loadData() {
       if (s.debug !== undefined)    S.debug       = s.debug;
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
       if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
+      if (s.bgPrivacy !== undefined) S.bgPrivacy = s.bgPrivacy;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
       if (s.lockEnabled !== undefined) S.lockEnabled = s.lockEnabled;
       if (s.lockHash)                  S.lockHash    = s.lockHash;
@@ -5224,6 +5357,22 @@ document.addEventListener('visibilitychange', () => {
   if (Date.now() - _lockHidTs >= (S.lockDelay || 0) * 1000) lockApp();
 });
 
+// ═══════════════════════════════════════════════
+// VOILE DE CONFIDENTIALITÉ EN ARRIÈRE-PLAN
+// ═══════════════════════════════════════════════
+// Android photographie la fenêtre pour l'aperçu du sélecteur d'applications :
+// on masque l'écran AVANT qu'elle ne passe en arrière-plan, et on le redécouvre
+// au retour. `visibilitychange` couvre le sélecteur d'apps et le verrouillage
+// de l'écran, `blur` couvre le volet de notifications et le multi-fenêtres.
+function _bgShield(on) {
+  if (on && !S.bgPrivacy) return;
+  document.documentElement.classList.toggle('bgshield', !!on);
+}
+document.addEventListener('visibilitychange', () => _bgShield(document.hidden));
+window.addEventListener('pagehide', () => _bgShield(true));
+window.addEventListener('blur',  () => _bgShield(true));
+window.addEventListener('focus', () => _bgShield(false));
+
 const _hasData=loadData();
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
 if(!_hasData || S.isDemo) S.accounts=genDemo();
@@ -5302,6 +5451,9 @@ try {
     if (now - _lastBack < 250) { _lastBack = now; return; }
     _lastBack = now;
 
+    // Le sélecteur d'icône est empilé AU-DESSUS d'une autre feuille : il se ferme seul
+    if (iconPickerOpen()) { closeIconPicker(); return; }
+
     // Close any open modal first (regardless of stack depth)
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
@@ -5342,6 +5494,7 @@ try {
 document.addEventListener('keydown', e => {
   if (_lockState) return;   // l'overlay de verrouillage gère ses propres touches
   if (e.key === 'Escape') {
+    if (iconPickerOpen()) { closeIconPicker(); return; }
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
                      'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet',
