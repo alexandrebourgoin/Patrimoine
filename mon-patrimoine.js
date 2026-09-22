@@ -58,8 +58,15 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 const CHANGELOG = {
+  '1.9.0': [
+    { type:'fix',     text:'Apports et retraits pris en compte dans le solde : un compte vaut désormais ses titres PLUS ses liquidités non investies (apports − retraits − achats + ventes + dividendes). Le détail « titres / liquidités » s\'affiche sur l\'écran du compte.' },
+    { type:'new',     text:'Liste des apports/retraits enregistrés, avec suppression, directement dans la fenêtre « Apports / Retraits ».' },
+    { type:'new',     text:'Type de compte : choix dans une liste (PEA, CTO, assurance-vie, PER, livrets, SCPI, crypto…) ou saisie libre, et surtout modifiable après coup via « Modifier ».' },
+    { type:'improve', text:'« Modifier le compte » permet aussi de changer l\'icône. Le type du compte est rappelé sous son nom.' },
+    { type:'improve', text:'La performance d\'un compte est calculée sur les titres seuls : les liquidités ne la diluent plus.' },
+  ],
   '1.8.0': [
     { type:'new',     text:'Verrouillage de l\'application : un code à 6 chiffres peut désormais être exigé à l\'ouverture. Activation dans Réglages → Sécurité.' },
     { type:'new',     text:'Déverrouillage par empreinte ou reconnaissance faciale (biométrie du téléphone), avec le code en secours.' },
@@ -175,11 +182,15 @@ function genDemo() {
     mkH('SAN','SAN','Sanofi',25,88.5,94.2,'Action','France','Santé',[mkTx('2023-09-05','BUY',25,88.5)]),
   ];
   function val(hs){ return hs.reduce((s,h)=>s+(h.valueRef ?? h.value),0); }
-  return [
-    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', value:val(pea), change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:15000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:5000,note:'Versement annuel'}] },
-    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', value:val(ct),  change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:20000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:8000,note:'Renforcement'}] },
-    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', value:val(av),  change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:42000,note:'Versement initial'}] },
+  // Apports calibrés pour laisser une petite trésorerie positive sur chaque compte
+  // (le solde démo = titres + liquidités, cf. accTotal).
+  const accs = [
+    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
+    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', currency:'EUR', value:0, change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:14000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:5000,note:'Renforcement'}] },
+    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
   ];
+  accs.forEach(a => { a.value = +(val(a.holdings) + PU.accCash(a, FX_RATES, 'EUR')).toFixed(2); });
+  return accs;
 }
 
 // ═══════════════════════════════════════════════
@@ -204,6 +215,11 @@ function fmtNative(v, cur) { return PU.fmtNative(v, cur); }
 function toRefCcy(amount, fromCcy) { return PU.toRefCcy(amount, fromCcy, FX_RATES, S.currency); }
 // Sum holdings values converted to app currency
 function accSum(holdings) { return PU.accSum(holdings); }
+// Liquidités non investies du compte (devise appli) — apports nets − achats nets.
+// `upTo` borne le calcul à une date passée (reconstruction de l'historique).
+function accCash(acc, upTo) { return PU.accCash(acc, FX_RATES, S.currency, upTo); }
+// Solde du compte = valeur des titres + liquidités. À utiliser partout où `acc.value` est (re)calculé.
+function accTotal(acc) { return PU.accTotal(acc, FX_RATES, S.currency); }
 
 function computeRealizedPnL(h) { return PU.computeRealizedPnL(h); }
 
@@ -1027,7 +1043,7 @@ function renderComptes() {
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
-          <div class="t-sm">${a.type} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
+          <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
@@ -1262,7 +1278,9 @@ const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
-  const costBase=acc.value-totPnl;
+  const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
+  const cash=accCash(acc);                    // liquidités non investies
+  const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
   const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
@@ -1281,9 +1299,13 @@ function renderAccount() {
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
       <div style="font-size:26px">${acc.icon}</div>
-      <div style="font-size:20px;font-weight:800;letter-spacing:-.5px;flex:1">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
+      <div class="col" style="gap:2px;flex:1;min-width:0">
+        <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
+        <div class="t-sm">${esc(acc.type||'')}</div>
+      </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${masked(acc.value)}</div>
+    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${masked(secVal)} de titres · ${masked(cash)} de liquidités</div>`:''}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
         <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
@@ -1295,10 +1317,14 @@ function renderAccount() {
     ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
-        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${masked(netCf)}</div>
+        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${maskedNative(netCf,acc.currency||S.currency)}</div>
+      </div>
+      <div style="flex:1">
+        <div class="t-label">Liquidités</div>
+        <div style="font-size:14px;font-weight:800" class="${cash>=0?'':'t-loss'} t-num">${masked(cash)}</div>
       </div>
       <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Apports / Retraits</div>
-    </div>`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
+    </div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport.</div>`:''}`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
   </div>
   <div class="search-wrap">
     <div class="search-box">
@@ -1417,7 +1443,7 @@ function deleteHolding(accId,holdId) {
   if(!h) return;
   openConfirm(`Supprimer ${h.name} ?`, ()=>{
     acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
-    acc.value=accSum(acc.holdings);
+    acc.value=accTotal(acc);
     renderHoldsHTML(acc);
     refreshMain();
     toast('Position supprimée');
@@ -1443,7 +1469,7 @@ function applyRefresh(accId) {
       h.pnlRef=+toRefCcy(h.pnl,h.currency).toFixed(2);
       h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
     });
-    acc.value=accSum(acc.holdings);
+    acc.value=accTotal(acc);
     acc.change1d=+(Math.random()*4-1).toFixed(2);
   });
 }
@@ -1655,8 +1681,11 @@ function donutBlock(title, segs) {
 
 function renderAnalysis() {
   const all=S.accounts.flatMap(a=>a.holdings);
-  const tot=all.reduce((s,h)=>s+(h.valueRef??h.value),0); // devise appli — h.value est en devise native
-  if(!all.length) return `<div class="analysis-top"><div class="t-title">Analyse</div></div>
+  // Les liquidités non investies des comptes comptent comme du « Cash » : sans elles,
+  // le total de l'Analyse ne collait pas au patrimoine affiché sur le dashboard.
+  const cashTot=S.accounts.reduce((s,a)=>s+accCash(a),0);
+  const tot=all.reduce((s,h)=>s+(h.valueRef??h.value),0)+cashTot; // devise appli — h.value est en devise native
+  if(!all.length&&!cashTot) return `<div class="analysis-top"><div class="t-title">Analyse</div></div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
@@ -1668,6 +1697,8 @@ function renderAnalysis() {
     byGeo[h.country]=(byGeo[h.country]||0)+v;
     bySec[h.sector]=(bySec[h.sector]||0)+v;
   });
+  // byGeo/bySec restent sur les titres seuls (le cash n'a ni pays ni secteur)
+  if(cashTot) byType['Cash']=(byType['Cash']||0)+cashTot;
   return `<div class="analysis-top anim">
     ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${masked(tot)}</span>`)}
   </div>
@@ -1690,7 +1721,8 @@ function analyzePortfolio(S) {
   const accs = S.accounts.filter(a => !a.observer);
   const all  = accs.flatMap(a => a.holdings.map(h => ({ h, acc: a })));
   const vOf  = h => (h.valueRef ?? h.value ?? 0);
-  const tot  = all.reduce((s, x) => s + vOf(x.h), 0);
+  const cashTot = accs.reduce((s, a) => s + accCash(a), 0); // liquidités non investies
+  const tot  = all.reduce((s, x) => s + vOf(x.h), 0) + cashTot;
   if (!all.length || tot <= 0) return recos;
   const appCcy = S.currency || 'EUR';
   const pct = v => (v / tot) * 100;
@@ -1758,7 +1790,7 @@ function analyzePortfolio(S) {
   });
 
   // 9. Liquidités dormantes
-  const cashW = pct(byType['Cash'] || 0);
+  const cashW = pct((byType['Cash'] || 0) + cashTot);
   if (cashW >= 15) recos.push({ sev: 1, icon: '💰', title: 'Liquidités importantes',
     detail: `${cashW.toFixed(0)} % en cash. Des liquidités dormantes perdent de la valeur avec l'inflation — envisagez de les investir.` });
 
@@ -2545,7 +2577,7 @@ function bindEvents(id, el) {
         openConfirm(`Supprimer ce ${lbl} du ${fmtDate(tx.date)} ?`,()=>{
           h.transactions.splice(idx,1);
           recalcHolding(h);
-          acc.value=accSum(acc.holdings);
+          acc.value=accTotal(acc);
           renderScreen('stock');
           refreshMain();
           toast('Mouvement supprimé');
@@ -2631,6 +2663,7 @@ function bindEvents(id, el) {
         saveAccounts();
         toast('Mode démo chargé ✓');
       }
+      S.accounts.forEach(a => { a.value = accTotal(a); }); // soldes recalculés (titres + liquidités)
       refreshMain();
       renderScreen('settings');
     });
@@ -3125,7 +3158,7 @@ function confirmImport() {
     targetAcc = {
       id: 'csv_' + Date.now(),
       name: 'Compte importé',
-      type: 'CTO',
+      type: ACCOUNT_TYPES[0],
       icon: '📊',
       iconBg: 'rgba(245,158,11,.13)',
       value: 0, change1d: 0,
@@ -3165,7 +3198,7 @@ function confirmImport() {
     added++;
   });
 
-  targetAcc.value = accSum(targetAcc.holdings);
+  targetAcc.value = accTotal(targetAcc);
   // L'import reste dans le mode courant : basculer S.isDemo=false ici transformait les
   // comptes démo en « données réelles » et écrasait le slot réel au toggle suivant
   saveData();
@@ -3293,6 +3326,58 @@ document.getElementById('watch-submit').addEventListener('click',()=>{
   toast(`${ticker} ajouté aux titres suivis ✓`);
 });
 
+// ── Types de compte ────────────────────────────────────────────────────
+// Liste proposée à la création ET à la modification. Un type absent de la liste
+// (données anciennes, saisie « Autre ») reste conservé : il est ajouté à la volée
+// comme option supplémentaire par setSelectValue.
+const ACCOUNT_TYPES = [
+  "Compte-Titres Ordinaire",
+  "Plan d'Épargne en Actions (PEA)",
+  "PEA-PME",
+  "Assurance-Vie",
+  "Plan d'Épargne Retraite (PER)",
+  "Épargne salariale (PEE / PERCO)",
+  "Livret A",
+  "LDDS",
+  "LEP",
+  "Livret Jeune",
+  "Compte à terme",
+  "Compte courant",
+  "PEL / CEL",
+  "SCPI / Immobilier",
+  "Crypto / Exchange",
+  "Métaux précieux",
+];
+const ACC_TYPE_OTHER = '__other__';
+
+// Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
+// « Préciser le type », affichée quand l'option « Autre… » est choisie.
+function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
+  const sel=document.getElementById(selId); if(!sel) return;
+  // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
+  const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
+  sel.innerHTML=types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')
+    +`<option value="${ACC_TYPE_OTHER}">Autre…</option>`;
+  sel.value=value||ACCOUNT_TYPES[0];
+  const otherRow=document.getElementById(otherRowId);
+  const otherInp=document.getElementById(otherInpId);
+  if(otherInp) otherInp.value='';
+  if(otherRow) otherRow.classList.add('hidden');
+  sel.onchange=()=>{
+    const isOther=sel.value===ACC_TYPE_OTHER;
+    if(otherRow) otherRow.classList.toggle('hidden',!isOther);
+    if(isOther && otherInp) otherInp.focus();
+  };
+}
+
+// Valeur retenue : le texte libre si « Autre… » est sélectionné, sinon l'option choisie.
+function readAccType(selId, otherInpId, fallback){
+  const sel=document.getElementById(selId);
+  const v=sel?.value||'';
+  if(v===ACC_TYPE_OTHER) return document.getElementById(otherInpId)?.value.trim()||fallback;
+  return v||fallback;
+}
+
 // ═══════════════════════════════════════════════
 // ADD ACCOUNT MODAL
 // ═══════════════════════════════════════════════
@@ -3301,7 +3386,7 @@ function openAccModal(){
   _accObserver=false;
   document.getElementById('acc-icon').value='📊';
   document.getElementById('acc-name').value='';
-  document.getElementById('acc-type').value='';
+  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
@@ -3320,13 +3405,13 @@ document.getElementById('acc-obs-tog').addEventListener('click',()=>{
 document.getElementById('acc-submit').addEventListener('click',()=>{
   const icon=document.getElementById('acc-icon').value.trim()||'📊';
   const name=document.getElementById('acc-name').value.trim();
-  const type=document.getElementById('acc-type').value.trim()||'Compte titre';
+  const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
   if(!name){toast('Nom du compte requis');return;}
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,icon,iconBg,currency,value:0,change1d:0,holdings:[],observer:_accObserver});
+  S.accounts.push({id,name,type,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -3460,7 +3545,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
     transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
     value:qty*pru,pnl:0,pnlPct:0,pnlRef:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
   acc.holdings.push(newH);
-  acc.value=accSum(acc.holdings);
+  acc.value=accTotal(acc);
   closePosModal();
   if(S.screen==='account'&&S.accountId===_posAccId) renderHoldsHTML(acc);
   refreshMain();
@@ -3509,7 +3594,7 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
   if(!h){toast('Position introuvable');return;}
   h.transactions[_editTxIdx]={date,type:_editTxType,qty,price};
   recalcHolding(h);
-  acc.value=accSum(acc.holdings);
+  acc.value=accTotal(acc);
   closeEditTx();
   renderScreen('stock');
   refreshMain();
@@ -3521,12 +3606,50 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
 // ═══════════════════════════════════════════════
 let _cfAccId=null, _cfType='DEP';
 
+// Liste des mouvements déjà saisis, avec suppression — indispensable depuis que les
+// apports/retraits entrent dans le solde du compte (une saisie erronée le fausse).
+function renderCfList(){
+  const el=document.getElementById('cf-list'); if(!el) return;
+  const acc=S.accounts.find(a=>a.id===_cfAccId);
+  const cfs=[...(acc?.cashflows||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  if(!cfs.length){ el.innerHTML=''; return; }
+  const accCcy=acc.currency||S.currency;
+  el.innerHTML=`<div class="t-label" style="margin:14px 0 4px">Mouvements enregistrés</div>`+
+    cfs.map(c=>{
+      const dep=c.type!=='WIT';
+      return `<div class="tx-item" style="padding:10px 0">
+        <div class="tx-dot ${dep?'buy':'sell'}">${dep?'AP':'RE'}</div>
+        <div class="flex1 col gap4" style="min-width:0">
+          <div style="font-size:13px;font-weight:700">${dep?'Apport':'Retrait'} · ${fmtDate(c.date)}</div>
+          ${c.note?`<div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.note)}</div>`:''}
+        </div>
+        <div style="font-size:13px;font-weight:800" class="${dep?'t-gain':'t-loss'} t-num">${dep?'+':'−'}${maskedNative(+c.amount||0,accCcy)}</div>
+        <div class="tx-del-btn" data-cfdel="${esc(c.id)}" title="Supprimer">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        </div>
+      </div>`;
+    }).join('');
+  el.querySelectorAll('[data-cfdel]').forEach(b=>b.addEventListener('click',()=>{
+    const acc=S.accounts.find(a=>a.id===_cfAccId); if(!acc) return;
+    acc.cashflows=(acc.cashflows||[]).filter(c=>c.id!==b.dataset.cfdel);
+    acc.value=accTotal(acc);
+    renderCfList();
+    renderScreen('account');
+    refreshMain();
+    toast('Mouvement supprimé');
+  }));
+}
+
 function openCfModal(accId){
   _cfAccId=accId; _cfType='DEP';
   document.getElementById('cf-amount').value='';
   document.getElementById('cf-note').value='';
-  document.getElementById('cf-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('cf-date').value=_dayKey(Date.now());
+  // Les montants sont saisis dans la devise du compte (convertis ensuite pour le patrimoine)
+  const lbl=document.getElementById('cf-amount-label');
+  if(lbl) lbl.textContent='Montant ('+(S.accounts.find(a=>a.id===accId)?.currency||S.currency)+')';
   document.querySelectorAll('[data-cftype]').forEach(b=>b.classList.toggle('on',b.dataset.cftype==='DEP'));
+  renderCfList();
   document.getElementById('cf-modal-bg').classList.add('show');
   document.getElementById('cf-modal-sheet').classList.add('show');
   setTimeout(()=>document.getElementById('cf-amount').focus(),330);
@@ -3544,7 +3667,7 @@ document.querySelectorAll('[data-cftype]').forEach(b=>b.addEventListener('click'
 }));
 document.getElementById('cf-submit').addEventListener('click',()=>{
   const amount=parseFloat(document.getElementById('cf-amount').value);
-  const date=document.getElementById('cf-date').value||new Date().toISOString().slice(0,10);
+  const date=document.getElementById('cf-date').value||_dayKey(Date.now());
   const note=document.getElementById('cf-note').value.trim();
   if(!(amount>0)){toast('Montant requis');return;}
   const acc=S.accounts.find(a=>a.id===_cfAccId);
@@ -3552,6 +3675,7 @@ document.getElementById('cf-submit').addEventListener('click',()=>{
   if(!acc.cashflows) acc.cashflows=[];
   acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,note});
   acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
+  acc.value=accTotal(acc); // le solde intègre désormais les apports/retraits non investis
   closeCfModal();
   renderScreen('account');
   refreshMain(); // persiste le cashflow (saveData) — sans ça l'apport disparaissait au rechargement
@@ -3613,7 +3737,7 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 });
 
 // ═══════════════════════════════════════════════
-// RENAME ACCOUNT
+// EDIT ACCOUNT (nom, icône, type, devise)
 // ═══════════════════════════════════════════════
 let _renameAccId=null;
 function openRenameAcc(accId, currentName){
@@ -3621,8 +3745,12 @@ function openRenameAcc(accId, currentName){
   const acc=S.accounts.find(a=>a.id===accId);
   const inp=document.getElementById('rename-acc-input');
   inp.value=currentName||'';
+  const icoInp=document.getElementById('rename-acc-icon');
+  if(icoInp) icoInp.value=acc?.icon||'📊';
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
+  // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
+  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'');
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
@@ -3640,7 +3768,10 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const renamedId=_renameAccId;
   const acc=S.accounts.find(a=>a.id===renamedId); if(!acc) return;
   acc.name=name;
+  acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
+  acc.type=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
+  acc.value=accTotal(acc); // la devise du compte entre dans la conversion des apports/retraits
   saveAccounts();
   closeRenameAcc();
   refreshMain();
@@ -3690,7 +3821,7 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
   if(newPrice>0){
     h.currentPrice=newPrice;
     recalcHolding(h);
-    acc.value=accSum(acc.holdings);
+    acc.value=accTotal(acc);
   }
   saveAccounts();
   closeEditHolding();
@@ -3750,7 +3881,7 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   // recalcHolding recompute tout (dont valueRef/pnlRef, que le calcul manuel oubliait :
   // accSum lit valueRef → patrimoine faux jusqu'au prochain fetch), comme edit-tx-submit
   recalcHolding(h);
-  acc.value=accSum(acc.holdings);
+  acc.value=accTotal(acc);
   closeModal();
   const accEl=document.getElementById('s-account');
   const holdsEl=accEl?.querySelector('#js-holds');
@@ -4044,6 +4175,8 @@ function reconstructWealthOnDay(dayKey) {
       }
       tot += toRefCcy(qty * price, h.currency);
     });
+    // Liquidités du compte à cette date (apports/retraits et transactions antérieurs)
+    tot += accCash(a, dayKey);
   });
   return +tot.toFixed(2);
 }
@@ -4070,7 +4203,7 @@ function applyPrices(priceData) {
     const p=priceData.prices[h.ticker];
     if(p!=null){ h.currentPrice=p; recalcHolding(h); }
   });
-  S.accounts.forEach(a=>{ a.value=accSum(a.holdings); });
+  S.accounts.forEach(a=>{ a.value=accTotal(a); });
   S.lastPriceUpdate=priceData.updatedAt;
 }
 
@@ -4249,7 +4382,7 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
   if (h) {
     h.currentPrice = price;
     recalcHolding(h);
-    acc.value = accSum(acc.holdings);
+    acc.value = accTotal(acc);
     const cached = loadPrices() || { prices: {} };
     cached.prices[ticker] = price;
     savePrices(cached.prices);
@@ -4449,7 +4582,7 @@ async function fetchFxRates() {
           h.valueRef = +toRefCcy(h.value||0, h.currency).toFixed(2);
           h.pnlRef   = +toRefCcy(h.pnl||0,   h.currency).toFixed(2);
         });
-        acc.value = accSum(acc.holdings);
+        acc.value = accTotal(acc);
       });
       dbgLog('[OK]', `FX mis à jour: ${Object.entries(FX_RATES).map(([k,v])=>`${k}=${v}`).join(', ')}`);
     } else dbgLog('[WRN]', 'FX: aucun résultat');
@@ -4594,7 +4727,7 @@ async function fetchLivePrices() {
   // ── Finalisation ───────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
   if (updated > 0) {
-    S.accounts.forEach(a=>{ a.value=accSum(a.holdings); });
+    S.accounts.forEach(a=>{ a.value=accTotal(a); });
     savePrices(prices);
     snapshotWealth(); // fige la valeur totale du jour avec les cours fraîchement mis à jour
     refreshMain();
@@ -4932,6 +5065,8 @@ if(_priceCache?.fxRates) {
   _fxUpdatedAt = _priceCache.fxUpdatedAt || null;
 }
 if(_priceCache && !S.isDemo) applyPrices(_priceCache);
+// Recalculer les soldes : le `acc.value` stocké peut dater d'avant la prise en compte des liquidités
+S.accounts.forEach(a => { a.value = accTotal(a); });
 // Historique du patrimoine : reconstruire le passé manquant puis figer le point du jour (mode réel)
 if(!S.isDemo) { backfillWealthHistory(); snapshotWealth(); }
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);

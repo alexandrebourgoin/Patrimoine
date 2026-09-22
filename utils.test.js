@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 // exactement comme dans le navigateur — les tests testent donc le VRAI code de prod.
 import './utils.js';
 const {
-  toRefCcy, accSum, recalcHolding, computeRealizedPnL,
+  toRefCcy, accSum, accCash, accTotal, recalcHolding, computeRealizedPnL,
   fmtPct, timeSince, initials, mkTx, fxSubText, esc, dayKey,
 } = globalThis.PU;
 
@@ -267,5 +267,81 @@ describe('fxSubText', () => {
     const jpyFX = { EUR: 1, JPY: 163 };
     const text = fxSubText(jpyFX, 'EUR', 1_700_000_000);
     expect(text).toContain('163.00');
+  });
+});
+
+// ─── accCash / accTotal ────────────────────────────────────────────────────
+describe('accCash', () => {
+  const mkAcc = (cashflows, holdings = [], currency = 'EUR') => ({ currency, cashflows, holdings });
+  const mkHold = (txs, currency = 'EUR', valueRef = 0) => ({ currency, transactions: txs, valueRef });
+
+  it('0 when no cashflow is recorded (compte non suivi en trésorerie)', () => {
+    const acc = mkAcc([], [mkHold([mkTx('2023-01-01', 'BUY', 10, 100)], 'EUR', 1200)]);
+    expect(accCash(acc, FX, 'EUR')).toBe(0);
+  });
+
+  it('deposits minus withdrawals minus purchases', () => {
+    const acc = mkAcc(
+      [{ date: '2023-01-01', type: 'DEP', amount: 10000 },
+       { date: '2023-06-01', type: 'WIT', amount: 1500 }],
+      [mkHold([mkTx('2023-02-01', 'BUY', 10, 500)], 'EUR', 6000)],
+    );
+    expect(accCash(acc, FX, 'EUR')).toBe(3500); // 10000 − 1500 − 5000
+  });
+
+  it('sales and dividends credit the cash', () => {
+    const acc = mkAcc(
+      [{ date: '2023-01-01', type: 'DEP', amount: 1000 }],
+      [mkHold([mkTx('2023-02-01', 'BUY', 10, 50),
+               mkTx('2023-03-01', 'SELL', 4, 60),
+               mkTx('2023-04-01', 'DIV', 6, 2)], 'EUR', 400)],
+    );
+    expect(accCash(acc, FX, 'EUR')).toBe(752); // 1000 − 500 + 240 + 12
+  });
+
+  it('converts cashflows from the account currency and transactions from the security currency', () => {
+    const acc = mkAcc(
+      [{ date: '2023-01-01', type: 'DEP', amount: 1080 }],       // 1080 USD = 1000 EUR
+      [mkHold([mkTx('2023-02-01', 'BUY', 1, 540)], 'USD', 500)], //  540 USD =  500 EUR
+      'USD',
+    );
+    expect(accCash(acc, FX, 'EUR')).toBeCloseTo(500, 2);
+  });
+
+  it('upTo ignores movements after the given day', () => {
+    const acc = mkAcc(
+      [{ date: '2023-01-01', type: 'DEP', amount: 1000 },
+       { date: '2023-12-01', type: 'DEP', amount: 5000 }],
+      [mkHold([mkTx('2023-02-01', 'BUY', 1, 300),
+               mkTx('2023-11-01', 'BUY', 1, 400)], 'EUR', 700)],
+    );
+    expect(accCash(acc, FX, 'EUR', '2023-06-30')).toBe(700); // 1000 − 300
+  });
+
+  it('goes negative when purchases exceed the deposits recorded', () => {
+    const acc = mkAcc(
+      [{ date: '2023-01-01', type: 'DEP', amount: 100 }],
+      [mkHold([mkTx('2023-02-01', 'BUY', 10, 50)], 'EUR', 500)],
+    );
+    expect(accCash(acc, FX, 'EUR')).toBe(-400);
+  });
+});
+
+describe('accTotal', () => {
+  it('sums the securities and the idle cash', () => {
+    const acc = {
+      currency: 'EUR',
+      cashflows: [{ date: '2023-01-01', type: 'DEP', amount: 10000 }],
+      holdings: [{ currency: 'EUR', valueRef: 6000, transactions: [mkTx('2023-02-01', 'BUY', 10, 500)] }],
+    };
+    expect(accTotal(acc, FX, 'EUR')).toBe(11000); // 6000 de titres + 5000 de liquidités
+  });
+
+  it('falls back to the securities alone without cashflows', () => {
+    const acc = {
+      currency: 'EUR', cashflows: [],
+      holdings: [{ currency: 'EUR', valueRef: 6000, transactions: [mkTx('2023-02-01', 'BUY', 10, 500)] }],
+    };
+    expect(accTotal(acc, FX, 'EUR')).toBe(6000);
   });
 });

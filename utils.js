@@ -58,6 +58,52 @@
     return holdings.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
   }
 
+  // ── Trésorerie d'un compte ─────────────────────────────────────────────
+  // `upTo` (clé jour 'YYYY-MM-DD', optionnel) borne le calcul à une date : utilisé
+  // pour reconstruire la valeur du patrimoine à une date passée.
+
+  // Apports − retraits, saisis dans la devise du compte, convertis en devise appli.
+  function accCashflowNet(acc, fxRates, appCcy = 'EUR', upTo) {
+    let net = 0;
+    (acc.cashflows || []).forEach(c => {
+      if (upTo && c.date > upTo) return;
+      const a = +c.amount || 0;
+      net += (c.type === 'WIT' ? -a : a);
+    });
+    return toRefCcy(net, acc.currency, fxRates, appCcy);
+  }
+
+  // Montant net sorti de la trésorerie pour investir : achats − ventes − dividendes
+  // encaissés. Chaque transaction est dans la devise native du titre.
+  function accInvestedNet(acc, fxRates, appCcy = 'EUR', upTo) {
+    let net = 0;
+    (acc.holdings || []).forEach(h => {
+      let n = 0;
+      (h.transactions || []).forEach(tx => {
+        if (upTo && tx.date > upTo) return;
+        const amt = (+tx.qty || 0) * (+tx.price || 0);
+        if (tx.type === 'BUY') n += amt;
+        else if (tx.type === 'SELL' || tx.type === 'DIV') n -= amt;
+      });
+      net += toRefCcy(n, h.currency, fxRates, appCcy);
+    });
+    return net;
+  }
+
+  // Liquidités disponibles sur le compte (devise appli) = apports nets − investi net.
+  // Renvoie 0 tant qu'aucun apport/retrait n'est saisi : le compte n'est alors pas
+  // suivi en trésorerie et ses titres seuls font le solde (comportement historique).
+  function accCash(acc, fxRates, appCcy = 'EUR', upTo) {
+    if (!acc || !acc.cashflows || !acc.cashflows.length) return 0;
+    return +(accCashflowNet(acc, fxRates, appCcy, upTo)
+           - accInvestedNet(acc, fxRates, appCcy, upTo)).toFixed(2);
+  }
+
+  // Solde du compte (devise appli) = valeur des titres + liquidités non investies.
+  function accTotal(acc, fxRates, appCcy = 'EUR') {
+    return +(accSum(acc.holdings || []) + accCash(acc, fxRates, appCcy)).toFixed(2);
+  }
+
   function computeRealizedPnL(h) {
     let runQty = 0, runCost = 0, realized = 0;
     [...h.transactions].sort((a, b) => a.date.localeCompare(b.date)).forEach(tx => {
@@ -122,6 +168,7 @@
 
   root.PU = {
     mkTx, fmtPct, fmtDate, initials, fmtNative, fmtCur, esc, dayKey,
-    toRefCcy, accSum, computeRealizedPnL, recalcHolding, timeSince, fxSubText,
+    toRefCcy, accSum, accCashflowNet, accInvestedNet, accCash, accTotal,
+    computeRealizedPnL, recalcHolding, timeSince, fxSubText,
   };
 })(globalThis);
