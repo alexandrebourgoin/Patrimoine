@@ -29,6 +29,7 @@ const S = {
   stockPeriod: 'MAX',   // '1M' | '3M' | '6M' | '1A' | 'MAX'
   debug: false,
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
+  accountsView: 'list', // 'list' | 'grid' — affichage de l'écran Comptes
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
   bgPrivacy: true,    // masque l'écran quand l'appli passe en arrière-plan
   bgIdle: 0,          // s d'inactivité avant masquage (0 = jamais)
@@ -63,9 +64,20 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.10.86';
+const APP_VERSION = '1.11.88';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.88': [
+    { type:'fix',     text:"Drapeaux de compte : Windows n'a pas de police couleur pour les émoji drapeau et affichait 2 lettres (« FR ») au lieu du drapeau. Ils s'affichent désormais comme une vraie image, partout où l'icône d'un compte apparaît." },
+  ],
+  '1.11.87': [
+    { type:'new',     text:"Établissement bancaire (optionnel) sur un compte, renseignable à la création comme dans « Modifier » — affiché sous le nom du compte et sur l'écran du compte." },
+    { type:'new',     text:"Vue en grille pour l'écran Comptes : bouton en haut pour basculer entre liste et grille à 2 colonnes. Le glisser-déposer pour réorganiser reste disponible en vue liste." },
+    { type:'new',     text:"Icônes de compte : 12 nouveaux drapeaux de pays dans le sélecteur (Suisse, Royaume-Uni, Allemagne, Espagne, Italie, Portugal, Luxembourg, Belgique, Pays-Bas, Canada, Japon, Chine)." },
+    { type:'new',     text:"Analyse : nouvelle répartition par type de compte (PEA, Assurance-Vie, PER…), en plus des répartitions par type d'actif, géographie et secteur." },
+    { type:'new',     text:"Type de compte « Pilier 3a » (prévoyance retraite suisse) ajouté à la liste." },
+    { type:'fix',     text:"Ajouter/Modifier un compte : le champ « Préciser le type » restait visible même pour un type de la liste (pas seulement pour « Autre… »)." },
+  ],
   '1.10.86': [
     { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
     { type:'new',     text:"Réorganisation des comptes : maintenez un compte appuyé, la carte se décolle et suit votre doigt ; relâchez à la bonne place et l'ordre est enregistré. Il s'applique aussi au tableau de bord." },
@@ -201,9 +213,9 @@ function genDemo() {
   // Apports calibrés pour laisser une petite trésorerie positive sur chaque compte
   // (le solde démo = titres + liquidités, cf. accTotal).
   const accs = [
-    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
-    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', icon:'🌍', iconBg:'rgba(0,194,203,.13)', currency:'EUR', value:0, change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:14000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:5000,note:'Renforcement'}] },
-    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
+    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", bank:'Boursorama', icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
+    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', bank:'Degiro', icon:'🌍', iconBg:'rgba(0,194,203,.13)', currency:'EUR', value:0, change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:14000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:5000,note:'Renforcement'}] },
+    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', bank:'BNP Paribas', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
   ];
   accs.forEach(a => { a.value = +(val(a.holdings) + PU.accCash(a, FX_RATES, 'EUR')).toFixed(2); });
   return accs;
@@ -984,6 +996,8 @@ function renderScreen(id) {
 // ── TOP BAR commun (tous les écrans principaux) ──
 const _SVG_SETTINGS = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>`;
 const _SVG_ASSISTANT = `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12zM6 14l.75 2.05L8.8 16.8l-2.05.75L6 19.6l-.75-2.05L3.2 16.8l2.05-.75L6 14z"/></svg>`;
+const _SVG_VIEW_LIST = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg>`;
+const _SVG_VIEW_GRID = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>`;
 
 function renderTopBar(extraBtns='') {
   return `<div class="top-bar">
@@ -1043,6 +1057,7 @@ function renderDash() {
 function renderComptes() {
   const w=totalWealth();
   const anim=_skipAccAnim?'':' anim';   // remis à faux en fin de fonction
+  const gridView = S.accountsView==='grid' && S.accounts.length>0; // pas de grille pour l'état vide
   const accs=S.accounts.map(a=>{
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
@@ -1053,14 +1068,27 @@ function renderComptes() {
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
+    if(gridView) return `<div class="acc-card acc-card-grid${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div class="acc-icon" style="background:${a.iconBg};width:36px;height:36px;font-size:17px">${iconHtml(a.icon)}</div>
+        <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions" style="margin-left:0">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+        </div>
+      </div>
+      <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</div>
+      <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${esc(a.type||"")}${a.bank?' · '+esc(a.bank):''}</div>
+      ${obsTag?`<div style="margin-top:6px">${obsTag}</div>`:''}
+      <div style="font-size:15px;font-weight:800;margin-top:10px" class="t-num">${displayVal}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:2px" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
+    </div>`;
     return `<div class="acc-card${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
-        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${a.icon}</div>
+        <div class="acc-icon tap" data-acc="${a.id}" style="background:${a.iconBg};cursor:pointer">${iconHtml(a.icon)}</div>
         <div class="flex1 col gap4 tap" data-acc="${a.id}" style="min-width:0;cursor:pointer">
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
-          <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}</div>
+          <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}${a.bank?' · '+esc(a.bank):''}</div>
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
@@ -1081,11 +1109,12 @@ function renderComptes() {
   _skipAccAnim=false;
   return `${renderTopBar(`
     <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
+    <div class="top-btn tap" id="js-acc-view" title="${gridView?'Vue liste':'Vue grille'}">${gridView?_SVG_VIEW_LIST:_SVG_VIEW_GRID}</div>
     <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
     </div>
   `)}
-  <div class="col gap12 px" id="js-acc-list">${accs}${empty}</div>`;
+  <div class="${gridView?'acc-grid':'col gap12'} px" id="js-acc-list">${accs}${empty}</div>`;
 }
 
 // ── RECHERCHE ──
@@ -1120,7 +1149,7 @@ function srchResults(q, mode) {
       if(!acc.holdings.length) return '';
       const rows=acc.holdings.map(h=>srchRow(h,acc)).join('');
       return `<div style="margin-bottom:6px">
-        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${acc.icon} ${esc(acc.name)}</div>
+        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${iconHtml(acc.icon)} ${esc(acc.name)}</div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">${rows}</div>
       </div>`;
     }).join('');
@@ -1317,10 +1346,10 @@ function renderAccount() {
   </div>
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
-      <div style="font-size:26px">${acc.icon}</div>
+      <div style="font-size:26px">${iconHtml(acc.icon)}</div>
       <div class="col" style="gap:2px;flex:1;min-width:0">
         <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
-        <div class="t-sm">${esc(acc.type||'')}</div>
+        <div class="t-sm">${esc(acc.type||'')}${acc.bank?' · '+esc(acc.bank):''}</div>
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${masked(acc.value)}</div>
@@ -1781,6 +1810,7 @@ function renderTargetsBlock(byType, tot) {
 const GEO_C=['#4F8EF7','#F59E0B','#00D68F','#A78BFA','#FF5A5A','#F97316'];
 const TYPE_C={'Action':'#4F8EF7','ETF':'#00C2CB','Obligation':'#00D68F','Cash':'#F59E0B'};
 const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
+const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
 
 function buildSegs(obj, colors) {
   const tot=Object.values(obj).reduce((s,v)=>s+v,0);
@@ -1813,7 +1843,7 @@ function renderAnalysis() {
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
     </div>`;
-  const byType={}, byGeo={}, bySec={};
+  const byType={}, byGeo={}, bySec={}, byAccType={};
   all.forEach(h=>{
     const v=h.valueRef??h.value;
     byType[h.type]=(byType[h.type]||0)+v;
@@ -1822,12 +1852,16 @@ function renderAnalysis() {
   });
   // byGeo/bySec restent sur les titres seuls (le cash n'a ni pays ni secteur)
   if(cashTot) byType['Cash']=(byType['Cash']||0)+cashTot;
+  // Répartition par type de compte : titres + liquidités de chaque compte (accTotal), agrégés par a.type
+  S.accounts.forEach(a=>{ byAccType[a.type||'Autre']=(byAccType[a.type||'Autre']||0)+accTotal(a); });
   return `<div class="analysis-top anim">
     ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${masked(tot)}</span>`)}
   </div>
   <div style="height:10px"></div>
   <div class="t-section px" style="padding-bottom:10px">Objectifs d'allocation</div>
   ${renderTargetsBlock(byType, tot)}
+  <div class="t-section px" style="padding-bottom:10px">Répartition par type de compte</div>
+  ${donutBlock('',buildSegs(byAccType,ACCTYPE_C))}
   <div class="t-section px" style="padding-bottom:10px">Par type d'actif</div>
   ${donutBlock('',buildSegs(byType,TYPE_C))}
   <div class="t-section px" style="padding-bottom:10px">Répartition géographique</div>
@@ -2542,8 +2576,14 @@ function bindEvents(id, el) {
   }
   if(id==='comptes') {
     _bindAccCards(el);
-    bindAccDrag(el.querySelector('#js-acc-list'));
+    // Le glisser-déposer suppose un empilement vertical (voir bindAccDrag) : pas de sens en grille
+    if(S.accountsView!=='grid') bindAccDrag(el.querySelector('#js-acc-list'));
     el.querySelector('#js-acc-add')?.addEventListener('click', openAccModal);
+    el.querySelector('#js-acc-view')?.addEventListener('click', ()=>{
+      S.accountsView = S.accountsView==='grid' ? 'list' : 'grid';
+      saveSettings();
+      renderScreen('comptes');
+    });
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
   }
@@ -3548,6 +3588,7 @@ const ACCOUNT_TYPES = [
   "Assurance-Vie",
   "Plan d'Épargne Retraite (PER)",
   "Épargne salariale (PEE / PERCO)",
+  "Pilier 3a",
   "Livret A",
   "LDDS",
   "LEP",
@@ -3597,21 +3638,39 @@ const ICON_CHOICES=['🏦','💼','📊','📈','💰','💵','💶','💷',
                     '🏠','🏡','🚗','✈️','🎓','👶','👨‍👩‍👧','❤️',
                     '🌱','🌍','🇫🇷','🇺🇸','🇪🇺','🌏','🔒','🔑',
                     '⭐','🚀','⚡','🎁','📦','🪴','🧊','🏆',
-                    '🔴','🟠','🟢','🔵','🟣','⚫','⚪','🟤'];
+                    '🔴','🟠','🟢','🔵','🟣','⚫','⚪','🟤',
+                    '🇨🇭','🇬🇧','🇩🇪','🇪🇸','🇮🇹','🇵🇹','🇱🇺','🇧🇪',
+                    '🇳🇱','🇨🇦','🇯🇵','🇨🇳'];
 let _iconTarget=null; // {inputId, btnId}
+
+// Windows/Chromium n'a pas de police emoji couleur pour les drapeaux (paires de regional
+// indicators) : ils s'affichent en 2 lettres ("FR") au lieu du drapeau. On les remplace par
+// une image Twemoji ; tout le reste (emoji normaux) continue de s'afficher via la police système.
+function isFlagEmoji(s){
+  const cps=Array.from(s||'');
+  return cps.length===2 && cps.every(c=>{const cp=c.codePointAt(0);return cp>=0x1F1E6&&cp<=0x1F1FF;});
+}
+function _twemojiCode(s){ return Array.from(s).map(c=>c.codePointAt(0).toString(16)).join('-'); }
+function _flagImgErr(img){ img.replaceWith(document.createTextNode(img.dataset.fallback)); }
+// Rendu d'une icône de compte : image Twemoji pour un drapeau, texte brut sinon (emoji normal).
+function iconHtml(ico){
+  const v=(ico||'').trim()||'📊';
+  if(!isFlagEmoji(v)) return v;
+  return `<img class="flag-emoji-img" src="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/${_twemojiCode(v)}.png" alt="${v}" data-fallback="${v}" onerror="_flagImgErr(this)">`;
+}
 
 // L'input caché garde la valeur (lue par les formulaires), le bouton l'affiche
 function setAccIcon(inputId,btnId,val){
   const v=(val||'').trim()||'📊';
   const inp=document.getElementById(inputId); if(inp) inp.value=v;
-  const btn=document.getElementById(btnId);   if(btn) btn.textContent=v;
+  const btn=document.getElementById(btnId);   if(btn) btn.innerHTML=iconHtml(v);
 }
 function iconPickerOpen(){ return document.getElementById('icon-picker-sheet')?.classList.contains('show'); }
 function openIconPicker(inputId,btnId){
   _iconTarget={inputId,btnId};
   const cur=document.getElementById(inputId)?.value||'📊';
   document.getElementById('icon-picker-grid').innerHTML=
-    ICON_CHOICES.map(e=>`<div class="icon-opt tap${e===cur?' sel':''}" data-ico="${e}">${e}</div>`).join('');
+    ICON_CHOICES.map(e=>`<div class="icon-opt tap${e===cur?' sel':''}" data-ico="${e}">${iconHtml(e)}</div>`).join('');
   const free=document.getElementById('icon-picker-free'); if(free) free.value='';
   document.getElementById('icon-picker-bg').classList.add('show');
   document.getElementById('icon-picker-sheet').classList.add('show');
@@ -3650,6 +3709,7 @@ function openAccModal(){
   _accObserver=false;
   setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
+  document.getElementById('acc-bank').value='';
   fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
@@ -3671,12 +3731,13 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const icon=document.getElementById('acc-icon').value.trim()||'📊';
   const name=document.getElementById('acc-name').value.trim();
   const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
+  const bank=document.getElementById('acc-bank').value.trim();
   if(!name){toast('Nom du compte requis');return;}
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver});
+  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -4141,6 +4202,7 @@ function openRenameAcc(accId, currentName){
   setAccIcon('rename-acc-icon','rename-acc-icon-btn',acc?.icon||'📊');
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
+  document.getElementById('rename-acc-bank').value=acc?.bank||'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
   fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'');
   document.getElementById('rename-acc-bg').classList.add('show');
@@ -4163,6 +4225,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.name=name;
   acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
   acc.type=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
+  acc.bank=document.getElementById('rename-acc-bank').value.trim();
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
   acc.value=accTotal(acc); // la devise du compte entre dans la conversion des apports/retraits
   saveAccounts();
@@ -4379,6 +4442,7 @@ function saveSettings() {
       sortDir:     S.sortDir,
       debug:       S.debug,
       autoRefresh: S.autoRefresh,
+      accountsView: S.accountsView,
       assistantEnabled: S.assistantEnabled,
       bgPrivacy:   S.bgPrivacy,
       bgIdle:      S.bgIdle,
@@ -4455,6 +4519,7 @@ function loadData() {
       if (s.sortDir !== undefined)  S.sortDir     = s.sortDir;
       if (s.debug !== undefined)    S.debug       = s.debug;
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
+      if (s.accountsView)           S.accountsView = s.accountsView;
       if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
       if (s.bgPrivacy !== undefined) S.bgPrivacy = s.bgPrivacy;
       if (s.bgIdle !== undefined)    S.bgIdle    = s.bgIdle;

@@ -156,6 +156,9 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .acc-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
 .acc-bar{height:2px;border-radius:2px;background:var(--border);margin-top:12px;overflow:hidden}
 .acc-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.acc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.acc-card-grid{padding:14px;min-width:0}
+.flag-emoji-img{width:1em;height:1em;vertical-align:-0.15em;object-fit:cover;border-radius:2px}
 
 /* ─── ACCOUNT DETAIL ─── */
 .acc-hero{padding:8px 20px 18px;border-bottom:1px solid var(--border)}
@@ -299,6 +302,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .type-btn.sell.on{background:var(--loss-dim);border-color:var(--loss);color:var(--loss)}
 .type-btn.div.on{background:rgba(245,158,11,.12);border-color:#F59E0B;color:#F59E0B}
 .form-row{display:flex;gap:10px;margin-bottom:14px}
+.form-row.hidden{display:none}
 .form-field{flex:1;display:flex;flex-direction:column;gap:5px}
 .form-label{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text2)}
 .form-input{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:10px 12px;font-size:15px;font-weight:600;color:var(--text);font-family:inherit;outline:none;transition:border-color .15s;width:100%}
