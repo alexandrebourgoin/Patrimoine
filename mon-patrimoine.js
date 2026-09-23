@@ -64,9 +64,13 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.88';
+const APP_VERSION = '1.11.89';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.89': [
+    { type:'fix',     text:"Graphiques de répartition (Analyse) : une part minuscule ou nulle (ex. compte sans titres) pouvait faire passer tout le donut d'une seule couleur au lieu d'afficher les vraies proportions." },
+    { type:'improve', text:"Vue grille des comptes : cartes réalignées sur le style de la liste (même icône, même infos — nombre de valeurs et barre de répartition inclus), juste réparties sur 2 colonnes." },
+  ],
   '1.11.88': [
     { type:'fix',     text:"Drapeaux de compte : Windows n'a pas de police couleur pour les émoji drapeau et affichait 2 lettres (« FR ») au lieu du drapeau. Ils s'affichent désormais comme une vraie image, partout où l'icône d'un compte apparaît." },
   ],
@@ -435,10 +439,15 @@ function donutSvg(segs, size=108, sw=16) {
   const tot=segs.reduce((s,sg)=>s+sg.value,0);
   let acc=0;
   const circles=segs.map(sg=>{
-    const dash=(sg.value/tot)*C-1.5;
+    const raw=tot>0?(sg.value/tot)*C:0;
+    // ⚠️ Une tranche minuscule (raw < 1.5) donnait un stroke-dasharray NÉGATIF, invalide en SVG :
+    // le navigateur ignore alors l'attribut et trace un cercle plein, qui écrase visuellement
+    // toutes les tranches précédentes (surtout grave car triées par valeur croissante à la fin,
+    // donc dessinées par-dessus les autres — le donut entier prenait la couleur de cette tranche).
+    const dash=Math.max(0,raw-1.5);
     const gap=C-dash;
     const off=-acc;
-    acc+=(sg.value/tot)*C;
+    acc+=raw;
     return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${sg.color}"
       stroke-width="${sw}" stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}"
       stroke-dashoffset="${off.toFixed(2)}" stroke-linecap="butt"
@@ -1068,18 +1077,19 @@ function renderComptes() {
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
     const obsTag=a.observer?`<div class="obs-tag" style="margin-left:6px">Observateur</div>`:'';
-    if(gridView) return `<div class="acc-card acc-card-grid${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
-      <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div class="acc-icon" style="background:${a.iconBg};width:36px;height:36px;font-size:17px">${iconHtml(a.icon)}</div>
+    if(gridView) return `<div class="acc-card acc-card-grid tap${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div class="acc-icon" style="background:${a.iconBg}">${iconHtml(a.icon)}</div>
         <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions" style="margin-left:0">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </div>
       </div>
-      <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</div>
-      <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${esc(a.type||"")}${a.bank?' · '+esc(a.bank):''}</div>
+      <div style="font-size:14px;font-weight:700;margin-top:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</div>
+      <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}${a.bank?' · '+esc(a.bank):''}</div>
       ${obsTag?`<div style="margin-top:6px">${obsTag}</div>`:''}
       <div style="font-size:15px;font-weight:800;margin-top:10px" class="t-num">${displayVal}</div>
       <div style="font-size:12px;font-weight:700;margin-top:2px" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
+      ${!a.observer?`<div class="acc-bar" style="margin-top:12px"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
     return `<div class="acc-card${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
       <div class="row gap12">
@@ -1108,7 +1118,6 @@ function renderComptes() {
   </div>`:'';
   _skipAccAnim=false;
   return `${renderTopBar(`
-    <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card);border:1px solid var(--border);padding:2px 10px;border-radius:20px;margin-right:2px">${S.accounts.length}</div>
     <div class="top-btn tap" id="js-acc-view" title="${gridView?'Vue liste':'Vue grille'}">${gridView?_SVG_VIEW_LIST:_SVG_VIEW_GRID}</div>
     <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -1813,8 +1822,11 @@ const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F9731
 const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
 
 function buildSegs(obj, colors) {
-  const tot=Object.values(obj).reduce((s,v)=>s+v,0);
-  return Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
+  // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
+  // donut — la garder faisait planter le dessin des tranches (voir donutSvg).
+  const entries=Object.entries(obj).filter(([,v])=>v>0);
+  const tot=entries.reduce((s,[,v])=>s+v,0);
+  return entries.sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
     name, value,
     color: colors[name]||colors[i%colors.length],
     pct: tot>0?(value/tot*100).toFixed(1):'0.0'
