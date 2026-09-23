@@ -64,7 +64,7 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.89';
+const APP_VERSION = '1.11.92';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
   '1.11.89': [
@@ -302,6 +302,7 @@ const SECURITIES_DB = {
   'EWLD':  {name:'iShares MSCI World ESG', sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
   'QQQ':   {name:'Invesco QQQ (Nasdaq)',   sector:'Technologie',    country:'USA',      currency:'USD',type:'ETF'},
   'MWRD':  {name:'Lyxor MSCI World',       sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
+  'PANX':  {name:'Amundi PEA US Tech Screened', sector:'Technologie', country:'USA',    currency:'EUR',type:'ETF'},
   'BTC':   {name:'Bitcoin',                sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'ETH':   {name:'Ethereum',               sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
   'SOL':   {name:'Solana',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
@@ -345,7 +346,7 @@ const YAHOO_MAP = {
   'JNJ':'JNJ','WMT':'WMT','UNH':'UNH',
   // ETFs
   'CW8':'CW8.PA','IWDA':'IWDA.AS','SP5':'SP5.PA','PAEEM':'PAEEM.PA',
-  'EWLD':'EWLD.PA','QQQ':'QQQ','MWRD':'MWRD.PA',
+  'EWLD':'EWLD.PA','QQQ':'QQQ','MWRD':'MWRD.PA','PANX':'PANX.PA',
   // Asia & others
   'BABA':'BABA','TSM':'TSM','SHOP':'SHOP','PLTR':'PLTR','ARM':'ARM',
   'COIN':'COIN','UBER':'UBER','SPOT':'SPOT',
@@ -353,9 +354,10 @@ const YAHOO_MAP = {
   'SU':'SU.PA','CS':'CS.PA','CAP':'CAP.PA','HO':'HO.PA',
 };
 
-// Symbole Yahoo pour un titre : table explicite, sinon le ticker brut.
+// Symbole Yahoo pour un titre : override du holding (résolution ISIN, ex. "PANX.PA") en priorité,
+// puis table explicite YAHOO_MAP, sinon le ticker brut.
 // Vrai pour la plupart des actions/ETF US cotés sans suffixe (ex: HOOD, AMD…).
-function yahooSymbolFor(ticker){ return YAHOO_MAP[ticker] || ticker; }
+function yahooSymbolFor(ticker, override){ return override || YAHOO_MAP[ticker] || ticker; }
 
 // ─── CoinGecko IDs (crypto uniquement) ───
 const CG_IDS = {
@@ -404,6 +406,7 @@ const ISIN_MAP = {
   'FR0010315770':{ ticker:'SP5',  name:'Amundi S&P 500' },
   'FR0013412285':{ ticker:'EWLD', name:'Lyxor MSCI World' },
   'FR0010429068':{ ticker:'PAEEM',name:'Amundi MSCI Emerging' },
+  'FR0013412269':{ ticker:'PANX', name:'Amundi PEA US Tech Screened' },
 };
 
 
@@ -3759,8 +3762,10 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
 // ADD POSITION MODAL
 // ═══════════════════════════════════════════════
 let _posAccId=null;
+let _posYahooSymbol=null;   // symbole Yahoo complet (avec suffixe) si résolu via ISIN, sinon null
 function openPosModal(accId){
   _posAccId=accId;
+  _posYahooSymbol=null;
   ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pos-type').value='Action';
   document.getElementById('pos-currency').value='EUR';
@@ -3792,6 +3797,11 @@ function closePosModal(){
     acList.classList.add('hidden');
     return true;
   }
+  function fillFromIsinEntry(entry){
+    tickerInp.value=entry.ticker;
+    if(!fillFromDB(entry.ticker)) document.getElementById('pos-name').value=entry.name;
+    toast(`ISIN résolu : ${entry.ticker} ✓`);
+  }
   // Titre hors base : résolution en ligne (nom, devise, type) via le proxy
   async function resolveAndFill(tk){
     if(!tk || SECURITIES_DB[tk]) return;
@@ -3803,22 +3813,38 @@ function closePosModal(){
     document.getElementById('pos-type').value=info.type;
     toast(`${tk} résolu : ${info.name} (${info.currency}) ✓`);
   }
+  // ISIN absent de la base locale : résolution en ligne (ticker, nom, devise, type) via le proxy
+  async function resolveIsinAndFill(isin){
+    const info = await resolveIsinOnline(isin);
+    if(!info){ toast(`ISIN « ${isin} » introuvable en ligne`); return; }
+    tickerInp.value=info.ticker;
+    _posYahooSymbol=info.yahooSymbol||null;   // suffixe Yahoo (ex. .PA) mémorisé à part, jamais affiché
+    const nameEl=document.getElementById('pos-name');
+    if(!nameEl.value.trim()) nameEl.value=info.name;
+    setSelectValue(document.getElementById('pos-currency'), info.currency, info.currency);
+    document.getElementById('pos-type').value=info.type;
+    toast(`ISIN résolu : ${info.ticker} (${info.name}) ✓`);
+  }
   tickerInp.addEventListener('input',()=>{
+    _posYahooSymbol=null;   // toute frappe manuelle invalide un précédent symbole Yahoo résolu par ISIN
     const q=tickerInp.value.trim().toUpperCase();
     if(!q){acList.classList.add('hidden');return;}
     // ISIN detection: 12 chars, 2 letters + 10 alphanumeric
     if(/^[A-Z]{2}[A-Z0-9]{10}$/.test(q)){
       const entry=ISIN_MAP[q];
       if(entry){
-        tickerInp.value=entry.ticker;
-        if(!fillFromDB(entry.ticker)){
-          document.getElementById('pos-name').value=entry.name;
-        }
-        toast(`ISIN résolu : ${entry.ticker} ✓`);
+        fillFromIsinEntry(entry);
         acList.classList.add('hidden');
         return;
       }
-      // ISIN inconnu → on laisse tomber dans la recherche normale (affiche l'option saisie manuelle)
+      // ISIN absent de la base locale → proposer une résolution en ligne (recherche Yahoo)
+      acList.innerHTML=`<div class="ac-item ac-empty" data-isin="${q}">
+        <span class="ac-tick">🔍</span>
+        <span class="ac-name">Résoudre l'ISIN « ${q} » en ligne</span>
+        <span class="ac-sub">ticker + nom + devise auto</span>
+      </div>`;
+      acList.classList.remove('hidden');
+      return;
     }
     const matches=Object.entries(SECURITIES_DB).filter(([k,v])=>
       k.startsWith(q)||v.name.toUpperCase().includes(q)
@@ -3845,6 +3871,12 @@ function closePosModal(){
   acList.addEventListener('click',e=>{
     const item=e.target.closest('.ac-item');
     if(!item) return;
+    if(item.dataset.isin){
+      acList.classList.add('hidden');
+      resolveIsinAndFill(item.dataset.isin);
+      document.getElementById('pos-name').focus();
+      return;
+    }
     if(item.dataset.manual){
       acList.classList.add('hidden');
       resolveAndFill(tickerInp.value.trim().toUpperCase());
@@ -3857,6 +3889,11 @@ function closePosModal(){
   tickerInp.addEventListener('blur',()=>setTimeout(()=>acList.classList.add('hidden'),200));
   tickerInp.addEventListener('change',()=>{
     const tk=tickerInp.value.trim().toUpperCase();
+    if(/^[A-Z]{2}[A-Z0-9]{10}$/.test(tk)){
+      const entry=ISIN_MAP[tk];
+      if(entry) fillFromIsinEntry(entry); else resolveIsinAndFill(tk);
+      return;
+    }
     if(!fillFromDB(tk)) resolveAndFill(tk);
   });
 })();
@@ -3880,6 +3917,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const hid=ticker+'_'+Date.now().toString(36);
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
     type,country,sector,currency,
+    ...(_posYahooSymbol && _posYahooSymbol!==ticker ? {yahooSymbol:_posYahooSymbol} : {}),
     transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
     value:qty*pru,pnl:0,pnlPct:0,pnlRef:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
   acc.holdings.push(newH);
@@ -4751,6 +4789,41 @@ async function resolveTickerOnline(ticker){
   }catch(_){ return null; }
 }
 
+// Résout un ISIN absent de ISIN_MAP via le proxy (route ?search=, recherche Yahoo).
+// Étape 1 : ISIN → symbole Yahoo (search, ex. "PANX.PA"). Étape 2 : symbole → devise/nom précis (quote, déjà déployée).
+// Le ticker AFFICHÉ/stocké est la partie avant le suffixe d'place ("PANX") — cohérent avec le reste de
+// l'appli (tickers courts partout : badges 4 caractères, etc.) — le suffixe est renvoyé à part
+// dans `yahooSymbol` pour que l'appelant puisse fiabiliser les prochains rafraîchissements de cours.
+// Renvoie {ticker, yahooSymbol?, name, currency, type} ou null. Best-effort, silencieux.
+async function resolveIsinOnline(isin){
+  if(_tickerMeta['ISIN:'+isin]) return _tickerMeta['ISIN:'+isin];
+  try{
+    const r = await fetch(PROXY_URL + '?search=' + encodeURIComponent(isin),
+      { signal: AbortSignal.timeout(12000) });
+    if(!r.ok) return null;
+    const data = await r.json();
+    const q = (data?.quotes||[]).find(x => x.symbol && (x.quoteType==='EQUITY'||x.quoteType==='ETF'));
+    if(!q) return null;
+    const type = q.quoteType==='ETF' ? 'ETF' : 'Action';
+    const fullSymbol = q.symbol;
+    const baseTicker = fullSymbol.split('.')[0].toUpperCase();
+    const yahooSymbol = fullSymbol.toUpperCase()!==baseTicker ? fullSymbol : undefined;
+    let info = { ticker:baseTicker, yahooSymbol, name:q.longname||q.shortname||fullSymbol, currency:'EUR', type };
+    // Affine devise/nom via la route quote existante (le search Yahoo ne renvoie pas la devise)
+    try{
+      const r2 = await fetch(PROXY_URL + '?symbols=' + encodeURIComponent(fullSymbol),
+        { signal: AbortSignal.timeout(12000) });
+      if(r2.ok){
+        const data2 = await r2.json();
+        const q2 = data2?.quoteResponse?.result?.find(x => x.regularMarketPrice);
+        if(q2) info = { ...info, name:q2.longName||q2.shortName||info.name, currency:(q2.currency||'EUR').toUpperCase() };
+      }
+    }catch(_){}
+    _tickerMeta['ISIN:'+isin] = info;
+    return info;
+  }catch(_){ return null; }
+}
+
 // Affecte une valeur à un <select>, en créant l'option si absente (ex: devise CAD/JPY).
 function setSelectValue(sel, val, label){
   if(!sel) return;
@@ -4837,7 +4910,9 @@ let _tickerFetching = false;
 async function fetchTickerPrice(ticker, accId, holdingId) {
   if (_tickerFetching) return;
   _tickerFetching = true;
-  const yhSym = yahooSymbolFor(ticker);
+  const acc = S.accounts.find(a => a.id === accId);
+  const h   = acc?.holdings.find(h => h.id === holdingId);
+  const yhSym = yahooSymbolFor(ticker, h?.yahooSymbol);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _tickerFetching=false; return; }
 
@@ -4851,8 +4926,6 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
 
   if (!price) { if (!_tdRateLimited || Date.now()-_tdRateLimited>61000) toast('Cours introuvable'); return; }
 
-  const acc = S.accounts.find(a => a.id === accId);
-  const h   = acc?.holdings.find(h => h.id === holdingId);
   if (h) {
     h.currentPrice = price;
     recalcHolding(h);
@@ -4928,7 +5001,7 @@ async function fetchTickerHistory(ticker, accId, holdingId) {
   const acc = S.accounts.find(a => a.id === accId);
   const h   = acc?.holdings.find(h => h.id === holdingId);
   if (!h) return;
-  const yhSym = yahooSymbolFor(ticker);
+  const yhSym = yahooSymbolFor(ticker, h.yahooSymbol);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
 
@@ -5087,7 +5160,7 @@ async function fetchLivePrices() {
     .filter(w => !CG_IDS[w.ticker])           // crypto suivie → gérée par CoinGecko
     .map(w => yahooSymbolFor(w.ticker));
   const yahooSymbols = [...new Set([
-    ...allH.filter(h=>h.type!=='Crypto').map(h=>yahooSymbolFor(h.ticker)),
+    ...allH.filter(h=>h.type!=='Crypto').map(h=>yahooSymbolFor(h.ticker, h.yahooSymbol)),
     ...watchSymbols,
   ])];
   // Cryptos des comptes ET de la watchlist (une crypto suivie sans position n'était jamais rafraîchie)
@@ -5099,6 +5172,7 @@ async function fetchLivePrices() {
   // Map inverse : symbole Yahoo → ticker app
   const yahooRev = {};
   Object.entries(YAHOO_MAP).forEach(([app,yh])=>yahooRev[yh]=app);
+  allH.forEach(h => { if(h.yahooSymbol) yahooRev[h.yahooSymbol]=h.ticker; }); // override par holding (résolution ISIN)
   // Map inverse : CoinGecko id → ticker app
   const cgRev = {};
   Object.entries(CG_IDS).forEach(([app,cg])=>cgRev[cg]=app);

@@ -2,13 +2,14 @@
    Cloudflare Worker — proxy "patrimoine-prices"
    Déployé sur : https://patrimoine-prices.al-the-best.workers.dev
 
-   Deux routes :
+   Trois routes :
    1) ?symbols=MC.PA,AAPL,EURUSD=X      → cours spot Yahoo (v7 quote, crumb auth)
    2) ?chart=MC.PA&range=5y&interval=1d → historique Yahoo (v8 chart)
+   3) ?search=FR0013412269              → recherche Yahoo (nom/ISIN → symbole, v1 search)
 
    La récupération crumb/cookie (cache 5 min) est factorisée dans getCrumb()
-   et partagée par les deux routes. Le v8 chart n'a pas besoin du crumb mais
-   réutilise le cookie (limite les 401/429 de Yahoo).
+   et partagée par les trois routes. Les v8 chart et v1 search n'ont pas besoin
+   du crumb mais réutilisent le cookie (limite les 401/429 de Yahoo).
    ──────────────────────────────────────────────────────────────────────── */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
@@ -58,9 +59,27 @@ export default {
       }
     }
 
+    // ── ROUTE RECHERCHE (v1 search : nom/ISIN → symbole) ──
+    const search = url.searchParams.get('search');
+    if (search) {
+      try {
+        const { cookie } = await getCrumb();   // réutilise le cookie (pas de crumb requis ici)
+        const yfResp = await fetch(
+          `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(search)}&quotesCount=5&newsCount=0`,
+          { headers: { 'User-Agent': UA, 'Cookie': cookie } }
+        );
+        return new Response(await yfResp.text(), {
+          status: yfResp.status,
+          headers: { ...CORS, 'Cache-Control': 'max-age=86400' }   // ISIN/nom → symbole : stable, cache 24h
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
+      }
+    }
+
     // ── ROUTE COURS SPOT (v7 quote, inchangée) ──
     const symbols = url.searchParams.get('symbols');
-    if (!symbols) return new Response(JSON.stringify({ error: 'symbols or chart required' }), { status: 400, headers: CORS });
+    if (!symbols) return new Response(JSON.stringify({ error: 'symbols, chart or search required' }), { status: 400, headers: CORS });
     try {
       const { cookie, crumb } = await getCrumb();
       const yfResp = await fetch(
