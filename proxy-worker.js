@@ -10,6 +10,11 @@
    La récupération crumb/cookie (cache 5 min) est factorisée dans getCrumb()
    et partagée par les trois routes. Les v8 chart et v1 search n'ont pas besoin
    du crumb mais réutilisent le cookie (limite les 401/429 de Yahoo).
+
+   ?symbols= : le crumb peut être invalidé côté Yahoo avant expiration du cache
+   5 min (résultat vide malgré un fetch qui aboutit) → 1 retry automatique avec
+   un crumb frais. Le status HTTP répercuté est celui de Yahoo (plus de 200
+   implicite qui masquait un échec réel côté logs de l'appli).
    ──────────────────────────────────────────────────────────────────────── */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
@@ -18,8 +23,8 @@ const CORS = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/
 // Cache module-level : persiste entre les requêtes d'une même instance
 let _crumbCache = { cookie: '', crumb: '', expires: 0 };
 
-async function getCrumb() {
-  if (Date.now() > _crumbCache.expires) {
+async function getCrumb(forceRefresh) {
+  if (forceRefresh || Date.now() > _crumbCache.expires) {
     const fcResp = await fetch('https://fc.yahoo.com', { headers: { 'User-Agent': UA } });
     const rawCookie = fcResp.headers.get('set-cookie') || '';
     const cookie = rawCookie.split('\n').map(c => c.split(';')[0]).join('; ');
@@ -81,13 +86,29 @@ export default {
     const symbols = url.searchParams.get('symbols');
     if (!symbols) return new Response(JSON.stringify({ error: 'symbols, chart or search required' }), { status: 400, headers: CORS });
     try {
-      const { cookie, crumb } = await getCrumb();
-      const yfResp = await fetch(
-        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&crumb=${encodeURIComponent(crumb)}`,
-        { headers: { 'User-Agent': UA, 'Cookie': cookie } }
-      );
-      const data = await yfResp.json();
-      return new Response(JSON.stringify(data), { headers: { ...CORS, 'Cache-Control': 'max-age=180' } });
+      const fetchQuote = async (crumb, cookie) => {
+        const r = await fetch(
+          `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols)}&crumb=${encodeURIComponent(crumb)}`,
+          { headers: { 'User-Agent': UA, 'Cookie': cookie } }
+        );
+        const data = await r.json().catch(() => null);
+        return { r, data };
+      };
+
+      let { cookie, crumb } = await getCrumb();
+      let { r: yfResp, data } = await fetchQuote(crumb, cookie);
+
+      // Crumb invalidé côté Yahoo (résultat vide malgré un statut OK) → 1 retry avec un crumb frais
+      if (!data?.quoteResponse?.result?.length) {
+        ({ cookie, crumb } = await getCrumb(true));
+        ({ r: yfResp, data } = await fetchQuote(crumb, cookie));
+      }
+
+      // Status Yahoo répercuté tel quel (au lieu d'un 200 implicite qui masquait les échecs)
+      return new Response(JSON.stringify(data), {
+        status: yfResp.status,
+        headers: { ...CORS, 'Cache-Control': 'max-age=180' }
+      });
     } catch (e) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
     }
