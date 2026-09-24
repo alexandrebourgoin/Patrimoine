@@ -64,9 +64,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.92';
+const APP_VERSION = '1.11.93';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.93': [
+    { type:'fix',     text:"Modifier un titre : le ticker n'était pas modifiable (champ verrouillé) — impossible de corriger une erreur de saisie sans supprimer puis recréer la ligne. Il est désormais éditable, avec vérification qu'il n'existe pas déjà dans le compte." },
+  ],
   '1.11.89': [
     { type:'fix',     text:"Graphiques de répartition (Analyse) : une part minuscule ou nulle (ex. compte sans titres) pouvait faire passer tout le donut d'une seule couleur au lieu d'afficher les vraies proportions." },
     { type:'improve', text:"Vue grille des comptes : cartes réalignées sur le style de la liste (même icône, même infos — nombre de valeurs et barre de répartition inclus), juste réparties sur 2 colonnes." },
@@ -4317,6 +4320,13 @@ document.getElementById('edit-holding-close').addEventListener('click',closeEdit
 document.getElementById('eh-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_ehAccId);
   const h=acc?.holdings.find(h=>h.id===_ehHoldId); if(!h) return;
+  const newTicker=document.getElementById('eh-ticker').value.trim().toUpperCase();
+  if(!newTicker){toast('Ticker requis');return;}
+  if(newTicker!==h.ticker){
+    if(acc.holdings.find(o=>o.id!==h.id&&o.ticker===newTicker)){toast('Ce ticker existe déjà dans ce compte');return;}
+    h.ticker=newTicker;
+    delete h.yahooSymbol; // le suffixe Yahoo mémorisé référait à l'ancien ticker
+  }
   const newName=document.getElementById('eh-name').value.trim();
   if(newName) h.name=newName;
   h.type=document.getElementById('eh-type').value;
