@@ -64,9 +64,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.94';
+const APP_VERSION = '1.11.95';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.95': [
+    { type:'fix', text:"Le bouton retour Android depuis un compte revient désormais toujours à la liste des comptes, même si la pile de navigation est incomplète." },
+  ],
   '1.11.94': [
     { type:'fix',     text:"Tirer pour actualiser sur l'écran d'un compte titres appliquait une simulation de cours aléatoire (biaisée à la hausse) au lieu de récupérer les vrais cours — le solde augmentait à chaque tirage jusqu'à un rafraîchissement depuis l'accueil. Le geste récupère désormais les cours réels, comme le bouton ↻ de l'accueil." },
   ],
@@ -988,6 +991,10 @@ function go(target, dir=null) {
 }
 
 function back() {
+  if (S.screen === 'account' && S.stack[S.stack.length - 2] !== 'comptes') {
+    go('comptes', 'back');
+    return;
+  }
   if (S.stack.length > 1) {
     go(S.stack[S.stack.length - 2]);
   } else {
