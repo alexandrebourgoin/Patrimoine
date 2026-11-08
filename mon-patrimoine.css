@@ -351,6 +351,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .add-modal-bg.show{opacity:1;pointer-events:all}
 .add-modal-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;z-index:215;transition:transform .32s cubic-bezier(.4,0,.2,1);padding-bottom:max(20px,env(safe-area-inset-bottom))}
 .add-modal-sheet.show{transform:translateX(-50%) translateY(0)}
+#cf-modal-sheet{max-height:90vh;max-height:90dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#cf-list{max-height:30vh;max-height:30dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 
 /* ─── AUTOCOMPLETE ─── */
 .ac-wrap{position:relative}
