@@ -65,9 +65,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.100';
+const APP_VERSION = '1.11.102';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.101': [
+    { type:'fix', text:"« Rechercher une mise à jour » ne recharge plus l'appli quand elle est déjà à jour : il affiche « Déjà à jour » et ne recharge que si une version plus récente existe." },
+  ],
   '1.11.100': [
     { type:'new', text:"Réglages → À propos → « Rechercher une mise à jour » : compare avec la dernière version en ligne, vide le cache de l'appli et la recharge en une fois, sans avoir à la redémarrer plusieurs fois. Les données (comptes, réglages, DCA) sont conservées." },
   ],
@@ -2570,7 +2573,7 @@ function renderSettings() {
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
       </div>
-      <div class="flex1 col gap4"><div class="s-name">Rechercher une mise à jour</div><div class="s-sub">Vide le cache de l'appli et la recharge (tes données sont conservées)</div></div>
+      <div class="flex1 col gap4"><div class="s-name">Recherche de mise à jour</div><div class="s-sub">Vérifie si une nouvelle version est disponible</div></div>
     </div>
     <div class="s-item tap" id="js-open-changelog" style="cursor:pointer">
       <div class="s-ico" style="background:rgba(255,200,50,.13)">
@@ -6388,7 +6391,8 @@ document.addEventListener('keydown', e => {
 // MISE À JOUR FORCÉE
 // Le service worker sert l'ancienne version en premier (stale-while-revalidate) : la nouvelle
 // n'apparaît qu'au lancement suivant, parfois le 2e ou 3e. Ici : on vérifie la version distante
-// en contournant tous les caches, puis on désinscrit le SW, on vide ses caches et on recharge.
+// en contournant tous les caches. Identique → message « déjà à jour », sinon on désinscrit le SW,
+// on vide ses caches et on recharge.
 // localStorage (comptes, réglages, DCA) n'est pas touché.
 // ═══════════════════════════════════════════════
 let _updating = false;
@@ -6407,12 +6411,18 @@ async function forceAppUpdate() {
     _updating = false;
     return;
   }
+  // Même version que celle en ligne : rien à faire, on ne recharge pas pour rien
+  if (remote === APP_VERSION) {
+    toast(`Déjà à jour (version ${APP_VERSION}) ✓`);
+    _updating = false;
+    return;
+  }
   try {
     const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
     await Promise.all(regs.map(r => r.unregister()));
     for (const k of await caches.keys()) await caches.delete(k);
   } catch (e) {}
-  toast(remote && remote !== APP_VERSION ? `Mise à jour ${APP_VERSION} → ${remote}…` : `Version ${APP_VERSION} à jour — rechargement…`);
+  toast(remote ? `Mise à jour ${APP_VERSION} → ${remote}…` : 'Version en ligne illisible — rechargement…');
   setTimeout(() => location.reload(), 700);
 }
 
