@@ -74,29 +74,17 @@
   <div id="s-settings"   class="screen no-nav"></div>
   <div id="s-watchstock" class="screen no-nav"></div>
   <div id="s-assistant"  class="screen no-nav"></div>
+  <div id="s-dca"        class="screen no-nav"></div>
 
-  <nav id="nav">
-    <div class="nav-btn on" data-nav="dashboard">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-      <span>Accueil</span>
-      <div class="nav-pip"></div>
-    </div>
-    <div class="nav-btn" data-nav="comptes">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 10v7h3v-7H4zm6 0v7h3v-7h-3zM2 22h19v-3H2v3zm14-12v7h3v-7h-3zM11.5 1L2 6v2h19V6l-9.5-5z"/></svg>
-      <span>Comptes</span>
-      <div class="nav-pip"></div>
-    </div>
-    <div class="nav-btn" data-nav="recherche">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-      <span>Recherche</span>
-      <div class="nav-pip"></div>
-    </div>
-    <div class="nav-btn" data-nav="analysis">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 2v20C5.93 21.5 2 17.21 2 12s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z"/></svg>
-      <span>Analyse</span>
-      <div class="nav-pip"></div>
-    </div>
-  </nav>
+  <nav id="nav"></nav>
+  <div id="drawer-bg"></div>
+  <aside id="drawer" aria-label="Menu"></aside>
+</div>
+<!-- DCA MODAL (contenu généré en JS : plan / objectif) -->
+<div id="dca-modal-bg" class="add-modal-bg"></div>
+<div id="dca-modal-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body" id="dca-modal-body"></div>
 </div>
 <div id="toast"></div>
 <input type="file" id="csv-file" accept=".csv">

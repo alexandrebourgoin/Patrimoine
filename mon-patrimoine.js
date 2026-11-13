@@ -31,6 +31,7 @@ const S = {
   autoRefresh: false, // auto-refresh au démarrage (désactivé par défaut)
   accountsView: 'list', // 'list' | 'grid' — affichage de l'écran Comptes
   assistantEnabled: true, // affiche le menu Assistant IA (recos locales)
+  navItems: ['dashboard','comptes','recherche','analysis'], // raccourcis de la barre du bas (3 à 5)
   bgPrivacy: true,    // masque l'écran quand l'appli passe en arrière-plan
   bgIdle: 0,          // s d'inactivité avant masquage (0 = jamais)
   priceApiKey: '',    // clé Twelve Data (US stocks)
@@ -64,9 +65,19 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.95';
+const APP_VERSION = '1.11.98';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.98': [
+    { type:'fix', text:"Le DCA & objectifs est maintenant séparé entre mode démo et mode réel (comme les comptes) : la bascule dans Réglages charge le DCA du bon mode. Un DCA déjà saisi est conservé dans le mode actif. L'export JSON inclut le DCA du mode réel." },
+  ],
+  '1.11.97': [
+    { type:'new', text:"DCA & objectifs (menu ☰ → Écrans) : plan d'investissement programmé (budget mensuel, jour d'échéance, répartition en % entre titres), cumul théorique, prochaine répartition avec nombre de parts estimé, projection sur 12 échéances et historique des changements de stratégie. Objectifs de capital (cible, date, rendement hypothétique) avec projection et versement mensuel nécessaire. Tout est théorique et stocké sur l'appareil." },
+  ],
+  '1.11.96': [
+    { type:'new', text:"Menu ☰ en haut à droite : confidentialité, actualisation des cours, assistant IA, réglages et accès à tous les écrans. La barre du haut ne garde que ☰ (et la confidentialité sur l'accueil), le badge d'alertes de l'assistant est repris sur ☰." },
+    { type:'new', text:"Barre du bas personnalisable : menu ☰ → « Personnaliser la barre du bas » pour choisir 3 à 5 raccourcis (écrans ou actions comme Actualiser / Masquer) et les réordonner." },
+  ],
   '1.11.95': [
     { type:'fix', text:"Le bouton retour Android depuis un compte revient désormais toujours à la liste des comptes, même si la pile de navigation est incomplète." },
   ],
@@ -1002,7 +1013,7 @@ function back() {
     // où on doit revenir selon l'écran courant
     const fallbacks = {
       account: 'comptes', stock: 'account',
-      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard',
+      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard',
     };
     const fb = fallbacks[S.screen];
     if (fb) go(fb);
@@ -1014,8 +1025,8 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant};
-  if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca};
+  if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); if(id==='dca') bindDca(el); }
 }
 
 // ── TOP BAR commun (tous les écrans principaux) ──
@@ -1029,11 +1040,179 @@ function renderTopBar(extraBtns='') {
     <div class="top-bar-title">Mon patrimoine</div>
     <div class="row gap8">
       ${extraBtns}
-      ${S.assistantEnabled ? (() => { const _n = assistantAlertCount(); return `<div id="js-assistant-btn" class="top-btn tap" title="Assistant IA${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''}`:''}" style="color:var(--accent);position:relative">${_SVG_ASSISTANT}${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`; })() : ''}
-      <div id="js-settings-btn" class="top-btn tap" title="Réglages">${_SVG_SETTINGS}</div>
+      ${(() => { const _n = S.assistantEnabled ? assistantAlertCount() : 0; return `<div id="js-burger-btn" class="top-btn tap" title="Menu${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''} dans l'assistant`:''}" style="position:relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`; })()}
     </div>
   </div>`;
 }
+
+// ═══════════════════════════════════════════════
+// MENU BURGER (tiroir) + RACCOURCIS DE LA BARRE DU BAS
+// ═══════════════════════════════════════════════
+const _NAV_PATH = {
+  dashboard: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z',
+  comptes:   'M4 10v7h3v-7H4zm6 0v7h3v-7h-3zM2 22h19v-3H2v3zm14-12v7h3v-7h-3zM11.5 1L2 6v2h19V6l-9.5-5z',
+  recherche: 'M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+  analysis:  'M11 2v20C5.93 21.5 2 17.21 2 12s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.24-8.52-8.97-8.99zm0 11.01V22c4.74-.47 8.5-4.25 8.97-8.99h-8.97z',
+  assistant: 'M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12zM6 14l.75 2.05L8.8 16.8l-2.05.75L6 19.6l-.75-2.05L3.2 16.8l2.05-.75L6 14z',
+  settings:  'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
+  dca:       'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+  refresh:   'M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
+  eye:       'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
+  eyeoff:    'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
+};
+// kind: 'screen' (ouvre un écran) | 'action' (exécute sans changer d'écran)
+const NAV_CATALOG = {
+  dashboard: { label:'Accueil',    kind:'screen' },
+  comptes:   { label:'Comptes',    kind:'screen' },
+  recherche: { label:'Recherche',  kind:'screen' },
+  analysis:  { label:'Analyse',    kind:'screen' },
+  dca:       { label:'DCA',        kind:'screen' },
+  assistant: { label:'Assistant',  kind:'screen' },
+  settings:  { label:'Réglages',   kind:'screen' },
+  refresh:   { label:'Actualiser', kind:'action' },
+  privacy:   { label:'Masquer',    kind:'action' },
+};
+const NAV_DEFAULT = ['dashboard','comptes','recherche','analysis'];
+const NAV_MIN = 3, NAV_MAX = 5;
+
+function navIconSvg(key, size=22) {
+  const p = key==='privacy' ? (S.privacy ? _NAV_PATH.eyeoff : _NAV_PATH.eye) : _NAV_PATH[key];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="${p}"/></svg>`;
+}
+function navLabel(key) {
+  if (key==='privacy') return S.privacy ? 'Afficher' : 'Masquer';
+  return NAV_CATALOG[key].label;
+}
+// Raccourcis effectivement affichés (l'assistant disparaît s'il est désactivé dans Réglages)
+function activeNavItems() {
+  return S.navItems.filter(k => NAV_CATALOG[k] && !(k==='assistant' && !S.assistantEnabled));
+}
+function renderNav() {
+  const nav = document.getElementById('nav'); if (!nav) return;
+  nav.innerHTML = activeNavItems().map(k =>
+    `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}">${navIconSvg(k)}<span>${navLabel(k)}</span><div class="nav-pip"></div></div>`
+  ).join('');
+}
+function togglePrivacy() {
+  S.privacy = !S.privacy;
+  ['dashboard','comptes','account','stock','analysis','recherche'].forEach(renderScreen);
+  renderNav();
+}
+// Exécute un raccourci / une entrée de menu
+function runShortcut(key) {
+  const def = NAV_CATALOG[key]; if (!def) return;
+  if (key==='refresh') { fetchLivePrices(); return; }
+  if (key==='privacy') { togglePrivacy(); return; }
+  if (key===S.screen) return;
+  if (NAV_SCREENS.includes(key)) {
+    const fi = NAV_SCREENS.indexOf(S.screen), ti = NAV_SCREENS.indexOf(key);
+    go(key, (fi>=0 && ti<fi) ? 'back' : 'forward');
+  } else {
+    go(key);
+  }
+}
+function sanitizeNavItems(arr) {
+  if (!Array.isArray(arr)) return NAV_DEFAULT.slice();
+  const out = [...new Set(arr.filter(k => NAV_CATALOG[k]))].slice(0, NAV_MAX);
+  return out.length >= NAV_MIN ? out : NAV_DEFAULT.slice();
+}
+
+let _drawerEdit = false;
+function drawerRow(key, opts={}) {
+  const badge = key==='assistant' && S.assistantEnabled ? assistantAlertCount() : 0;
+  const lbl = key==='privacy' ? (S.privacy ? 'Afficher les montants' : 'Masquer les montants')
+            : key==='refresh' ? 'Actualiser les cours'
+            : key==='assistant' ? 'Assistant IA'
+            : key==='dca' ? 'DCA & objectifs'
+            : NAV_CATALOG[key].label;
+  const on = NAV_CATALOG[key].kind==='screen' && key===S.screen;
+  return `<div class="dr-row${on?' on':''}" data-dkey="${key}"${key==='refresh'?' id="js-refresh-btn"':''}>
+    ${navIconSvg(key,20)}<span class="dr-lbl">${lbl}</span>
+    ${badge?`<span class="dr-pill">${badge>9?'9+':badge}</span>`:''}
+    ${key==='refresh'?'<span class="fresh-dot" id="js-fresh-dot"></span>':''}
+  </div>`;
+}
+function renderDrawer() {
+  const d = document.getElementById('drawer'); if (!d) return;
+  const close = `<div class="dr-btn" id="js-drawer-close" title="Fermer">✕</div>`;
+  if (!_drawerEdit) {
+    d.innerHTML = `<div class="dr-head"><div class="dr-title">Menu</div>${close}</div>
+      <div class="dr-sec">Actions</div>
+      ${['privacy','refresh', ...(S.assistantEnabled?['assistant']:[]), 'settings'].map(k=>drawerRow(k)).join('')}
+      <div class="dr-sec">Écrans</div>
+      ${[...NAV_SCREENS, 'dca'].map(k=>drawerRow(k)).join('')}
+      <div class="dr-sep"></div>
+      <div class="dr-row" id="js-drawer-edit"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="dr-lbl">Personnaliser la barre du bas</span></div>`;
+  } else {
+    const sel = S.navItems.filter(k => NAV_CATALOG[k]);
+    const rest = Object.keys(NAV_CATALOG).filter(k => !sel.includes(k));
+    const full = sel.length >= NAV_MAX;
+    d.innerHTML = `<div class="dr-head"><div class="dr-title">Barre du bas</div>${close}</div>
+      <div class="dr-hint">Choisis entre ${NAV_MIN} et ${NAV_MAX} raccourcis et réordonne-les (${sel.length}/${NAV_MAX}).</div>
+      <div class="dr-sec">Affichés</div>
+      ${sel.map((k,i)=>`<div class="dr-row" style="cursor:default">${navIconSvg(k,20)}<span class="dr-lbl">${NAV_CATALOG[k].label}</span>
+        <div class="dr-btn${i===0?' off':''}" data-dmove="${k}" data-dir="-1">↑</div>
+        <div class="dr-btn${i===sel.length-1?' off':''}" data-dmove="${k}" data-dir="1">↓</div>
+        <div class="dr-btn${sel.length<=NAV_MIN?' off':''}" data-dtoggle="${k}">✕</div></div>`).join('')}
+      <div class="dr-sec">Disponibles</div>
+      ${rest.map(k=>`<div class="dr-row" style="cursor:default">${navIconSvg(k,20)}<span class="dr-lbl">${NAV_CATALOG[k].label}</span>
+        <div class="dr-btn${full?' off':''}" data-dtoggle="${k}">+</div></div>`).join('')}
+      <div class="dr-sep"></div>
+      <div class="dr-row" id="js-drawer-back"><span class="dr-lbl">← Retour au menu</span></div>
+      <div class="dr-row" id="js-drawer-reset"><span class="dr-lbl" style="color:var(--text3)">Rétablir les raccourcis par défaut</span></div>`;
+  }
+  // Couleur du point de fraîcheur des cours (même seuils que l'ancien bouton ↻)
+  const dot = d.querySelector('#js-fresh-dot');
+  if (dot) {
+    const age = S.lastPriceUpdate ? Date.now() - S.lastPriceUpdate : Infinity;
+    dot.style.background = age < 5*60*1000 ? 'var(--gain)' : age < 60*60*1000 ? '#F59E0B' : 'var(--text3)';
+  }
+}
+function openDrawer() {
+  _drawerEdit = false;
+  renderDrawer();
+  document.getElementById('drawer-bg').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('drawer-bg').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+}
+function saveNavItems(items) {
+  S.navItems = items;
+  saveSettings();
+  renderNav();
+  renderDrawer();
+}
+document.getElementById('drawer-bg').addEventListener('click', closeDrawer);
+document.getElementById('drawer').addEventListener('click', e => {
+  if (e.target.closest('#js-drawer-close')) { closeDrawer(); return; }
+  if (e.target.closest('#js-drawer-edit'))  { _drawerEdit = true;  renderDrawer(); return; }
+  if (e.target.closest('#js-drawer-back'))  { _drawerEdit = false; renderDrawer(); return; }
+  if (e.target.closest('#js-drawer-reset')) { saveNavItems(NAV_DEFAULT.slice()); return; }
+  const mv = e.target.closest('[data-dmove]');
+  if (mv && !mv.classList.contains('off')) {
+    const items = S.navItems.slice(), i = items.indexOf(mv.dataset.dmove), j = i + (+mv.dataset.dir);
+    if (i>=0 && j>=0 && j<items.length) { [items[i], items[j]] = [items[j], items[i]]; saveNavItems(items); }
+    return;
+  }
+  const tg = e.target.closest('[data-dtoggle]');
+  if (tg && !tg.classList.contains('off')) {
+    const k = tg.dataset.dtoggle;
+    const items = S.navItems.includes(k) ? S.navItems.filter(x => x!==k) : [...S.navItems, k];
+    if (items.length>=NAV_MIN && items.length<=NAV_MAX) saveNavItems(items);
+    return;
+  }
+  const row = e.target.closest('[data-dkey]');
+  if (row) {
+    const key = row.dataset.dkey;
+    if (key==='refresh') { fetchLivePrices(); closeDrawer(); return; }   // le spinner est sur l'icône du menu
+    closeDrawer();
+    runShortcut(key);
+  }
+});
+// Ouverture depuis le bouton ☰ (présent dans la barre du haut de chaque écran principal)
+document.addEventListener('click', e => { if (e.target.closest('#js-burger-btn')) openDrawer(); });
 
 // ── DASHBOARD ──
 function renderDash() {
@@ -1055,10 +1234,6 @@ function renderDash() {
           ? `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`
           : `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
         }
-      </div>
-      <div id="js-refresh-btn" class="top-btn tap" title="Actualiser les cours" style="position:relative">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        <div class="fresh-dot" id="js-fresh-dot"></div>
       </div>
     `)}
   </div>
@@ -2546,7 +2721,6 @@ function bindEvents(id, el) {
     attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
-    el.querySelector('#js-refresh-btn')?.addEventListener('click', fetchLivePrices);
     el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
     el.querySelector('#js-watch-sort')?.addEventListener('click', () => {
       const modes = ['default','perf_desc','perf_asc'];
@@ -2592,15 +2766,7 @@ function bindEvents(id, el) {
     });
     // Privacy toggle
 
-    el.querySelector('#js-privacy-btn')?.addEventListener('click',()=>{
-      S.privacy=!S.privacy;
-      renderScreen('dashboard');
-      renderScreen('comptes');
-      renderScreen('account');
-      renderScreen('stock');
-      renderScreen('analysis');
-      renderScreen('recherche');
-    });
+    el.querySelector('#js-privacy-btn')?.addEventListener('click', togglePrivacy);
   }
   if(id==='comptes') {
     _bindAccCards(el);
@@ -2902,12 +3068,14 @@ function bindEvents(id, el) {
         toast('Mode démo chargé ✓');
       }
       S.accounts.forEach(a => { a.value = accTotal(a); }); // soldes recalculés (titres + liquidités)
+      loadDca();                                           // DCA du mode qu'on vient d'activer
       refreshMain();
       renderScreen('settings');
     });
     el.querySelector('#js-demo-reset')?.addEventListener('click',()=>{
       openConfirm('Réinitialiser les données démo ?',()=>{
         S.accounts=genDemo();
+        localStorage.removeItem(STORE_DCA_DEMO); loadDca();
         saveAccounts();
         refreshMain();
         renderScreen('settings');
@@ -2944,6 +3112,7 @@ function bindEvents(id, el) {
         watchlist: S.watchlist,
         targets:   S.targets,
         user:      S.user,
+        dca:       S.isDemo ? null : S.dca,
       };
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
@@ -2962,6 +3131,8 @@ function bindEvents(id, el) {
         localStorage.removeItem(STORE_ACCOUNTS);
         localStorage.removeItem(STORE_ACCOUNTS_DEMO);
         localStorage.removeItem(STORE_ACCOUNTS_REAL);
+        localStorage.removeItem(STORE_DCA_DEMO);
+        localStorage.removeItem(STORE_DCA_REAL);
         localStorage.removeItem(STORE_PRICES);
         localStorage.removeItem(STORE_WEALTH);
         location.reload();
@@ -2979,6 +3150,7 @@ function bindEvents(id, el) {
       saveSettings();
       // Re-render des écrans à top-bar pour afficher/masquer le bouton immédiatement
       ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
+      renderNav();
       toast('Assistant IA ' + (S.assistantEnabled ? 'activé' : 'masqué'));
     });
     el.querySelector('#js-bgpriv-tog')?.addEventListener('click', () => {
@@ -4416,15 +4588,329 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
 });
 
 // ═══════════════════════════════════════════════
+// DCA & OBJECTIFS
+// Plan d'investissement programmé (budget mensuel réparti en % entre des titres) + objectifs
+// de capital. Calculs 100 % théoriques (apports prévus), aucun achat n'est écrit dans les comptes.
+// Données : S.dca = { plans:[{from,budget,day,lines:[{ticker,name,weight,color}]}], goals:[{id,name,target,date,start,rate}] }
+// `plans` trié par date d'effet : les échéances passées gardent l'ancien budget / l'ancienne répartition.
+// ═══════════════════════════════════════════════
+// Un slot par mode (comme les comptes) : le DCA démo ne se mélange pas au DCA réel.
+const STORE_DCA_DEMO = 'patrimoine-dca-demo';
+const STORE_DCA_REAL = 'patrimoine-dca-real';
+const STORE_DCA_LEGACY = 'patrimoine-dca'; // v1.11.97 : slot unique → migré vers le mode courant
+const dcaKey = () => S.isDemo ? STORE_DCA_DEMO : STORE_DCA_REAL;
+const DCA_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4'];
+S.dca = { plans: [], goals: [] };
+
+// Charge le slot du mode courant (à rappeler après chaque bascule démo ↔ réel)
+function loadDca() {
+  S.dca = { plans: [], goals: [] };
+  try {
+    const legacy = localStorage.getItem(STORE_DCA_LEGACY);
+    if (legacy) {                       // migration unique, vers le mode actif au moment du chargement
+      if (!localStorage.getItem(dcaKey())) localStorage.setItem(dcaKey(), legacy);
+      localStorage.removeItem(STORE_DCA_LEGACY);
+    }
+    const d = JSON.parse(localStorage.getItem(dcaKey()) || 'null');
+    if (d && Array.isArray(d.plans)) S.dca.plans = d.plans.sort((a,b) => a.from < b.from ? -1 : 1);
+    if (d && Array.isArray(d.goals)) S.dca.goals = d.goals;
+  } catch(e) {}
+}
+function saveDca() { try { localStorage.setItem(dcaKey(), JSON.stringify(S.dca)); } catch(e) {} }
+
+function _ymd(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function _parseYmd(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function _fmtDate(s) { return _parseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
+function _numIn(v) { return parseFloat(String(v).replace(',', '.')); }
+
+// Plan en vigueur à une date (le dernier dont la date d'effet est passée)
+function dcaPlanAt(ymd) {
+  let p = null;
+  for (const x of S.dca.plans) if (x.from <= ymd) p = x;
+  return p;
+}
+// Toutes les échéances de la 1re date d'effet jusqu'à `untilYmd` (incluse) : [{date, plan}]
+function dcaOccurrences(untilYmd) {
+  const plans = S.dca.plans, out = [];
+  if (!plans.length) return out;
+  let cur = _parseYmd(plans[0].from); cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
+  const until = _parseYmd(untilYmd);
+  while (cur <= until) {
+    const y = cur.getFullYear(), m = cur.getMonth(), last = new Date(y, m+1, 0).getDate();
+    for (let i = 0; i < plans.length; i++) {
+      const c = _ymd(new Date(y, m, Math.min(plans[i].day, last)));
+      const next = plans[i+1];
+      if (c >= plans[i].from && (!next || c < next.from)) { if (c <= untilYmd) out.push({ date: c, plan: plans[i] }); break; }
+    }
+    cur = new Date(y, m+1, 1);
+  }
+  return out;
+}
+function dcaStats() {
+  const today = _ymd(new Date());
+  const past = dcaOccurrences(today);
+  const cumul = past.reduce((s,o) => s + o.plan.budget, 0);
+  // 12 prochaines échéances (stratégie en vigueur à chaque date)
+  const horizon = new Date(); horizon.setMonth(horizon.getMonth() + 14);
+  const future = dcaOccurrences(_ymd(horizon)).filter(o => o.date > today).slice(0, 12);
+  let run = cumul;
+  const proj = future.map(o => { run += o.plan.budget; return { date: o.date, budget: o.plan.budget, cumul: run }; });
+  return { today, past, cumul, next: future[0] || null, proj, current: dcaPlanAt(today) || S.dca.plans[0] || null };
+}
+function dcaPriceRef(ticker) {
+  for (const a of S.accounts) for (const h of a.holdings) if (h.ticker === ticker && h.currentPrice) return toRefCcy(h.currentPrice, h.currency || 'EUR');
+  const w = S.watchlist.find(w => w.ticker === ticker);
+  return w && w.price ? toRefCcy(w.price, w.currency || 'EUR') : null;
+}
+function dcaGoalCalc(g, budget) {
+  const now = new Date(), end = _parseYmd(g.date);
+  let n = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
+  if (end.getDate() < now.getDate()) n--;
+  n = Math.max(0, n);
+  const i = (g.rate || 0) / 1200, grow = Math.pow(1 + i, n);
+  const proj = (g.start || 0) * grow + (i ? budget * (grow - 1) / i : budget * n);
+  let need = null;
+  if (n > 0) need = Math.max(0, i ? (g.target - (g.start || 0) * grow) * i / (grow - 1) : (g.target - (g.start || 0)) / n);
+  return { n, proj, need, pct: Math.min(100, (g.start || 0) / g.target * 100), ok: proj >= g.target };
+}
+
+function renderDca() {
+  const st = dcaStats(), plan = st.current;
+  const header = `<div class="back tap" id="js-back">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    Retour
+  </div>
+  <div class="settings-top" style="padding-top:4px">
+    <div class="t-title">DCA & objectifs</div>
+    <div class="t-sm" style="margin-top:2px">Investissement programmé — calculs théoriques, aucun ordre passé</div>
+  </div>`;
+  const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;
+  if (!plan) return header + `<div style="text-align:center;padding:50px 20px;color:var(--text2)">
+    <div style="font-size:40px;margin-bottom:12px">📈</div>
+    <div style="font-size:15px;font-weight:600">Aucun plan DCA</div>
+    <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres.</div>
+    <button class="form-submit" id="js-dca-cfg" style="max-width:260px">Configurer le plan</button>
+  </div>` + renderDcaGoals(null);
+
+  const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
+  const lines = plan.lines.map(l => {
+    const amt = plan.budget * l.weight / 100, px = dcaPriceRef(l.ticker);
+    return `<div class="s-item" style="cursor:default">
+      <div class="s-ico" style="background:${l.color}22"><span style="width:12px;height:12px;border-radius:50%;background:${l.color}"></span></div>
+      <div class="flex1 col gap4"><div class="s-name">${esc(l.name || l.ticker)}</div>
+        <div class="s-sub">${esc(l.ticker)} · ${pct(l.weight)} %${px ? ` · ≈ ${(amt / px).toLocaleString('fr-FR', { maximumFractionDigits: 3 })} part(s)` : ''}</div></div>
+      <div style="font-weight:700">${masked(amt)}</div>
+    </div>`;
+  }).join('');
+
+  const maxC = st.proj.length ? st.proj[st.proj.length - 1].cumul : 1;
+  const bars = st.proj.map((p, i) => `<div class="dca-bar" data-i="${i}" data-date="${p.date}" data-cumul="${p.cumul}" style="flex:1;background:var(--accent);opacity:${i === 0 ? 1 : .55};border-radius:4px 4px 0 0;height:${Math.max(4, p.cumul / maxC * 100)}%;cursor:pointer"></div>`).join('');
+
+  const hist = [...S.dca.plans].reverse().map(p => `<div class="s-item" style="cursor:default">
+      <div class="flex1 col gap4"><div class="s-name">${_fmtDate(p.from)}${p === plan ? ' · en vigueur' : ''}</div>
+        <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(l.ticker) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
+      ${S.dca.plans.length > 1 ? `<div class="dr-btn" data-plandel="${p.from}">✕</div>` : ''}
+    </div>`).join('');
+
+  return header + `
+  <div class="px" style="margin-top:14px"><button class="form-submit" id="js-dca-cfg" style="margin-top:0">Modifier le plan / changer de stratégie</button></div>
+  ${sec('Mon rythme')}
+  <div class="s-group">
+    <div class="s-item" style="cursor:default"><div class="flex1 s-name">Budget mensuel</div><div style="font-weight:800">${masked(plan.budget)}</div></div>
+    <div class="s-item" style="cursor:default"><div class="flex1 s-name">Cumul théorique à ce jour</div><div style="font-weight:800">${masked(st.cumul)}</div></div>
+    <div class="s-item" style="cursor:default"><div class="flex1 s-name">Échéances passées</div><div style="font-weight:800">${st.past.length}</div></div>
+  </div>
+  ${sec(`Prochaine répartition${st.next ? ' · ' + _fmtDate(st.next.date) : ''}`)}
+  <div class="s-group">${lines}</div>
+  ${sec('Et dans 12 échéances ?')}
+  <div class="s-group" style="padding:14px 16px">
+    <div style="display:flex;align-items:flex-end;gap:4px;height:90px">${bars}</div>
+    <div id="dca-bar-info" class="t-sm" style="margin-top:10px;text-align:center">${st.proj.length ? `${_fmtDate(st.proj[0].date)} → ${_fmtDate(st.proj[st.proj.length - 1].date)} · ${masked(maxC)} cumulés (sans rendement)` : '—'}</div>
+  </div>
+  ${renderDcaGoals(plan)}
+  ${sec('Historique des stratégies')}
+  <div class="s-group">${hist}</div>
+  <div class="t-sm px" style="padding:14px 20px 30px">Cumul = somme des apports prévus par le plan, pas une valeur de portefeuille. Les données sont stockées sur cet appareil.</div>`;
+}
+
+function renderDcaGoals(plan) {
+  const sec = `<div class="t-section px" style="padding:20px 20px 8px;display:flex;align-items:center;justify-content:space-between">Objectifs<div class="dr-btn" id="js-goal-add" style="font-size:18px">+</div></div>`;
+  if (!S.dca.goals.length) return sec + `<div class="t-sm px" style="padding-bottom:8px">Aucun objectif. Ajoute un montant cible et une date pour savoir si ton plan y mène.</div>`;
+  const budget = plan ? plan.budget : 0;
+  return sec + `<div class="s-group">` + S.dca.goals.map(g => {
+    const c = dcaGoalCalc(g, budget);
+    return `<div class="s-item tap" data-goal="${g.id}" style="flex-wrap:wrap">
+      <div class="flex1 col gap4"><div class="s-name">${esc(g.name)}</div>
+        <div class="s-sub">Cible ${S.privacy ? '● ● ●' : fmtCur(g.target)} · ${_fmtDate(g.date)} · ${g.rate || 0} %/an</div></div>
+      <span class="badge ${c.ok ? 'up' : 'dn'}">${c.ok ? 'Sur la bonne voie' : 'En retard'}</span>
+      <div style="flex-basis:100%;height:6px;border-radius:3px;background:var(--card2);overflow:hidden"><div style="width:${c.pct}%;height:100%;background:${c.ok ? 'var(--gain)' : 'var(--accent)'}"></div></div>
+      <div class="s-sub" style="flex-basis:100%">Capital actuel ${masked(g.start || 0)} · projeté ${masked(c.proj)}${c.need != null && !c.ok ? ` · il faudrait ${masked(c.need)}/mois` : ''}</div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+// ── Modales (plan / objectif) ──
+let _dcaDraft = null, _dcaGoalDraft = null;
+function openDcaModal(html) {
+  document.getElementById('dca-modal-body').innerHTML = html;
+  document.getElementById('dca-modal-bg').classList.add('show');
+  document.getElementById('dca-modal-sheet').classList.add('show');
+}
+function closeDcaModal() {
+  document.getElementById('dca-modal-bg').classList.remove('show');
+  document.getElementById('dca-modal-sheet').classList.remove('show');
+  _dcaDraft = _dcaGoalDraft = null;
+}
+const _dcaHead = t => `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <div class="modal-title" style="margin-bottom:0">${t}</div>
+  <div id="dca-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div></div>`;
+
+function dcaPlanModalHTML() {
+  const p = _dcaDraft;
+  const opts = Object.entries(SECURITIES_DB).map(([t, d]) => `<option value="${esc(t)}">${esc(d.name)}</option>`).join('');
+  return _dcaHead('Plan DCA') + `<datalist id="dca-tickers">${opts}</datalist>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Budget mensuel</div><input class="form-input" id="dca-budget" type="number" min="0" step="any" inputmode="decimal" value="${p.budget || ''}" placeholder="500"></div>
+      <div class="form-field"><div class="form-label">Jour du mois</div><input class="form-input" id="dca-day" type="number" min="1" max="31" inputmode="numeric" value="${p.day}"></div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Date d'effet</div><input class="form-input" id="dca-from" type="date" value="${p.from}"></div></div>
+    <div class="form-label" style="margin-bottom:8px">Répartition (total = 100 %)</div>
+    ${p.lines.map((l, i) => `<div class="dca-line" data-i="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker" value="${esc(l.ticker)}" style="flex:1;min-width:0">
+      <input class="form-input dl-w" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="%" value="${l.weight}" style="width:76px">
+      <input class="dl-c" type="color" value="${l.color}" style="width:34px;height:34px;border:none;background:none;padding:0">
+      <div class="dr-btn${p.lines.length <= 1 ? ' off' : ''}" data-ldel="${i}">✕</div></div>`).join('')}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px">
+      <div class="dr-row" id="dca-ladd" style="padding:6px 0;color:var(--accent)">+ Ajouter un titre</div>
+      <div id="dca-total" class="t-sm" style="font-weight:700"></div></div>
+    <button class="form-submit" id="dca-save">Enregistrer le plan</button>`;
+}
+function readDcaPlanForm() {
+  const b = document.getElementById('dca-modal-body'), p = _dcaDraft;
+  p.budget = _numIn(b.querySelector('#dca-budget').value) || 0;
+  p.day = parseInt(b.querySelector('#dca-day').value, 10) || 1;
+  p.from = b.querySelector('#dca-from').value || p.from;
+  p.lines = [...b.querySelectorAll('.dca-line')].map(r => ({
+    ticker: r.querySelector('.dl-t').value.trim().toUpperCase(),
+    weight: _numIn(r.querySelector('.dl-w').value) || 0,
+    color: r.querySelector('.dl-c').value,
+  }));
+}
+function dcaUpdateTotal() {
+  const b = document.getElementById('dca-modal-body'); if (!b) return;
+  const t = [...b.querySelectorAll('.dl-w')].reduce((s, i) => s + (_numIn(i.value) || 0), 0);
+  const el = b.querySelector('#dca-total'); if (!el) return;
+  el.textContent = `Total : ${Math.round(t * 100) / 100} %`;
+  el.style.color = Math.abs(t - 100) < 0.01 ? 'var(--gain)' : 'var(--loss)';
+}
+function openDcaPlanModal() {
+  const cur = dcaStats().current, today = _ymd(new Date());
+  _dcaDraft = cur
+    ? { budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
+    : { budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
+  openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
+}
+function saveDcaPlan() {
+  readDcaPlanForm();
+  const p = _dcaDraft;
+  if (!(p.budget > 0)) return toast('Indique un budget mensuel');
+  if (p.day < 1 || p.day > 31) return toast('Jour du mois entre 1 et 31');
+  if (!p.from) return toast("Indique une date d'effet");
+  if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker de chaque ligne');
+  if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un ticker apparaît deux fois');
+  if (Math.abs(p.lines.reduce((s, l) => s + l.weight, 0) - 100) > 0.01) return toast('Le total doit faire exactement 100 %');
+  const plan = {
+    from: p.from, budget: p.budget, day: p.day,
+    lines: p.lines.map(l => ({ ticker: l.ticker, name: SECURITIES_DB[l.ticker]?.name || S.watchlist.find(w => w.ticker === l.ticker)?.name || l.ticker, weight: l.weight, color: l.color })),
+  };
+  // Même date d'effet : on remplace ; sinon on ajoute (l'historique des stratégies est conservé)
+  S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
+  saveDca(); closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
+}
+
+function openDcaGoalModal(id) {
+  const g = S.dca.goals.find(x => x.id === id);
+  const y = new Date(); y.setFullYear(y.getFullYear() + 5);
+  _dcaGoalDraft = g ? { ...g } : { id: 'g' + Date.now(), name: '', target: 0, date: _ymd(y), start: Math.round(dcaStats().cumul), rate: 4, isNew: true };
+  const d = _dcaGoalDraft;
+  openDcaModal(_dcaHead(g ? "Modifier l'objectif" : 'Nouvel objectif') + `
+    <div class="form-row"><div class="form-field"><div class="form-label">Nom</div><input class="form-input" id="dg-name" value="${esc(d.name)}" placeholder="Apport immobilier"></div></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Montant cible</div><input class="form-input" id="dg-target" type="number" min="0" step="any" inputmode="decimal" value="${d.target || ''}"></div>
+      <div class="form-field"><div class="form-label">Date cible</div><input class="form-input" id="dg-date" type="date" value="${d.date}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Capital actuel</div><input class="form-input" id="dg-start" type="number" min="0" step="any" inputmode="decimal" value="${d.start}"></div>
+      <div class="form-field"><div class="form-label">Rendement annuel (%)</div><input class="form-input" id="dg-rate" type="number" step="any" inputmode="decimal" value="${d.rate}"></div>
+    </div>
+    <div class="t-sm" style="margin-bottom:12px">Projection : capital actuel + versements mensuels du plan, capitalisés au rendement hypothétique. Rendement 0 = sans intérêts.</div>
+    <button class="form-submit" id="dg-save">Enregistrer</button>
+    ${g ? '<button class="form-submit" id="dg-del" style="background:var(--loss);margin-top:10px">Supprimer</button>' : ''}`);
+}
+function saveDcaGoal() {
+  const b = document.getElementById('dca-modal-body'), d = _dcaGoalDraft;
+  d.name = b.querySelector('#dg-name').value.trim();
+  d.target = _numIn(b.querySelector('#dg-target').value);
+  d.date = b.querySelector('#dg-date').value;
+  d.start = _numIn(b.querySelector('#dg-start').value) || 0;
+  d.rate = _numIn(b.querySelector('#dg-rate').value) || 0;
+  if (!d.name) return toast("Donne un nom à l'objectif");
+  if (!(d.target > 0)) return toast('Indique un montant cible');
+  if (!d.date) return toast('Indique une date cible');
+  const isNew = d.isNew; delete d.isNew;
+  S.dca.goals = isNew ? [...S.dca.goals, d] : S.dca.goals.map(x => x.id === d.id ? d : x);
+  saveDca(); closeDcaModal(); renderScreen('dca'); toast('Objectif enregistré ✓');
+}
+
+document.getElementById('dca-modal-bg').addEventListener('click', closeDcaModal);
+document.getElementById('dca-modal-body').addEventListener('click', e => {
+  const t = e.target;
+  if (t.closest('#dca-close')) return closeDcaModal();
+  if (t.closest('#dca-save')) return saveDcaPlan();
+  if (t.closest('#dg-save')) return saveDcaGoal();
+  if (t.closest('#dg-del')) {
+    const id = _dcaGoalDraft.id;
+    closeDcaModal();
+    return openConfirm('Supprimer cet objectif ?', () => { S.dca.goals = S.dca.goals.filter(x => x.id !== id); saveDca(); renderScreen('dca'); });
+  }
+  if (t.closest('#dca-ladd')) {
+    readDcaPlanForm();
+    if (_dcaDraft.lines.length < 8) _dcaDraft.lines.push({ ticker: '', weight: 0, color: DCA_COLORS[_dcaDraft.lines.length % DCA_COLORS.length] });
+    openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal(); return;
+  }
+  const del = t.closest('[data-ldel]');
+  if (del && !del.classList.contains('off')) {
+    readDcaPlanForm(); _dcaDraft.lines.splice(+del.dataset.ldel, 1);
+    openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
+  }
+});
+document.getElementById('dca-modal-body').addEventListener('input', e => { if (e.target.classList.contains('dl-w')) dcaUpdateTotal(); });
+
+function bindDca(el) {
+  el.querySelector('#js-back')?.addEventListener('click', back);
+  el.querySelector('#js-dca-cfg')?.addEventListener('click', openDcaPlanModal);
+  el.querySelector('#js-goal-add')?.addEventListener('click', () => openDcaGoalModal());
+  el.querySelectorAll('[data-goal]').forEach(i => i.addEventListener('click', () => openDcaGoalModal(i.dataset.goal)));
+  el.querySelectorAll('[data-plandel]').forEach(b => b.addEventListener('click', () => {
+    const from = b.dataset.plandel;
+    openConfirm(`Supprimer la stratégie du ${_fmtDate(from)} ?`, () => {
+      S.dca.plans = S.dca.plans.filter(p => p.from !== from); saveDca(); renderScreen('dca');
+    });
+  }));
+  el.querySelectorAll('.dca-bar').forEach(b => b.addEventListener('click', () => {
+    el.querySelectorAll('.dca-bar').forEach(x => x.style.opacity = x === b ? 1 : .55);
+    el.querySelector('#dca-bar-info').innerHTML = `${_fmtDate(b.dataset.date)} · ${masked(+b.dataset.cumul)} cumulés`;
+  }));
+}
+
+// ═══════════════════════════════════════════════
 // BOTTOM NAV
 // ═══════════════════════════════════════════════
-document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
-  const t=b.dataset.nav;
-  if(t===S.screen) return;
-  const fi=NAV_SCREENS.indexOf(S.screen), ti=NAV_SCREENS.indexOf(t);
-  const dir=(fi>=0&&ti<fi)?'back':'forward';
-  go(t,dir);
-}));
+// Barre dynamique (raccourcis configurables, voir renderNav) : délégation d'événements
+document.getElementById('nav').addEventListener('click', e => {
+  const b = e.target.closest('.nav-btn');
+  if (b) runShortcut(b.dataset.nav);
+});
 
 // ═══════════════════════════════════════════════
 // SWIPE ENTRE ONGLETS
@@ -4512,6 +4998,7 @@ function saveSettings() {
       autoRefresh: S.autoRefresh,
       accountsView: S.accountsView,
       assistantEnabled: S.assistantEnabled,
+      navItems:    S.navItems,
       bgPrivacy:   S.bgPrivacy,
       bgIdle:      S.bgIdle,
       priceApiKey: S.priceApiKey,
@@ -4589,6 +5076,7 @@ function loadData() {
       if (s.autoRefresh !== undefined) S.autoRefresh = s.autoRefresh;
       if (s.accountsView)           S.accountsView = s.accountsView;
       if (s.assistantEnabled !== undefined) S.assistantEnabled = s.assistantEnabled;
+      if (s.navItems)               S.navItems = sanitizeNavItems(s.navItems);
       if (s.bgPrivacy !== undefined) S.bgPrivacy = s.bgPrivacy;
       if (s.bgIdle !== undefined)    S.bgIdle    = s.bgIdle;
       if (s.priceApiKey)            S.priceApiKey = s.priceApiKey;
@@ -4756,11 +5244,11 @@ function dbgLog(tag, msg) {
     }).join('\n');
   } else if (S.screen !== 'settings') {
     // Badge sur le bouton ⚙ pour signaler qu'il y a des logs à consulter
-    document.querySelectorAll('#js-settings-btn').forEach(btn => {
+    document.querySelectorAll('#js-burger-btn').forEach(btn => {
       if (!btn.querySelector('.log-badge')) {
         const b = document.createElement('div');
         b.className = 'log-badge';
-        b.style.cssText = 'position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#F59E0B;border:1.5px solid var(--card);pointer-events:none';
+        b.style.cssText = 'position:absolute;bottom:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#F59E0B;border:1.5px solid var(--card);pointer-events:none';
         btn.style.position = 'relative';
         btn.appendChild(b);
       }
@@ -5730,6 +6218,7 @@ function _copyFallback(txt) {
 function _bgPrivacySync() { window.__bgPrivacy = !!S.bgPrivacy; }
 
 const _hasData=loadData();
+loadDca();
 _bgPrivacySync();   // le pré-script a lu localStorage ; on repart de l'état chargé
 _idleReset();       // arme le masquage par inactivité (no-op si S.bgIdle=0)
 // Si aucune donnée ou en mode démo → régénérer les données d'exemple (jamais persistées)
@@ -5750,6 +6239,7 @@ S.accounts.forEach(a => { a.value = accTotal(a); });
 // Historique du patrimoine : reconstruire le passé manquant puis figer le point du jour (mode réel)
 if(!S.isDemo) { backfillWealthHistory(); snapshotWealth(); }
 ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
+renderNav();
 document.getElementById('nav').classList.remove('hidden');
 // Sécurité : sonder le capteur biométrique, puis armer le verrou s'il est configuré
 bioAvailable().then(v => {
@@ -5818,16 +6308,22 @@ try {
     // Le sélecteur d'icône est empilé AU-DESSUS d'une autre feuille : il se ferme seul
     if (iconPickerOpen()) { closeIconPicker(); return; }
 
+    // Tiroir ☰ ouvert : le retour le ferme (ou revient au menu depuis l'édition des raccourcis)
+    if (document.getElementById('drawer')?.classList.contains('show')) {
+      if (_drawerEdit) { _drawerEdit = false; renderDrawer(); } else closeDrawer();
+      return;
+    }
+
     // Close any open modal first (regardless of stack depth)
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
                      'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet',
-                     'changelog-modal-sheet','newcode-sheet']
+                     'changelog-modal-sheet','newcode-sheet','dca-modal-sheet']
                     .some(id => document.getElementById(id)?.classList.contains('show'));
     if (anyOpen) {
       closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
       closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
-      closeChangelogModal(); closeNewCode();
+      closeChangelogModal(); closeNewCode(); closeDcaModal();
       return;
     }
 
@@ -5862,12 +6358,12 @@ document.addEventListener('keydown', e => {
     const anyOpen = ['modal-sheet','confirm-sheet','watch-modal-sheet',
                      'acc-modal-sheet','pos-modal-sheet','edit-tx-sheet','cf-modal-sheet',
                      'acc-action-sheet','rename-acc-sheet','csv-modal-sheet','fx-modal-sheet',
-                     'changelog-modal-sheet','newcode-sheet']
+                     'changelog-modal-sheet','newcode-sheet','dca-modal-sheet']
                     .some(id => document.getElementById(id)?.classList.contains('show'));
     if (anyOpen) {
       closeModal(); closeConfirm(); closeWatchModal(); closeAccModal(); closePosModal();
       closeEditTx(); closeCfModal(); closeAccMenu(); closeRenameAcc(); closeCsvModal(); closeFxModal();
-      closeChangelogModal(); closeNewCode();
+      closeChangelogModal(); closeNewCode(); closeDcaModal();
     } else if (S.stack.length > 1) {
       back();
     }
