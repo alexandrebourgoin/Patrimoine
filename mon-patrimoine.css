@@ -46,6 +46,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .screen{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;background:var(--bg);overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:80px;transform:translateX(100%);will-change:transform;scrollbar-width:none}
 .screen::-webkit-scrollbar{display:none}
 .screen.no-nav{padding-bottom:20px}
+.screen.no-nav.has-nav{padding-bottom:80px}
 #s-dashboard{transform:translateX(0)}
 
 /* NAV */

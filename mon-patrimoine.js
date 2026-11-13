@@ -65,9 +65,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.103';
+const APP_VERSION = '1.11.104';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.104': [
+    { type:'fix', text:"Un écran ajouté en raccourci dans la barre du bas (DCA, Assistant, Réglages) garde maintenant la barre visible et utilisable quand on est dessus ; avant, elle disparaissait." },
+  ],
   '1.11.103': [
     { type:'fix', text:"Détail d'un compte en devise étrangère : le solde s'affiche dans la devise du compte, avec la contre-valeur en devise de référence en dessous (et la ligne titres / liquidités dans la devise du compte)." },
   ],
@@ -1008,7 +1011,7 @@ function go(target, dir=null) {
     nextEl.style.transition='';
   }, 350);
 
-  const showNav=NAV_SCREENS.includes(target);
+  const showNav=navVisibleFor(target);
   document.getElementById('nav').classList.toggle('hidden',!showNav);
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('on',b.dataset.nav===target));
 }
@@ -1099,9 +1102,18 @@ function navLabel(key) {
 function activeNavItems() {
   return S.navItems.filter(k => NAV_CATALOG[k] && !(k==='assistant' && !S.assistantEnabled));
 }
+// La barre reste visible sur les 4 écrans principaux ET sur tout écran ajouté en raccourci
+// (DCA, Assistant, Réglages), sinon on ne pourrait plus s'en servir depuis cet écran.
+function navVisibleFor(screen) {
+  return NAV_SCREENS.includes(screen) || activeNavItems().includes(screen);
+}
 function renderNav() {
   const nav = document.getElementById('nav'); if (!nav) return;
-  nav.innerHTML = activeNavItems().map(k =>
+  const items = activeNavItems();
+  // Écrans « sans nav » devenus raccourcis : on leur réserve la place de la barre en bas
+  document.querySelectorAll('.screen.no-nav').forEach(s => s.classList.toggle('has-nav', items.includes(s.id.slice(2))));
+  nav.classList.toggle('hidden', !navVisibleFor(S.screen));
+  nav.innerHTML = items.map(k =>
     `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}">${navIconSvg(k)}<span>${navLabel(k)}</span><div class="nav-pip"></div></div>`
   ).join('');
 }
