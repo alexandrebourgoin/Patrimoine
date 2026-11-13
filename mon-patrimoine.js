@@ -65,9 +65,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.98';
+const APP_VERSION = '1.11.99';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.99': [
+    { type:'fix', text:"DCA : le dernier plan peut maintenant être supprimé (✕ dans l'historique des stratégies, avec confirmation). Les objectifs sont conservés." },
+  ],
   '1.11.98': [
     { type:'fix', text:"Le DCA & objectifs est maintenant séparé entre mode démo et mode réel (comme les comptes) : la bascule dans Réglages charge le DCA du bon mode. Un DCA déjà saisi est conservé dans le mode actif. L'export JSON inclut le DCA du mode réel." },
   ],
@@ -4709,7 +4712,7 @@ function renderDca() {
   const hist = [...S.dca.plans].reverse().map(p => `<div class="s-item" style="cursor:default">
       <div class="flex1 col gap4"><div class="s-name">${_fmtDate(p.from)}${p === plan ? ' · en vigueur' : ''}</div>
         <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(l.ticker) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
-      ${S.dca.plans.length > 1 ? `<div class="dr-btn" data-plandel="${p.from}">✕</div>` : ''}
+      <div class="dr-btn" data-plandel="${p.from}">✕</div>
     </div>`).join('');
 
   return header + `
@@ -4893,7 +4896,8 @@ function bindDca(el) {
   el.querySelectorAll('[data-goal]').forEach(i => i.addEventListener('click', () => openDcaGoalModal(i.dataset.goal)));
   el.querySelectorAll('[data-plandel]').forEach(b => b.addEventListener('click', () => {
     const from = b.dataset.plandel;
-    openConfirm(`Supprimer la stratégie du ${_fmtDate(from)} ?`, () => {
+    const last = S.dca.plans.length === 1;
+    openConfirm(last ? `Supprimer le plan DCA (stratégie du ${_fmtDate(from)}) ? Le cumul et la projection seront effacés ; les objectifs sont conservés.` : `Supprimer la stratégie du ${_fmtDate(from)} ?`, () => {
       S.dca.plans = S.dca.plans.filter(p => p.from !== from); saveDca(); renderScreen('dca');
     });
   }));
