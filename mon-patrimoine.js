@@ -65,9 +65,12 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.102';
+const APP_VERSION = '1.11.103';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 const CHANGELOG = {
+  '1.11.103': [
+    { type:'fix', text:"Détail d'un compte en devise étrangère : le solde s'affiche dans la devise du compte, avec la contre-valeur en devise de référence en dessous (et la ligne titres / liquidités dans la devise du compte)." },
+  ],
   '1.11.101': [
     { type:'fix', text:"« Rechercher une mise à jour » ne recharge plus l'appli quand elle est déjà à jour : il affiche « Déjà à jour » et ne recharge que si une version plus récente existe." },
   ],
@@ -1531,6 +1534,18 @@ function renderHistCard() {
 const SORT_OPTS=[{key:'value',label:'Valeur'},{key:'pnl',label:'P&L €'},{key:'pnlPct',label:'P&L %'},{key:'name',label:'Nom'},{key:'type',label:'Type'}];
 const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
 
+// Montant d'un compte dans SA devise (si différente de la devise appli) ; v = montant en devise appli
+function accNative(acc, v) {
+  const ccy = acc.currency || S.currency;
+  if (ccy === S.currency) return masked(v);
+  return maskedNative(v * (FX_RATES[ccy] || 1) / (FX_RATES[S.currency] || 1), ccy);
+}
+// Bloc valeur du hero : devise du compte en gros, contre-valeur en devise appli dessous
+function accHeroValHTML(acc) {
+  if ((acc.currency || S.currency) === S.currency) return masked(acc.value);
+  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
+}
+
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
@@ -1561,8 +1576,8 @@ function renderAccount() {
         <div class="t-sm">${esc(acc.type||'')}${acc.bank?' · '+esc(acc.bank):''}</div>
       </div>
     </div>
-    <div class="acc-hero-val t-num" id="js-acc-val">${masked(acc.value)}</div>
-    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${masked(secVal)} de titres · ${masked(cash)} de liquidités</div>`:''}
+    <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
+    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
         <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
@@ -2921,7 +2936,7 @@ function bindEvents(id, el) {
       await fetchLivePrices();
       renderHoldsHTML(acc);
       const v=el.querySelector('#js-acc-val');
-      if(v) v.textContent=masked(acc.value);
+      if(v) v.innerHTML=accHeroValHTML(acc);
     });
   }
   if(id==='stock') {
