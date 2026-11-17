@@ -1,0 +1,401 @@
+// Écran d un compte : hero, portefeuille, mouvements, tirer-pour-actualiser + binding.
+// Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
+
+// ── ACCOUNT ──
+const SORT_OPTS=[{key:'value',label:'Valeur'},{key:'pnl',label:'P&L €'},{key:'pnlPct',label:'P&L %'},{key:'name',label:'Nom'},{key:'type',label:'Type'}];
+const SORT_DEFAULTS={value:-1,pnl:-1,pnlPct:-1,name:1,type:1};
+
+// Montant d'un compte dans SA devise (si différente de la devise appli) ; v = montant en devise appli
+function accNative(acc, v) {
+  const ccy = acc.currency || S.currency;
+  if (ccy === S.currency) return masked(v);
+  return maskedNative(v * (FX_RATES[ccy] || 1) / (FX_RATES[S.currency] || 1), ccy);
+}
+// Bloc valeur du hero : devise du compte en gros, contre-valeur en devise appli dessous
+function accHeroValHTML(acc) {
+  if ((acc.currency || S.currency) === S.currency) return masked(acc.value);
+  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
+}
+
+function renderAccount() {
+  const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
+  _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
+  const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
+  const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
+  const cash=accCash(acc);                    // liquidités non investies
+  const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
+  const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
+  const pills=SORT_OPTS.map(o=>{
+    const on=S.sort===o.key;
+    const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
+    return `<div class="sort-pill${on?' on':''}" data-sort="${o.key}" data-label="${o.label}">${o.label}${arrow}</div>`;
+  }).join('');
+  // Cashflow total
+  const cfs=acc.cashflows||[];
+  const totalDep=cfs.filter(c=>c.type==='DEP').reduce((s,c)=>s+c.amount,0);
+  const totalWit=cfs.filter(c=>c.type==='WIT').reduce((s,c)=>s+c.amount,0);
+  const netCf=totalDep-totalWit;
+  return `<div class="back tap" id="js-back">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+    Retour
+  </div>
+  <div class="acc-hero">
+    <div class="row gap10" style="margin-bottom:6px;align-items:center">
+      <div style="font-size:26px">${iconHtml(acc.icon)}</div>
+      <div class="col" style="gap:2px;flex:1;min-width:0">
+        <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
+        <div class="t-sm">${esc(acc.type||'')}${acc.bank?' · '+esc(acc.bank):''}</div>
+      </div>
+    </div>
+    <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
+    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
+    <div class="stat-row">
+      <div class="stat-box"><div class="t-label">P&amp;L Total</div>
+        <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
+      <div class="stat-box"><div class="t-label">Performance</div>
+        <div style="font-size:15px;font-weight:800" class="${totPnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(totPnlPct)}</div></div>
+      <div class="stat-box"><div class="t-label">Variation J</div>
+        <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
+    </div>
+    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
+      <div style="flex:1">
+        <div class="t-label">Apport net</div>
+        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${maskedNative(netCf,acc.currency||S.currency)}</div>
+      </div>
+      <div style="flex:1">
+        <div class="t-label">Liquidités</div>
+        <div style="font-size:14px;font-weight:800" class="${cash>=0?'':'t-loss'} t-num">${masked(cash)}</div>
+      </div>
+      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Apports / Retraits</div>
+    </div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport.</div>`:''}`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
+  </div>
+  <div class="search-wrap">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input type="text" id="js-search" placeholder="Rechercher une valeur…" value="${esc(S.search)}" autocomplete="off" spellcheck="false">
+      ${S.search?`<div class="search-clear" id="js-clr">✕</div>`:''}
+    </div>
+  </div>
+  <div class="sort-row">${pills}</div>
+  <div class="ptr-bar" id="js-ptr">↓ Tirez pour actualiser</div>
+  <div class="row" style="padding:12px 20px 6px;justify-content:space-between;align-items:center">
+    <div class="t-section">Portefeuille</div>
+    <div class="row gap8" style="align-items:center">
+      <div id="js-hcnt" style="font-size:12px;font-weight:600;color:var(--text2)"></div>
+      <div class="hold-add-btn" id="js-add-hold" title="Ajouter une position">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div id="js-holds"></div>
+  <div class="row" style="padding:20px 20px 6px;justify-content:space-between;align-items:center">
+    <div class="t-section">Mouvements</div>
+    <div class="row gap8" style="align-items:center">
+      <div id="js-mcnt" style="font-size:12px;font-weight:600;color:var(--text2)"></div>
+      <div class="hold-add-btn" id="js-add-move" title="Ajouter un apport / retrait">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+      </div>
+    </div>
+  </div>
+  <div id="js-moves"></div>`;
+}
+
+// ── HOLDS HELPERS ──
+function getFilteredHoldings(acc) {
+  let hs=[...acc.holdings];
+  if(S.search){const q=S.search.toLowerCase();hs=hs.filter(h=>h.name.toLowerCase().includes(q)||h.ticker.toLowerCase().includes(q));}
+  hs.sort((a,b)=>{
+    if(S.sort==='name'||S.sort==='type') return S.sortDir*a[S.sort].localeCompare(b[S.sort]);
+    return S.sortDir*(a[S.sort]-b[S.sort]);
+  });
+  return hs;
+}
+
+function renderHoldsHTML(acc) {
+  const el=document.getElementById('js-holds'); if(!el) return;
+  const cnt=document.getElementById('js-hcnt');
+  const hs=getFilteredHoldings(acc);
+  if(cnt) cnt.textContent=`${hs.length} valeur${hs.length!==1?'s':''}`;
+  if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;renderMovesHTML(acc);return;}
+  el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
+    hs.map(h=>{
+      const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
+      const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
+      return `
+      <div class="hold-item" data-hid="${h.id}">
+        <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
+        <div class="hold-item-body">
+          <div class="hold-item-top">
+            <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.name)}</div>
+            <div class="col right" style="gap:1px;flex-shrink:0">
+              <div style="font-size:14px;font-weight:800" class="t-num">${masked(h.valueRef??h.value)}</div>
+              <div style="font-size:10px;color:var(--text3);text-align:right">${weight}%</div>
+            </div>
+          </div>
+          <div class="hold-item-bot">
+            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
+            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
+            <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            </div>
+            <div class="hold-add-btn" data-add="${h.id}" style="width:26px;height:26px;border-radius:7px">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+            </div>
+            <div class="hold-del-btn" data-del="${h.id}" style="width:26px;height:26px;border-radius:7px">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')+
+  `</div>`;
+  // Navigate on row click (excluding action buttons)
+  el.querySelectorAll('.hold-item').forEach(item=>{
+    item.addEventListener('click',e=>{
+      if(e.target.closest('.hold-del-btn')||e.target.closest('.hold-add-btn')||e.target.closest('.hold-watch-btn')) return;
+      S.holdingId=item.dataset.hid; go('stock');
+    });
+  });
+  // Étoile : toggle watchlist
+  el.querySelectorAll('.hold-watch-btn').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    const h = acc.holdings.find(h => h.id === b.dataset.watchHid);
+    if (!h) return;
+    const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
+    haptic(idx >= 0 ? 6 : 12);
+    if (idx >= 0) {
+      S.watchlist.splice(idx, 1);
+      toast(`${h.ticker} retiré des favoris`);
+    } else {
+      S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
+      toast(`${h.ticker} ajouté aux favoris ⭐`);
+      // Animation pop sur le bouton étoile
+      const starBtn = b.closest('.hold-watch-btn') || b;
+      starBtn.classList.remove('star-pop');
+      void starBtn.offsetWidth;
+      starBtn.classList.add('star-pop');
+    }
+    saveAccounts();
+    refreshMain();
+    renderHoldsHTML(acc);
+  }));
+  el.querySelectorAll('.hold-add-btn[data-add]').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    openAddOrder(S.accountId, b.dataset.add);
+  }));
+  el.querySelectorAll('.hold-del-btn').forEach(b=>b.addEventListener('click',e=>{
+    e.stopPropagation();
+    deleteHolding(S.accountId,b.dataset.del);
+  }));
+  renderMovesHTML(acc); // le relevé suit toujours l'état des positions
+}
+
+// ── MOUVEMENTS DU COMPTE ──
+// Relevé unifié : ordres sur titres (achat/vente/dividende) + apports/retraits,
+// tous comptes de dates confondus, du plus récent au plus ancien.
+const MOVES_PAGE = 15;
+let _movesAll = false;
+
+function getAccountMoves(acc) {
+  const mv = [];
+  (acc.holdings||[]).forEach(h => {
+    (h.transactions||[]).forEach((tx, idx) => {
+      mv.push({
+        date: tx.date, kind: tx.type, holdId: h.id, txIdx: idx,
+        label: h.name || h.ticker, ticker: h.ticker,
+        detail: `${tx.qty} × ${fmtNative(tx.price, h.currency||'EUR')}`,
+        amount: (+tx.qty||0)*(+tx.price||0), ccy: h.currency||'EUR',
+      });
+    });
+  });
+  (acc.cashflows||[]).forEach(c => {
+    mv.push({
+      date: c.date, kind: c.type, cfId: c.id,
+      label: c.type==='WIT' ? 'Retrait' : 'Apport',
+      detail: c.note || '', amount: +c.amount||0, ccy: acc.currency||S.currency,
+    });
+  });
+  mv.sort((a,b) => b.date.localeCompare(a.date)); // du plus récent au plus ancien
+  if (!S.search) return mv;
+  const q = S.search.toLowerCase();
+  return mv.filter(m => (m.label||'').toLowerCase().includes(q)
+                     || (m.ticker||'').toLowerCase().includes(q)
+                     || (m.detail||'').toLowerCase().includes(q));
+}
+
+const MOVE_STYLE = {
+  BUY:  { dot:'ACH', cls:'buy',  type:'Achat',      sign:'−', val:'t-loss' },
+  SELL: { dot:'VTE', cls:'sell', type:'Vente',      sign:'+', val:'t-gain' },
+  DIV:  { dot:'DIV', cls:'div',  type:'Dividende',  sign:'+', val:'t-gain' },
+  DEP:  { dot:'AP',  cls:'buy',  type:'Apport',     sign:'+', val:'t-gain' },
+  WIT:  { dot:'RE',  cls:'sell', type:'Retrait',    sign:'−', val:'t-loss' },
+};
+
+function renderMovesHTML(acc) {
+  const el=document.getElementById('js-moves'); if(!el) return;
+  const all=getAccountMoves(acc);
+  const cnt=document.getElementById('js-mcnt');
+  if(cnt) cnt.textContent=`${all.length} mouvement${all.length!==1?'s':''}`;
+  if(!all.length){
+    el.innerHTML=`<div style="text-align:center;padding:26px 20px;color:var(--text2);font-size:13px">
+      ${S.search?'Aucun mouvement pour cette recherche':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
+    </div>`;
+    return;
+  }
+  const shown=_movesAll?all:all.slice(0,MOVES_PAGE);
+  el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
+    shown.map(m=>{
+      const st=MOVE_STYLE[m.kind]||MOVE_STYLE.BUY;
+      const nav=m.holdId?`data-mvhold="${esc(m.holdId)}"`:`data-mvcf="1"`;
+      return `<div class="tx-item tap" ${nav} style="cursor:pointer">
+        <div class="tx-dot ${st.cls}">${st.dot}</div>
+        <div class="flex1 col gap4" style="min-width:0">
+          <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)}</div>
+          <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtDate(m.date)}${m.detail?' · '+esc(m.detail):''}</div>
+        </div>
+        <div class="col right gap4" style="flex-shrink:0">
+          <div style="font-size:13px;font-weight:800" class="${st.val} t-num">${st.sign}${maskedNative(m.amount,m.ccy)}</div>
+          <div class="t-sm">${st.type}</div>
+        </div>
+      </div>`;
+    }).join('')+
+  `</div>`+
+  (all.length>MOVES_PAGE?`<div class="row" style="justify-content:center;padding:12px 20px 0">
+    <div class="tap" id="js-moves-more" style="padding:6px 16px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2);cursor:pointer">${_movesAll?'Réduire':`Voir les ${all.length} mouvements`}</div>
+  </div>`:'');
+  // Un ordre renvoie vers l'écran du titre, un apport/retrait ouvre la fenêtre de saisie
+  el.querySelectorAll('[data-mvhold]').forEach(r=>r.addEventListener('click',()=>{
+    S.holdingId=r.dataset.mvhold; go('stock');
+  }));
+  el.querySelectorAll('[data-mvcf]').forEach(r=>r.addEventListener('click',()=>openCfModal(acc.id)));
+  el.querySelector('#js-moves-more')?.addEventListener('click',()=>{
+    _movesAll=!_movesAll;
+    renderMovesHTML(acc);
+  });
+}
+
+
+function deleteHolding(accId,holdId) {
+  const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
+  const h=acc.holdings.find(h=>h.id===holdId);
+  if(!h) return;
+  openConfirm(`Supprimer ${h.name} ?`, ()=>{
+    acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
+    acc.value=accTotal(acc);
+    renderHoldsHTML(acc);
+    refreshMain();
+    toast('Position supprimée');
+  });
+}
+
+function applyRefresh(accId) {
+  S._histCache={};
+  // Refresh watchlist prices
+  S.watchlist.forEach(w=>{
+    const chg=(Math.random()*.03-.01);
+    w.price=+(w.price*(1+chg)).toFixed(2);
+    w.change1d=+((Math.random()*4-1.5).toFixed(2));
+  });
+  const accs=accId?[S.accounts.find(a=>a.id===accId)]:S.accounts;
+  accs.filter(Boolean).forEach(acc=>{
+    acc.holdings.forEach(h=>{
+      const chg=(Math.random()*.028-.006);
+      h.currentPrice=+(h.currentPrice*(1+chg)).toFixed(2);
+      h.value=+(h.quantity*h.currentPrice).toFixed(2);
+      h.valueRef=+toRefCcy(h.value,h.currency).toFixed(2);
+      h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
+      h.pnlRef=+toRefCcy(h.pnl,h.currency).toFixed(2);
+      h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
+    });
+    acc.value=accTotal(acc);
+    acc.change1d=+(Math.random()*4-1).toFixed(2);
+  });
+}
+
+function initPTR(screenEl, onRefresh) {
+  // Le callback est rafraîchi à chaque render (closure fraîche), mais les listeners ne sont
+  // attachés qu'une fois : l'élément écran persiste et les ré-attacher les empilait (double refresh,
+  // rendu des positions de l'ancien compte).
+  screenEl._ptrRefresh = onRefresh;
+  if (screenEl._ptrBound) return;
+  screenEl._ptrBound = true;
+  let y0=0,pulling=false,dist=0,armed=false;
+  const bar=()=>screenEl.querySelector('#js-ptr'); // re-query : le bar est recréé à chaque render
+  screenEl.addEventListener('touchstart',e=>{
+    // `armed` doit être réévalué à CHAQUE geste : sans lui, un geste ignoré laissait
+    // y0 obsolète et le touchmove suivant pouvait déclencher un tirage fantôme.
+    // .acc-card = surface de glisser-déposer (réordonnancement) : elle n'arme jamais le
+    // pull-to-refresh, sinon amorcer un déplacement déclenche une actualisation.
+    armed=false; pulling=false; dist=0;
+    if(!bar()||e.target.closest('.hold-item')||e.target.closest('.acc-card')) return;
+    if(screenEl.scrollTop===0){y0=e.touches[0].clientY;armed=true;}
+  },{passive:true});
+  screenEl.addEventListener('touchmove',e=>{
+    const b=bar(); if(!b||!armed||screenEl.scrollTop>2) return;
+    if(_drag?.active){   // une carte vient de décoller : on annule un tirage en cours
+      if(pulling){pulling=false;dist=0;b.classList.remove('open');}
+      return;
+    }
+    const dy=e.touches[0].clientY-y0;
+    if(dy>12){pulling=true;dist=dy;b.classList.add('open');b.textContent=dy>60?'↑ Relâchez pour actualiser':'↓ Tirez pour actualiser';}
+  },{passive:true});
+  screenEl.addEventListener('touchend',()=>{
+    const b=bar(); if(!b||!pulling) return;
+    if(dist>60){
+      b.innerHTML='<span class="ptr-spin">↻</span> Actualisation…';
+      setTimeout(()=>{screenEl._ptrRefresh();b.classList.remove('open');},900);
+    } else {b.classList.remove('open');}
+    pulling=false; dist=0;
+  },{passive:true});
+}
+
+
+SCREEN_BIND.account = function (el, id) {
+    const acc=S.accounts.find(a=>a.id===S.accountId);
+    el.querySelector('#js-back')?.addEventListener('click',back);
+
+    if(acc) renderHoldsHTML(acc);
+
+    el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
+
+    // Cashflows button
+    el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
+    el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
+
+    // Search
+    el.querySelector('#js-search')?.addEventListener('input',e=>{
+      S.search=e.target.value;
+      const sb=el.querySelector('.search-box');
+      let clr=sb.querySelector('.search-clear');
+      if(S.search&&!clr){
+        clr=document.createElement('div');clr.className='search-clear';clr.id='js-clr';clr.textContent='✕';
+        clr.addEventListener('click',()=>{S.search='';el.querySelector('#js-search').value='';clr.remove();if(acc)renderHoldsHTML(acc);});
+        sb.appendChild(clr);
+      } else if(!S.search&&clr){clr.remove();}
+      if(acc) renderHoldsHTML(acc);
+    });
+    el.querySelector('#js-clr')?.addEventListener('click',()=>{
+      S.search='';el.querySelector('#js-search').value='';el.querySelector('.search-clear')?.remove();
+      if(acc) renderHoldsHTML(acc);
+    });
+
+    el.querySelectorAll('.sort-pill').forEach(pill=>pill.addEventListener('click',()=>{
+      const key=pill.dataset.sort;
+      if(S.sort===key) S.sortDir*=-1;
+      else{S.sort=key;S.sortDir=SORT_DEFAULTS[key]||(-1);}
+      el.querySelectorAll('.sort-pill').forEach(p=>{
+        const on=p.dataset.sort===S.sort;
+        p.classList.toggle('on',on);
+        p.textContent=p.dataset.label+(on?(S.sortDir===-1?' ↓':' ↑'):'');
+      });
+      if(acc) renderHoldsHTML(acc);
+    }));
+
+    initPTR(el,async ()=>{
+      if(!acc) return;
+      await fetchLivePrices();
+      renderHoldsHTML(acc);
+      const v=el.querySelector('#js-acc-val');
+      if(v) v.innerHTML=accHeroValHTML(acc);
+    });
+};

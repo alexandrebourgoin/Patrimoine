@@ -714,11 +714,47 @@
 </div>
 
 <script src="utils.js"></script>
+<script src="js/core/dom-guard.js"></script>
 <!-- Ordre de chargement = dépendances (scripts classiques, pas d'ES modules) :
-     utils (PU) → data (tables, démo, changelog) → application -->
+     utils (PU) → dom-guard → data → core → services → features → modales → écrans → application -->
 <script src="js/data/securities.js"></script>
 <script src="js/data/demo.js"></script>
 <script src="js/data/changelog.js"></script>
+<script src="js/core/screens.js"></script>
+<script src="js/core/modals.js"></script>
+<script src="js/core/storage.js"></script>
+<script src="js/core/ui.js"></script>
+<script src="js/core/navigation.js"></script>
+<script src="js/core/shell.js"></script>
+<script src="js/core/back-handler.js"></script>
+<script src="js/core/app-update.js"></script>
+<script src="js/services/prices.js"></script>
+<script src="js/services/csv-import.js"></script>
+<script src="js/features/lock.js"></script>
+<script src="js/features/dca.js"></script>
+<script src="js/features/assistant.js"></script>
+<script src="js/features/drag.js"></script>
+<script src="js/features/privacy.js"></script>
+<script src="js/features/charts.js"></script>
+<script src="js/features/chart-fullscreen.js"></script>
+<script src="js/modals/fx.js"></script>
+<script src="js/modals/changelog.js"></script>
+<script src="js/modals/confirm.js"></script>
+<script src="js/modals/watchlist.js"></script>
+<script src="js/modals/icon-picker.js"></script>
+<script src="js/modals/account.js"></script>
+<script src="js/modals/position.js"></script>
+<script src="js/modals/order.js"></script>
+<script src="js/modals/cashflow.js"></script>
+<script src="js/screens/dashboard.js"></script>
+<script src="js/screens/accounts.js"></script>
+<script src="js/screens/search.js"></script>
+<script src="js/screens/account.js"></script>
+<script src="js/screens/stock.js"></script>
+<script src="js/screens/analysis.js"></script>
+<script src="js/screens/assistant.js"></script>
+<script src="js/screens/settings.js"></script>
+<script src="js/screens/watch.js"></script>
 <script src="mon-patrimoine.js"></script>
 </body>
 </html>
