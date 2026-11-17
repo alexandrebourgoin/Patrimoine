@@ -112,7 +112,10 @@ function renderStock() {
   </div>
   <div class="row" style="padding:4px 20px 10px;justify-content:space-between;align-items:center">
     <div class="t-section">Mouvements</div>
-    <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
+    <div class="row gap8" style="align-items:center">
+      <span style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</span>
+      <div id="js-add-mv" class="tap" style="padding:6px 12px;border-radius:8px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700">+ Mouvement</div>
+    </div>
   </div>
   <div id="js-tx-list">${txs}</div>`;
 }
@@ -120,6 +123,7 @@ function renderStock() {
 
 SCREEN_BIND.stock = function (el, id) {
     el.querySelector('#js-back')?.addEventListener('click',back);
+    el.querySelector('#js-add-mv')?.addEventListener('click',()=>openAddOrder(S.accountId,S.holdingId));
     el.querySelector('#js-ticker-refresh')?.addEventListener('click', () => {
       const acc = S.accounts.find(a => a.id === S.accountId);
       const h   = acc?.holdings.find(h => h.id === S.holdingId);

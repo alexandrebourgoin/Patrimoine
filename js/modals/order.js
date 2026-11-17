@@ -107,6 +107,8 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   const accEl=document.getElementById('s-account');
   const holdsEl=accEl?.querySelector('#js-holds');
   if(holdsEl) renderHoldsHTML(acc);
+  // Saisie depuis la fiche d'un titre : rafraîchir cette fiche (mouvements, quantité, PRU)
+  if(S.screen==='stock') renderScreen('stock');
   refreshMain();
   const lbl={BUY:'Achat',SELL:'Vente',DIV:'Dividende'}[_mType];
   toast(`${lbl} enregistré ✓`);
