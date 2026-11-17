@@ -65,200 +65,9 @@ const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup ch
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.104';
+const APP_VERSION = '1.11.106';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
-const CHANGELOG = {
-  '1.11.104': [
-    { type:'fix', text:"Un écran ajouté en raccourci dans la barre du bas (DCA, Assistant, Réglages) garde maintenant la barre visible et utilisable quand on est dessus ; avant, elle disparaissait." },
-  ],
-  '1.11.103': [
-    { type:'fix', text:"Détail d'un compte en devise étrangère : le solde s'affiche dans la devise du compte, avec la contre-valeur en devise de référence en dessous (et la ligne titres / liquidités dans la devise du compte)." },
-  ],
-  '1.11.101': [
-    { type:'fix', text:"« Rechercher une mise à jour » ne recharge plus l'appli quand elle est déjà à jour : il affiche « Déjà à jour » et ne recharge que si une version plus récente existe." },
-  ],
-  '1.11.100': [
-    { type:'new', text:"Réglages → À propos → « Rechercher une mise à jour » : compare avec la dernière version en ligne, vide le cache de l'appli et la recharge en une fois, sans avoir à la redémarrer plusieurs fois. Les données (comptes, réglages, DCA) sont conservées." },
-  ],
-  '1.11.99': [
-    { type:'fix', text:"DCA : le dernier plan peut maintenant être supprimé (✕ dans l'historique des stratégies, avec confirmation). Les objectifs sont conservés." },
-  ],
-  '1.11.98': [
-    { type:'fix', text:"Le DCA & objectifs est maintenant séparé entre mode démo et mode réel (comme les comptes) : la bascule dans Réglages charge le DCA du bon mode. Un DCA déjà saisi est conservé dans le mode actif. L'export JSON inclut le DCA du mode réel." },
-  ],
-  '1.11.97': [
-    { type:'new', text:"DCA & objectifs (menu ☰ → Écrans) : plan d'investissement programmé (budget mensuel, jour d'échéance, répartition en % entre titres), cumul théorique, prochaine répartition avec nombre de parts estimé, projection sur 12 échéances et historique des changements de stratégie. Objectifs de capital (cible, date, rendement hypothétique) avec projection et versement mensuel nécessaire. Tout est théorique et stocké sur l'appareil." },
-  ],
-  '1.11.96': [
-    { type:'new', text:"Menu ☰ en haut à droite : confidentialité, actualisation des cours, assistant IA, réglages et accès à tous les écrans. La barre du haut ne garde que ☰ (et la confidentialité sur l'accueil), le badge d'alertes de l'assistant est repris sur ☰." },
-    { type:'new', text:"Barre du bas personnalisable : menu ☰ → « Personnaliser la barre du bas » pour choisir 3 à 5 raccourcis (écrans ou actions comme Actualiser / Masquer) et les réordonner." },
-  ],
-  '1.11.95': [
-    { type:'fix', text:"Le bouton retour Android depuis un compte revient désormais toujours à la liste des comptes, même si la pile de navigation est incomplète." },
-  ],
-  '1.11.94': [
-    { type:'fix',     text:"Tirer pour actualiser sur l'écran d'un compte titres appliquait une simulation de cours aléatoire (biaisée à la hausse) au lieu de récupérer les vrais cours — le solde augmentait à chaque tirage jusqu'à un rafraîchissement depuis l'accueil. Le geste récupère désormais les cours réels, comme le bouton ↻ de l'accueil." },
-  ],
-  '1.11.93': [
-    { type:'fix',     text:"Modifier un titre : le ticker n'était pas modifiable (champ verrouillé) — impossible de corriger une erreur de saisie sans supprimer puis recréer la ligne. Il est désormais éditable, avec vérification qu'il n'existe pas déjà dans le compte." },
-  ],
-  '1.11.89': [
-    { type:'fix',     text:"Graphiques de répartition (Analyse) : une part minuscule ou nulle (ex. compte sans titres) pouvait faire passer tout le donut d'une seule couleur au lieu d'afficher les vraies proportions." },
-    { type:'improve', text:"Vue grille des comptes : cartes réalignées sur le style de la liste (même icône, même infos — nombre de valeurs et barre de répartition inclus), juste réparties sur 2 colonnes." },
-  ],
-  '1.11.88': [
-    { type:'fix',     text:"Drapeaux de compte : Windows n'a pas de police couleur pour les émoji drapeau et affichait 2 lettres (« FR ») au lieu du drapeau. Ils s'affichent désormais comme une vraie image, partout où l'icône d'un compte apparaît." },
-  ],
-  '1.11.87': [
-    { type:'new',     text:"Établissement bancaire (optionnel) sur un compte, renseignable à la création comme dans « Modifier » — affiché sous le nom du compte et sur l'écran du compte." },
-    { type:'new',     text:"Vue en grille pour l'écran Comptes : bouton en haut pour basculer entre liste et grille à 2 colonnes. Le glisser-déposer pour réorganiser reste disponible en vue liste." },
-    { type:'new',     text:"Icônes de compte : 12 nouveaux drapeaux de pays dans le sélecteur (Suisse, Royaume-Uni, Allemagne, Espagne, Italie, Portugal, Luxembourg, Belgique, Pays-Bas, Canada, Japon, Chine)." },
-    { type:'new',     text:"Analyse : nouvelle répartition par type de compte (PEA, Assurance-Vie, PER…), en plus des répartitions par type d'actif, géographie et secteur." },
-    { type:'new',     text:"Type de compte « Pilier 3a » (prévoyance retraite suisse) ajouté à la liste." },
-    { type:'fix',     text:"Ajouter/Modifier un compte : le champ « Préciser le type » restait visible même pour un type de la liste (pas seulement pour « Autre… »)." },
-  ],
-  '1.10.86': [
-    { type:'new',     text:"Choix de l'icône d'un compte dans une grille d'emojis (48 propositions) à la création comme dans « Modifier » — plus besoin d'aller chercher le clavier emoji. La saisie libre reste possible pour coller n'importe quel autre emoji." },
-    { type:'new',     text:"Réorganisation des comptes : maintenez un compte appuyé, la carte se décolle et suit votre doigt ; relâchez à la bonne place et l'ordre est enregistré. Il s'applique aussi au tableau de bord." },
-    { type:'new',     text:"Confidentialité : l'écran se masque quand l'application passe en arrière-plan, pour que les montants n'apparaissent pas dans l'aperçu du sélecteur d'applications. Réglages → Sécurité → « Masquer en arrière-plan ». Selon l'appareil, Android peut photographier la fenêtre avant le masquage : le journal de diagnostic (Réglages → Débogage) indique ce qui s'est réellement passé." },
-    { type:'fix',     text:"Déplacer un compte ne déclenche plus le « tirer pour actualiser » : un geste qui démarre sur une carte n'arme plus le rafraîchissement." },
-    { type:'new',     text:"Masquer après inactivité (Réglages → Sécurité) : au bout du délai choisi, l'écran se voile de lui-même pendant que l'application est encore ouverte — un toucher le retire. C'est le seul masquage qu'Android ne peut pas prendre de vitesse, l'aperçu du sélecteur d'applications montrant alors le voile et non les montants." },
-    { type:'improve', text:"Le numéro de version reprend celui du cache de l'application (1.10.86 = cache v86) et Réglages → À propos indique le cache réellement utilisé : on voit d'un coup d'œil si une ancienne version est encore servie." },
-  ],
-  '1.9.0': [
-    { type:'new',     text:"Code oublié : Réglages → Sécurité propose « Réinitialiser le code ». Après vérification de votre empreinte ou de votre visage, un nouveau code est tiré au hasard et affiché une seule fois — notez-le. Disponible uniquement application déverrouillée et biométrie activée." },
-    { type:'fix',     text:'Apports et retraits pris en compte dans le solde : un compte vaut désormais ses titres PLUS ses liquidités non investies (apports − retraits − achats + ventes + dividendes). Le détail « titres / liquidités » s\'affiche sur l\'écran du compte.' },
-    { type:'new',     text:"Relevé des mouvements sur l'écran d'un compte : achats, ventes, dividendes et apports/retraits réunis par ordre chronologique, sous le portefeuille. On ne voyait jusqu'ici que les positions." },
-    { type:'new',     text:'Liste des apports/retraits enregistrés, avec suppression, directement dans la fenêtre « Apports / Retraits ».' },
-    { type:'new',     text:'Type de compte : choix dans une liste (PEA, CTO, assurance-vie, PER, livrets, SCPI, crypto…) ou saisie libre, et surtout modifiable après coup via « Modifier ».' },
-    { type:'improve', text:'« Modifier le compte » permet aussi de changer l\'icône. Le type du compte est rappelé sous son nom.' },
-    { type:'improve', text:'La performance d\'un compte est calculée sur les titres seuls : les liquidités ne la diluent plus.' },
-  ],
-  '1.8.0': [
-    { type:'new',     text:'Verrouillage de l\'application : un code à 6 chiffres peut désormais être exigé à l\'ouverture. Activation dans Réglages → Sécurité.' },
-    { type:'new',     text:'Déverrouillage par empreinte ou reconnaissance faciale (biométrie du téléphone), avec le code en secours.' },
-    { type:'new',     text:'Re-verrouillage automatique au retour depuis l\'arrière-plan : immédiat, après 1 min ou après 5 min, au choix.' },
-    { type:'improve', text:'Sécurité : le code n\'est jamais enregistré tel quel, et les essais répétés sont temporairement bloqués après 5 erreurs.' },
-  ],
-  '1.7.1': [
-    { type:'fix',     text:'Apports/retraits : un cashflow ajouté n\'était pas sauvegardé et disparaissait au rechargement.' },
-    { type:'fix',     text:'Import CSV en mode démo : l\'import basculait silencieusement en mode réel et pouvait écraser vos vraies données. L\'import reste désormais dans le mode courant.' },
-    { type:'fix',     text:'Ajouter un ordre : le patrimoine total restait faux jusqu\'à la prochaine actualisation (valeur convertie non recalculée).' },
-    { type:'fix',     text:'Écran Analyse : le total et les répartitions mélangeaient les devises (USD comptés comme EUR) ; poids des lignes corrigé de la même façon.' },
-    { type:'fix',     text:'Cours toujours frais : le service worker servait les prix du refresh précédent (cache supprimé pour les appels externes).' },
-    { type:'fix',     text:'Devises : taux JPY hors-ligne corrigé (était inversé) ; les devises inhabituelles (CAD, AUD…) sont désormais récupérées automatiquement au lieu d\'être comptées à parité avec l\'euro.' },
-    { type:'fix',     text:'Historique : les clôtures étaient enregistrées à la veille (décalage de fuseau horaire) — graphiques, marqueurs d\'achats/ventes et backfill du patrimoine réalignés.' },
-    { type:'fix',     text:'Mode confidentialité : les montants restaient visibles sur la carte Évolution, l\'écran Analyse, les mouvements d\'un titre et la recherche.' },
-    { type:'fix',     text:'Bascule démo → réel : la watchlist et les objectifs du mode démo ne fuient plus dans le mode réel.' },
-    { type:'fix',     text:'Cryptos en liste de suivi (sans position) : leurs cours sont désormais actualisés.' },
-    { type:'improve', text:'Écran titre : la tuile "Effet change" (valeur non calculable, toujours trompeuse) est remplacée par le P&L latent converti dans la devise de l\'appli.' },
-    { type:'improve', text:'Robustesse : pull-to-refresh ne se déclenche plus en double, spinners ne restent plus bloqués après une erreur, protections contre les % infinis/NaN, noms et recherches avec caractères spéciaux affichés sans casser la page.' },
-  ],
-  '1.7.0': [
-    { type:'new',     text:'Évolution du patrimoine : la courbe du dashboard est désormais réelle — reconstituée à partir de vos cours historiques et de vos transactions, puis enregistrée chaque jour. Indicateur "● réel / ○ estimé" comme sur les graphiques de titres.' },
-    { type:'improve', text:'Assistant IA : une pastille rouge sur l\'icône ✨ indique le nombre de points importants détectés, recalculée après chaque actualisation des cours.' },
-  ],
-  '1.6.0': [
-    { type:'new',     text:'Titres hors base reconnus automatiquement (ex: HOOD, AMD…) : saisissez un ticker absent de la liste et l\'appli récupère en ligne son nom, sa devise et son prix. Les cours et l\'historique de ces titres se mettent désormais à jour comme les autres.' },
-  ],
-  '1.5.0': [
-    { type:'new',     text:'Assistant IA : nouveau menu (icône ✨ en haut) qui analyse automatiquement vos comptes et titres et propose des recommandations — concentration, diversification, exposition devise, performances, allocation vs objectifs, liquidités, watchlist. Analyse 100 % locale, aucune donnée envoyée. Activable/masquable dans Réglages.' },
-  ],
-  '1.4.1': [
-    { type:'new',     text:'Bouton plein écran en bas à droite de chaque graphique (évolution du patrimoine, titre détenu, titre suivi) : affichage agrandi avec passage en paysage sur Android' },
-  ],
-  '1.4.0': [
-    { type:'new',     text:'Reprise d\'historique réel : bouton sur l\'écran d\'un titre détenu ET d\'un titre suivi pour récupérer les vrais cours passés (Yahoo Finance / CoinGecko) au lieu de la courbe estimée' },
-    { type:'improve', text:'Titres suivis : les performances (YTD, 1M, 3M, 6M, 52 sem.) deviennent réelles une fois l\'historique repris' },
-    { type:'improve', text:'Graphiques titre & suivi : indicateur "● réel / ○ estimé" selon la source des données' },
-  ],
-  '1.3.0': [
-    { type:'fix',     text:'Renommage de compte : le bouton Enregistrer ne fonctionnait pas (id transmis après nullification)' },
-    { type:'fix',     text:'Crypto : prix affichés dans la bonne devise (USD) et non en EUR' },
-    { type:'fix',     text:'Graphique crypto : dates correctes, plus de projections dans le futur' },
-    { type:'fix',     text:'Performance portefeuille : NaN corrigé pour les comptes sans historique de P&L' },
-    { type:'fix',     text:'Mode démo : modifications et créations sauvegardées correctement' },
-    { type:'new',     text:'Devise du compte : choisir à la création et modifier via "Modifier le compte"' },
-    { type:'new',     text:'Modifier un titre existant : nom, type, devise, pays, secteur et cours actuel' },
-    { type:'new',     text:'Sélecteur de période sur le graphique titre : 1M / 3M / 6M / 1A / MAX' },
-    { type:'new',     text:'Saisie d\'un code ISIN pour rechercher et ajouter un titre' },
-    { type:'new',     text:'20+ nouveaux tickers : BABA, TSM, SHOP, PLTR, ARM, COIN, UBER, SPOT, DOGE, ADA, AVAX…' },
-    { type:'new',     text:'Mode démo ↔ réel : deux fichiers de sauvegarde indépendants, bascule sans perte de données' },
-    { type:'new',     text:'Bouton "Réinitialiser les données démo" dans les Réglages' },
-    { type:'improve', text:'Synthèse des comptes : performance all-time (P&L / investi) au lieu du daily' },
-    { type:'improve', text:'Synthèse des comptes : montant affiché dans la devise du compte' },
-    { type:'improve', text:'Tooltips des graphiques masqués en mode confidentialité' },
-    { type:'improve', text:'Autocomplete ticker disponible également dans la watchlist' },
-  ],
-  '1.2.0': [
-    { type:'fix',     text:'Devise correcte pour les titres en USD affichés dans un compte EUR' },
-    { type:'fix',     text:'P&L total juste pour les comptes avec plusieurs devises' },
-    { type:'fix',     text:'Bouton Retour Android ne ferme plus accidentellement l\'appli' },
-    { type:'new',     text:'Taux de change en direct via Yahoo Finance' },
-    { type:'new',     text:'Cours de change consultables depuis les Réglages' },
-    { type:'new',     text:'Compatibilité PC : survol, touche Échap, fenêtre centrée' },
-    { type:'improve', text:'Taux de change mémorisés entre les sessions' },
-    { type:'improve', text:'Modal des cours adapté à la devise principale de l\'appli' },
-  ]
-};
 
-// ═══════════════════════════════════════════════
-// DEMO DATA
-// ═══════════════════════════════════════════════
-function mkH(id, ticker, name, qty, buy, cur, type, country, sector, txs, currency='EUR') {
-  const value = qty * cur;
-  const pnl = (cur - buy) * qty;
-  const pnlPct = ((cur - buy) / buy) * 100;
-  const valueRef = +toRefCcy(value, currency).toFixed(2);
-  const pnlRef   = +toRefCcy(pnl,   currency).toFixed(2);
-  return { id, ticker, name, quantity: qty, avgBuyPrice: buy, currentPrice: cur, type, country, sector, transactions: txs, value, pnl, pnlPct, currency, valueRef, pnlRef };
-}
-// ── Délégations vers utils.js (namespace PU, chargé avant ce fichier) ──
-// Une seule implémentation, partagée avec les tests vitest ; les wrappers injectent S/FX_RATES.
-function mkTx(date, type, qty, price) { return PU.mkTx(date, type, qty, price); }
-
-// Watchlist d'exemple (mode démo) — déclaration hoistée, utilisée aussi par l'init de S
-function genDemoWatchlist() {
-  return [
-    { ticker: 'OR',   name: "L'Oréal",       price: 412.35, change1d:  0.68 },
-    { ticker: 'AI',   name: 'Air Liquide',    price: 168.50, change1d: -0.32 },
-    { ticker: 'MSFT', name: 'Microsoft',      price: 378.50, change1d:  1.15 },
-    { ticker: 'TSLA', name: 'Tesla',          price: 248.20, change1d: -2.45 },
-  ];
-}
-
-function genDemo() {
-  const pea = [
-    mkH('MC','MC','LVMH',12,682.5,734.2,'Action','France','Luxe',[mkTx('2023-03-15','BUY',5,720),mkTx('2023-08-22','BUY',7,652.1)]),
-    mkH('TTE','TTE','TotalEnergies',45,54.2,61.8,'Action','France','Énergie',[mkTx('2022-11-10','BUY',30,51.3),mkTx('2023-06-05','BUY',20,58.4),mkTx('2024-01-18','SELL',5,60.1),mkTx('2023-03-27','DIV',45,0.79),mkTx('2023-06-26','DIV',45,0.79),mkTx('2023-09-25','DIV',45,0.82),mkTx('2023-12-18','DIV',45,0.79)]),
-    mkH('BNP','BNP','BNP Paribas',60,52.3,58.9,'Action','France','Finance',[mkTx('2022-09-20','BUY',40,50.8),mkTx('2023-02-14','BUY',20,55.2),mkTx('2023-05-30','DIV',60,4.60)]),
-    mkH('AIR','AIR','Airbus',8,128.4,152.6,'Action','France','Aéronautique',[mkTx('2023-01-09','BUY',8,128.4)]),
-    mkH('CW8','CW8','Amundi MSCI World',25,312,368.5,'ETF','Monde','Diversifié',[mkTx('2022-06-15','BUY',10,290),mkTx('2023-01-20','BUY',10,318.5),mkTx('2023-09-10','BUY',5,341)]),
-  ];
-  const ct = [
-    mkH('AAPL','AAPL','Apple Inc.',20,148.5,189.3,'Action','USA','Technologie',[mkTx('2022-05-20','BUY',15,142.3),mkTx('2023-03-08','BUY',5,165.5),mkTx('2023-02-16','DIV',20,0.23),mkTx('2023-05-11','DIV',20,0.24),mkTx('2023-08-10','DIV',20,0.24),mkTx('2023-11-09','DIV',20,0.24)],'USD'),
-    mkH('MSFT','MSFT','Microsoft',15,285.2,378.5,'Action','USA','Technologie',[mkTx('2022-07-14','BUY',10,268.4),mkTx('2023-05-22','BUY',5,319.5)],'USD'),
-    mkH('NVDA','NVDA','NVIDIA',10,312.4,495.8,'Action','USA','Technologie',[mkTx('2022-10-12','BUY',10,312.4)],'USD'),
-    mkH('ASML','ASML','ASML Holding',5,610,742.8,'Action','Europe','Technologie',[mkTx('2023-04-18','BUY',5,610)]),
-    mkH('IWDA','IWDA','iShares Core MSCI World',30,78.4,91.2,'ETF','Monde','Diversifié',[mkTx('2022-08-10','BUY',20,74.2),mkTx('2023-02-28','BUY',10,86.8)]),
-    mkH('NOVO','NOVO','Novo Nordisk',18,92.3,108.6,'Action','Europe','Santé',[mkTx('2023-06-30','BUY',18,92.3)]),
-  ];
-  const av = [
-    mkH('EURO','FR0013309002','Fonds Euros',1,42000,44730,'Obligation','France','Fonds euros',[mkTx('2021-12-01','BUY',1,42000)]),
-    mkH('PAEEM','PAEEM','Amundi EM ESG',40,42.1,45.8,'ETF','Émergents','Diversifié',[mkTx('2022-03-15','BUY',25,40.2),mkTx('2023-07-20','BUY',15,45.1)]),
-    mkH('SAN','SAN','Sanofi',25,88.5,94.2,'Action','France','Santé',[mkTx('2023-09-05','BUY',25,88.5)]),
-  ];
-  function val(hs){ return hs.reduce((s,h)=>s+(h.valueRef ?? h.value),0); }
-  // Apports calibrés pour laisser une petite trésorerie positive sur chaque compte
-  // (le solde démo = titres + liquidités, cf. accTotal).
-  const accs = [
-    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", bank:'Boursorama', icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
-    { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', bank:'Degiro', icon:'🌍', iconBg:'rgba(0,194,203,.13)', currency:'EUR', value:0, change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:14000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:5000,note:'Renforcement'}] },
-    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', bank:'BNP Paribas', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
-  ];
-  accs.forEach(a => { a.value = +(val(a.holdings) + PU.accCash(a, FX_RATES, 'EUR')).toFixed(2); });
-  return accs;
-}
 
 // ═══════════════════════════════════════════════
 // FORMATTING
@@ -297,152 +106,6 @@ function maskedNative(v,cur) { return S.privacy?'<span class="prv">● ● ●</
 // Échappement innerHTML — implémentation dans utils.js
 function esc(s) { return PU.esc(s); }
 
-// ─── Securities database for autocomplete ───
-const SECURITIES_DB = {
-  'MC':    {name:'LVMH',                  sector:'Luxe',           country:'France',   currency:'EUR',type:'Action'},
-  'TTE':   {name:'TotalEnergies',          sector:'Énergie',        country:'France',   currency:'EUR',type:'Action'},
-  'BNP':   {name:'BNP Paribas',            sector:'Finance',        country:'France',   currency:'EUR',type:'Action'},
-  'OR':    {name:"L'Oréal",               sector:'Cosmétiques',    country:'France',   currency:'EUR',type:'Action'},
-  'SAN':   {name:'Sanofi',                 sector:'Santé',          country:'France',   currency:'EUR',type:'Action'},
-  'AIR':   {name:'Airbus',                 sector:'Aéronautique',   country:'France',   currency:'EUR',type:'Action'},
-  'BN':    {name:'Danone',                 sector:'Agroalimentaire',country:'France',   currency:'EUR',type:'Action'},
-  'KER':   {name:'Kering',                 sector:'Luxe',           country:'France',   currency:'EUR',type:'Action'},
-  'AI':    {name:'Air Liquide',            sector:'Chimie',         country:'France',   currency:'EUR',type:'Action'},
-  'ORA':   {name:'Orange',                 sector:'Télécoms',       country:'France',   currency:'EUR',type:'Action'},
-  'SGO':   {name:'Saint-Gobain',           sector:'Matériaux',      country:'France',   currency:'EUR',type:'Action'},
-  'DSY':   {name:'Dassault Systèmes',      sector:'Technologie',    country:'France',   currency:'EUR',type:'Action'},
-  'RNO':   {name:'Renault',                sector:'Automobile',     country:'France',   currency:'EUR',type:'Action'},
-  'STLAM': {name:'Stellantis',             sector:'Automobile',     country:'Europe',   currency:'EUR',type:'Action'},
-  'ASML':  {name:'ASML Holding',           sector:'Technologie',    country:'Europe',   currency:'EUR',type:'Action'},
-  'NOVO':  {name:'Novo Nordisk',           sector:'Santé',          country:'Europe',   currency:'EUR',type:'Action'},
-  'SAP':   {name:'SAP',                    sector:'Technologie',    country:'Europe',   currency:'EUR',type:'Action'},
-  'ALV':   {name:'Allianz',                sector:'Finance',        country:'Europe',   currency:'EUR',type:'Action'},
-  'AAPL':  {name:'Apple',                  sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'MSFT':  {name:'Microsoft',              sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'NVDA':  {name:'NVIDIA',                 sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'GOOGL': {name:'Alphabet',               sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'AMZN':  {name:'Amazon',                 sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'META':  {name:'Meta Platforms',         sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'TSLA':  {name:'Tesla',                  sector:'Automobile',     country:'USA',      currency:'USD',type:'Action'},
-  'NFLX':  {name:'Netflix',                sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'V':     {name:'Visa',                   sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
-  'JPM':   {name:'JPMorgan Chase',         sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
-  'JNJ':   {name:'Johnson & Johnson',      sector:'Santé',          country:'USA',      currency:'USD',type:'Action'},
-  'WMT':   {name:'Walmart',                sector:'Consommation',   country:'USA',      currency:'USD',type:'Action'},
-  'UNH':   {name:'UnitedHealth',           sector:'Santé',          country:'USA',      currency:'USD',type:'Action'},
-  'CW8':   {name:'Amundi MSCI World',      sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
-  'IWDA':  {name:'iShares MSCI World',     sector:'Diversifié',     country:'Monde',    currency:'USD',type:'ETF'},
-  'SP5':   {name:'Amundi S&P 500',         sector:'Diversifié',     country:'USA',      currency:'EUR',type:'ETF'},
-  'PAEEM': {name:'Amundi EM ESG',          sector:'Diversifié',     country:'Émergents',currency:'EUR',type:'ETF'},
-  'EWLD':  {name:'iShares MSCI World ESG', sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
-  'QQQ':   {name:'Invesco QQQ (Nasdaq)',   sector:'Technologie',    country:'USA',      currency:'USD',type:'ETF'},
-  'MWRD':  {name:'Lyxor MSCI World',       sector:'Diversifié',     country:'Monde',    currency:'EUR',type:'ETF'},
-  'PANX':  {name:'Amundi PEA US Tech Screened', sector:'Technologie', country:'USA',    currency:'EUR',type:'ETF'},
-  'BTC':   {name:'Bitcoin',                sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'ETH':   {name:'Ethereum',               sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'SOL':   {name:'Solana',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'BNB':   {name:'BNB',                    sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'XRP':   {name:'Ripple',                 sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  // Asia & others
-  'BABA':  {name:'Alibaba',                sector:'Technologie',    country:'Chine',    currency:'USD',type:'Action'},
-  'TSM':   {name:'Taiwan Semiconductor',   sector:'Technologie',    country:'Asie',     currency:'USD',type:'Action'},
-  'SHOP':  {name:'Shopify',               sector:'Technologie',    country:'Canada',   currency:'USD',type:'Action'},
-  'PLTR':  {name:'Palantir',              sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'ARM':   {name:'ARM Holdings',           sector:'Technologie',    country:'UK',       currency:'USD',type:'Action'},
-  'COIN':  {name:'Coinbase',              sector:'Finance',        country:'USA',      currency:'USD',type:'Action'},
-  'UBER':  {name:'Uber',                  sector:'Technologie',    country:'USA',      currency:'USD',type:'Action'},
-  'SPOT':  {name:'Spotify',               sector:'Technologie',    country:'Europe',   currency:'USD',type:'Action'},
-  'SIE':   {name:'Siemens',              sector:'Industrie',      country:'Europe',   currency:'EUR',type:'Action'},
-  'BAS':   {name:'BASF',                 sector:'Chimie',         country:'Europe',   currency:'EUR',type:'Action'},
-  'SU':    {name:'Schneider Electric',   sector:'Industrie',      country:'France',   currency:'EUR',type:'Action'},
-  'CS':    {name:'AXA',                  sector:'Finance',        country:'France',   currency:'EUR',type:'Action'},
-  'CAP':   {name:'Capgemini',            sector:'Technologie',    country:'France',   currency:'EUR',type:'Action'},
-  'HO':    {name:'Thales',               sector:'Aéronautique',   country:'France',   currency:'EUR',type:'Action'},
-  // Crypto
-  'DOGE':  {name:'Dogecoin',              sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'ADA':   {name:'Cardano',               sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'AVAX':  {name:'Avalanche',             sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'DOT':   {name:'Polkadot',              sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-  'LINK':  {name:'Chainlink',             sector:'Crypto',         country:'—',        currency:'USD',type:'Crypto'},
-};
-
-// ─── Yahoo Finance symbol mapping ───
-// Ticker app → symbole Yahoo Finance
-const YAHOO_MAP = {
-  // France – Euronext Paris
-  'MC':'MC.PA','TTE':'TTE.PA','BNP':'BNP.PA','OR':'OR.PA','SAN':'SAN.PA',
-  'AIR':'AIR.PA','BN':'BN.PA','KER':'KER.PA','AI':'AI.PA','ORA':'ORA.PA',
-  'SGO':'SGO.PA','DSY':'DSY.PA','RNO':'RNO.PA','STLAM':'STLAM.MI',
-  // Europe
-  'ASML':'ASML.AS','NOVO':'NOVO-B.CO','SAP':'SAP.DE','ALV':'ALV.DE',
-  // USA (identiques)
-  'AAPL':'AAPL','MSFT':'MSFT','NVDA':'NVDA','GOOGL':'GOOGL','AMZN':'AMZN',
-  'META':'META','TSLA':'TSLA','NFLX':'NFLX','V':'V','JPM':'JPM',
-  'JNJ':'JNJ','WMT':'WMT','UNH':'UNH',
-  // ETFs
-  'CW8':'CW8.PA','IWDA':'IWDA.AS','SP5':'SP5.PA','PAEEM':'PAEEM.PA',
-  'EWLD':'EWLD.PA','QQQ':'QQQ','MWRD':'MWRD.PA','PANX':'PANX.PA',
-  // Asia & others
-  'BABA':'BABA','TSM':'TSM','SHOP':'SHOP','PLTR':'PLTR','ARM':'ARM',
-  'COIN':'COIN','UBER':'UBER','SPOT':'SPOT',
-  'SIE':'SIE.DE','BAS':'BAS.DE',
-  'SU':'SU.PA','CS':'CS.PA','CAP':'CAP.PA','HO':'HO.PA',
-};
-
-// Symbole Yahoo pour un titre : override du holding (résolution ISIN, ex. "PANX.PA") en priorité,
-// puis table explicite YAHOO_MAP, sinon le ticker brut.
-// Vrai pour la plupart des actions/ETF US cotés sans suffixe (ex: HOOD, AMD…).
-function yahooSymbolFor(ticker, override){ return override || YAHOO_MAP[ticker] || ticker; }
-
-// ─── CoinGecko IDs (crypto uniquement) ───
-const CG_IDS = {
-  'BTC':'bitcoin','ETH':'ethereum','SOL':'solana','BNB':'binancecoin','XRP':'ripple',
-  'DOGE':'dogecoin','ADA':'cardano','AVAX':'avalanche-2','DOT':'polkadot','LINK':'chainlink',
-};
-
-// (Twelve Data cascade supprimée — proxy Cloudflare utilisé directement)
-
-// ─── ISIN → ticker (pour import Degiro) ───
-const ISIN_MAP = {
-  'US0378331005':{ ticker:'AAPL', name:'Apple' },
-  'US5949181045':{ ticker:'MSFT', name:'Microsoft' },
-  'US02079K3059':{ ticker:'GOOGL',name:'Alphabet' },
-  'US0231351067':{ ticker:'AMZN', name:'Amazon' },
-  'US67066G1040':{ ticker:'NVDA', name:'NVIDIA' },
-  'US30303M1027':{ ticker:'META', name:'Meta' },
-  'US88160R1014':{ ticker:'TSLA', name:'Tesla' },
-  'US5128071082':{ ticker:'NFLX', name:'Netflix' },
-  'US92826C8394':{ ticker:'V',    name:'Visa' },
-  'US46625H1005':{ ticker:'JPM',  name:'JPMorgan' },
-  'US4581401001':{ ticker:'INTC', name:'Intel' },
-  'US17275R1023':{ ticker:'CSCO', name:'Cisco' },
-  'US4592001014':{ ticker:'IBM',  name:'IBM' },
-  'US79466L3024':{ ticker:'SPGI', name:'S&P Global' },
-  'FR0000131104':{ ticker:'BNP',  name:'BNP Paribas' },
-  'FR0000121014':{ ticker:'MC',   name:'LVMH' },
-  'FR0000120271':{ ticker:'TTE',  name:'TotalEnergies' },
-  'FR0000120321':{ ticker:'OR',   name:"L'Oréal" },
-  'FR0000073135':{ ticker:'AI',   name:'Air Liquide' },
-  'FR0000120628':{ ticker:'AXA',  name:'AXA' },
-  'FR0000131228':{ ticker:'BN',   name:'Danone' },
-  'FR0000045072':{ ticker:'GLE',  name:'Société Générale' },
-  'FR0000131906':{ ticker:'SGO',  name:'Saint-Gobain' },
-  'FR0000120073':{ ticker:'AIR',  name:'Airbus' },
-  'FR0000125338':{ ticker:'DSY',  name:'Dassault Systèmes' },
-  'FR0000133308':{ ticker:'ORA',  name:'Orange' },
-  'FR0000120503':{ ticker:'RNO',  name:'Renault' },
-  'FR0000121667':{ ticker:'SAN',  name:'Sanofi' },
-  'FR0000121972':{ ticker:'KER',  name:'Kering' },
-  'NL0010273215':{ ticker:'ASML', name:'ASML' },
-  'DE0007164600':{ ticker:'SAP',  name:'SAP' },
-  'DE0008404005':{ ticker:'ALV',  name:'Allianz' },
-  'IE00B4L5Y983':{ ticker:'IWDA', name:'iShares Core MSCI World' },
-  'LU1681043599':{ ticker:'CW8',  name:'Amundi MSCI World' },
-  'FR0010315770':{ ticker:'SP5',  name:'Amundi S&P 500' },
-  'FR0013412285':{ ticker:'EWLD', name:'Lyxor MSCI World' },
-  'FR0010429068':{ ticker:'PAEEM',name:'Amundi MSCI Emerging' },
-  'FR0013412269':{ ticker:'PANX', name:'Amundi PEA US Tech Screened' },
-};
 
 
 // ═══════════════════════════════════════════════
@@ -1140,6 +803,28 @@ function sanitizeNavItems(arr) {
   const out = [...new Set(arr.filter(k => NAV_CATALOG[k]))].slice(0, NAV_MAX);
   return out.length >= NAV_MIN ? out : NAV_DEFAULT.slice();
 }
+
+// Filet de sécurité « versions mélangées » : après une mise à jour, le service worker peut servir
+// un nouveau JS avec un ancien HTML (ou l'inverse). Si le HTML n'a pas les éléments dont ce JS
+// a besoin, on les crée ici plutôt que de planter au premier addEventListener (la barre du bas
+// se retrouvait alors morte jusqu'au redémarrage).
+(function ensureShellEls() {
+  const app = document.getElementById('app') || document.body;
+  const mk = (id, tag, cls, html) => {
+    if (document.getElementById(id)) return;
+    const e = document.createElement(tag); e.id = id;
+    if (cls) e.className = cls;
+    if (html) e.innerHTML = html;
+    app.appendChild(e);
+  };
+  mk('drawer-bg', 'div');
+  mk('drawer', 'aside');
+  mk('s-dca', 'div', 'screen no-nav');
+  mk('dca-modal-bg', 'div', 'add-modal-bg');
+  mk('dca-modal-sheet', 'div', 'add-modal-sheet', '<div class="modal-drag"></div><div class="modal-body" id="dca-modal-body"></div>');
+  const sheet = document.getElementById('dca-modal-sheet');
+  if (sheet) sheet.style.cssText = 'max-height:92vh;overflow-y:auto';
+})();
 
 let _drawerEdit = false;
 function drawerRow(key, opts={}) {
@@ -4954,6 +4639,13 @@ function bindDca(el) {
 document.getElementById('nav').addEventListener('click', e => {
   const b = e.target.closest('.nav-btn');
   if (b) runShortcut(b.dataset.nav);
+});
+// Filet de sécurité : au retour dans l'appli, on reconstruit la barre si elle est vide ou si son
+// état (visible/masquée) ne correspond pas à l'écran courant (cas observé après une mise à jour)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const n = document.getElementById('nav');
+  if (n && (!n.children.length || n.classList.contains('hidden') === navVisibleFor(S.screen))) renderNav();
 });
 
 // ═══════════════════════════════════════════════

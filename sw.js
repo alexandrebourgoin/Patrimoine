@@ -8,13 +8,16 @@
 // ⚠️ Ce numéro EST le 3e chiffre de la version applicative : patrimoine-vNN ↔ 1.11.NN.
 // Le bumper ici oblige à mettre APP_VERSION à jour dans mon-patrimoine.js (et inversement).
 // L'écran Réglages → À propos affiche le cache réellement actif et signale un écart.
-const CACHE = 'patrimoine-v104';
+const CACHE = 'patrimoine-v106';
 const SHELL = [
   './index.html',
   './mon-patrimoine.html',
   './mon-patrimoine.css',
   './mon-patrimoine.js',
   './utils.js',
+  './js/data/securities.js',
+  './js/data/demo.js',
+  './js/data/changelog.js',
   './manifest.json',
   './icon.svg'
 ];
