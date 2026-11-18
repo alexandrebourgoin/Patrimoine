@@ -2,6 +2,29 @@
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
 // ═══════════════════════════════════════════════
+// CONTRÔLE DES VENTES : on ne peut pas vendre plus que ce qu'on détient
+// ═══════════════════════════════════════════════
+// Vrai si, en rejouant les mouvements dans l'ordre chronologique (achats avant ventes à date égale),
+// la quantité détenue devient négative à un moment.
+function _sellsExceedHoldings(txs){
+  const rank={BUY:0,SELL:1};
+  const seq=txs.map((t,i)=>({t,i})).sort((a,b)=>
+    (a.t.date<b.t.date?-1:a.t.date>b.t.date?1:0) ||
+    ((rank[a.t.type]??2)-(rank[b.t.type]??2)) || (a.i-b.i));
+  let q=0;
+  for(const {t} of seq){
+    if(t.type==='BUY') q+=t.qty;
+    else if(t.type==='SELL'){ q-=t.qty; if(q<-1e-9) return true; }
+  }
+  return false;
+}
+// Quantité actuellement détenue (tous achats − toutes ventes).
+function _heldQty(txs){
+  return txs.reduce((q,t)=>t.type==='BUY'?q+t.qty:t.type==='SELL'?q-t.qty:q,0);
+}
+function _fmtQty(q){ return (Math.round(q*1e6)/1e6).toString(); }
+
+// ═══════════════════════════════════════════════
 // EDIT TRANSACTION MODAL
 // ═══════════════════════════════════════════════
 let _editTxAccId=null, _editTxHoldId=null, _editTxIdx=null, _editTxType='BUY';
@@ -41,6 +64,11 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_editTxAccId);
   const h=acc?.holdings.find(h=>h.id===_editTxHoldId);
   if(!h){toast('Position introuvable');return;}
+  // Refuse une modification qui rendrait la quantité négative à une date (sauf si l'historique l'était déjà)
+  const next=h.transactions.map((t,i)=>i===_editTxIdx?{date,type:_editTxType,qty,price}:t);
+  if(_sellsExceedHoldings(next)&&!_sellsExceedHoldings(h.transactions)){
+    toast('Modification impossible : les ventes dépasseraient la quantité détenue');return;
+  }
   h.transactions[_editTxIdx]={date,type:_editTxType,qty,price};
   recalcHolding(h);
   acc.value=accTotal(acc);
@@ -98,6 +126,16 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_mAccId);
   const h=acc?.holdings.find(h=>h.id===_mHoldId);
   if(!h){toast('Position introuvable');return;}
+  // Une vente ne peut pas dépasser la quantité détenue (ni à la date saisie, ni aujourd'hui)
+  if(_mType==='SELL'){
+    const held=_heldQty(h.transactions);
+    if(qty>held+1e-9){
+      toast('Vente impossible : vous ne détenez que '+_fmtQty(Math.max(held,0))+' titre(s)');return;
+    }
+    if(_sellsExceedHoldings([...h.transactions,{date,type:_mType,qty,price}])){
+      toast('Vente impossible à cette date : quantité détenue insuffisante');return;
+    }
+  }
   h.transactions.push({date,type:_mType,qty,price});
   // recalcHolding recompute tout (dont valueRef/pnlRef, que le calcul manuel oubliait :
   // accSum lit valueRef → patrimoine faux jusqu'au prochain fetch), comme edit-tx-submit
