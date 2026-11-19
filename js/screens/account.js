@@ -44,6 +44,120 @@ function accPerfInfo(acc) {
   return { net, gain, pct, start, auto, years, annual };
 }
 
+// ── COMPARAISON À UN INDICE ──
+// Indice choisi par compte (acc.benchmark : clé ci-dessous, '' = aucun ; absent = défaut selon le type de compte :
+// Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun sinon). Cours via le proxy Yahoo, séries gardées
+// dans l'historique local sous la clé 'IDX:<clé>'. MSCI World / ACWI sont suivis via les ETF iShares URTH / ACWI.
+// Les indices restent dans leur devise d'origine (pas de conversion).
+const BENCHMARKS = {
+  SPX:   { label:'S&P 500',    sym:'^GSPC'   },
+  WORLD: { label:'MSCI World', sym:'URTH'    },
+  ACWI:  { label:'MSCI ACWI',  sym:'ACWI'    },
+  CAC40: { label:'CAC 40',     sym:'^FCHI'   },
+  BTC:   { label:'Bitcoin',    sym:'BTC-USD' },
+};
+function accBenchmarkKey(acc) {
+  if (acc.benchmark !== undefined) return acc.benchmark;
+  const t = (acc.type || '').toLowerCase();
+  if (/crypto/.test(t)) return 'BTC';
+  if (/\bpea\b/.test(t)) return 'CAC40';
+  return '';
+}
+const _benchTried = {};   // une tentative de téléchargement par indice et par session
+function benchNeedsLoad(key, startDay) {
+  if (!BENCHMARKS[key]) return false;
+  const h = getHistorySeries('IDX:' + key);
+  if (!h) return true;
+  if (Date.now() - h.fetchedAt > 12 * 3600 * 1000) return true;
+  return !!startDay && new Date(h.series[0].d + 'T00:00:00').getTime() > new Date(startDay + 'T00:00:00').getTime() + 7 * 86400000;
+}
+async function loadBenchmark(key, startDay) {
+  const b = BENCHMARKS[key]; if (!b) return;
+  const tag = key + '|' + (startDay || '');
+  if (_benchTried[tag]) return;
+  _benchTried[tag] = true;
+  const years = startDay ? (Date.now() - new Date(startDay + 'T00:00:00').getTime()) / (365.25 * 86400000) : 1;
+  const range = years <= 0.9 ? '1y' : years <= 1.9 ? '2y' : years <= 4.9 ? '5y' : years <= 9.9 ? '10y' : 'max';
+  try {
+    const s = await _fetchYahooHistory(b.sym, range);
+    if (s && s.length >= 2) saveHistory('IDX:' + key, s, 'USD');
+  } catch (e) { dbgLog('[ERR]', 'Indice ' + key + ' : ' + (e?.message || e)); }
+  if (S.screen === 'account') renderScreen('account');
+}
+// Variation (%) de l'indice entre le dernier cours ≤ fromDay (ou le 1er point connu) et aujourd'hui
+function benchRet(series, fromDay) {
+  if (!series || series.length < 2) return null;
+  let base = series[0];
+  for (const p of series) { if (p.d <= fromDay) base = p; else break; }
+  const last = series[series.length - 1];
+  return base.c > 0 ? (last.c / base.c - 1) * 100 : null;
+}
+// Valeur du compte à une date passée (devise appli) : quantités détenues ce jour-là × clôture connue + liquidités.
+// approx = true si un titre n'a pas d'historique de cours (le cours actuel est alors utilisé).
+function accValueOnDay(acc, day) {
+  let tot = 0, approx = false;
+  acc.holdings.forEach(h => {
+    const q = _qtyOnDay(h, day); if (q <= 0) return;
+    const hist = getHistorySeries(h.ticker);
+    let price = h.currentPrice, found = false;
+    if (hist) {
+      let c = null;
+      for (const p of hist.series) { if (p.d <= day) c = p.c; else break; }
+      if (c != null) { price = c; found = true; }
+    }
+    if (!found) approx = true;
+    tot += toRefCcy(q * price, h.currency);
+  });
+  tot += accCash(acc, day);
+  return { v: tot, approx };
+}
+// Performance pondérée des flux (Dietz modifié) depuis t0Day : (V1 − V0 − flux) / (V0 + flux pondérés par leur ancienneté)
+function accDietz(acc, t0Day, v0, inclusive) {
+  const ccy = acc.currency || S.currency, T = Date.now(), t0 = new Date(t0Day + 'T00:00:00').getTime();
+  if (!(T > t0)) return null;
+  let F = 0, W = 0;
+  (acc.cashflows || []).forEach(c => {
+    if (!c.date || (inclusive ? c.date < t0Day : c.date <= t0Day)) return;
+    const a = (c.type === 'WIT' ? -1 : 1) * toRefCcy(c.amount, ccy);
+    const t = new Date(c.date + 'T00:00:00').getTime();
+    F += a; W += a * Math.max(0, (T - t) / (T - t0));
+  });
+  const denom = v0 + W;
+  return denom > 0 ? (acc.value - v0 - F) / denom * 100 : null;
+}
+function _bmRow(lbl, a, r, name) {
+  const A = a == null ? '—' : fmtPct(a), R = r == null ? '—' : fmtPct(r);
+  const d = (a == null || r == null) ? null : a - r;
+  return `<div style='display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12px'><span style='font-weight:700'>${lbl}</span><span style='text-align:right'>Compte <b class='${a != null && a < 0 ? 't-loss' : 't-gain'}'>${A}</b> · ${esc(name)} <b class='${r != null && r < 0 ? 't-loss' : 't-gain'}'>${R}</b>${d == null ? '' : ` · écart <b class='${d < 0 ? 't-loss' : 't-gain'}'>${d >= 0 ? '+' : ''}${d.toFixed(1)} pts</b>`}</span></div>`;
+}
+function accBenchHTML(acc, perf) {
+  const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
+  const chip = `<span id='js-bm-btn' class='tap' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
+  if (!b) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
+  const ser = getHistorySeries('IDX:' + key);
+  if (!ser) {
+    const tried = _benchTried[key + '|' + (perf.start || '')];
+    return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>${tried ? 'indice indisponible pour le moment' : 'chargement de l\'indice…'}</span></div>`;
+  }
+  const cfDates = (acc.cashflows || []).map(c => c.date).filter(Boolean).sort();
+  const t0 = perf.start && cfDates[0] ? (perf.start < cfDates[0] ? perf.start : cfDates[0]) : (perf.start || cfDates[0]);
+  if (!t0) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
+  const pye = (new Date().getFullYear() - 1) + '-12-31';
+  const since = accDietz(acc, t0, 0, true), bSince = benchRet(ser.series, t0);
+  let ytd, bYtd, approx = false;
+  if (t0 > pye) { ytd = since; bYtd = bSince; }
+  else {
+    const v0 = accValueOnDay(acc, pye); approx = v0.approx;
+    ytd = accDietz(acc, pye, v0.v, false); bYtd = benchRet(ser.series, pye);
+  }
+  return `<div style='margin-top:8px'>
+    <div class='t-sm' style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px'>${chip}</div>
+    ${_bmRow('YTD', ytd, bYtd, b.label)}
+    ${_bmRow('Depuis le début', since, bSince, b.label)}
+    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · indice dans sa devise d'origine.</div>
+  </div>`;
+}
+
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
@@ -87,6 +201,7 @@ function renderAccount() {
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
     ${perf?`<div class="t-sm" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Perf. annuelle moy. : <b class="${perf.annual!=null&&perf.annual<0?'t-loss':'t-gain'}">${perf.annual!=null?fmtPct(perf.annual)+' / an':'—'}</b></span><span>· depuis ${perf.start?fmtDate(perf.start):'—'}${perf.auto?' (auto)':''}${perf.years!=null&&perf.years<1?' · calcul après 1 an':''}</span><span id="js-start-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Date de début</span></div>`:''}
+    ${perf?accBenchHTML(acc,perf):''}
     ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
@@ -423,6 +538,45 @@ document.getElementById('start-ok').addEventListener('click',()=>_saveStartDate(
 document.getElementById('start-clear').addEventListener('click',()=>_saveStartDate(''));
 registerModal('start-sheet', closeStartDate);
 
+// ── Choix de l'indice de comparaison du compte ──
+let _bmAccId=null;
+(function(){
+  const opts=Object.entries(BENCHMARKS).map(([k,b])=>`<option value='${k}'>${b.label}</option>`).join('');
+  document.body.insertAdjacentHTML('beforeend',`
+<div id='bm-bg' class='add-modal-bg'></div>
+<div id='bm-sheet' class='add-modal-sheet'>
+  <div class='modal-drag'></div>
+  <div class='modal-body'>
+    <div class='modal-title' style='margin-bottom:6px'>Indice de comparaison</div>
+    <div class='t-sm' style='margin-bottom:14px'>Par défaut : Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun pour les autres. MSCI World et MSCI ACWI sont suivis via les ETF iShares URTH et ACWI.</div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Indice</div>
+      <select class='form-input' id='bm-select' style='cursor:pointer'><option value='auto'>Par défaut (selon le type de compte)</option><option value=''>Aucun</option>${opts}</select></div></div>
+    <button class='form-submit' id='bm-ok'>Enregistrer</button>
+  </div>
+</div>`);
+})();
+function openBenchSheet(acc){
+  _bmAccId=acc.id;
+  document.getElementById('bm-select').value=acc.benchmark===undefined?'auto':acc.benchmark;
+  document.getElementById('bm-bg').classList.add('show');
+  document.getElementById('bm-sheet').classList.add('show');
+}
+function closeBenchSheet(){
+  document.getElementById('bm-bg').classList.remove('show');
+  document.getElementById('bm-sheet').classList.remove('show');
+}
+document.getElementById('bm-bg').addEventListener('click',closeBenchSheet);
+document.getElementById('bm-ok').addEventListener('click',()=>{
+  const acc=S.accounts.find(a=>a.id===_bmAccId); if(!acc) return;
+  const v=document.getElementById('bm-select').value;
+  if(v==='auto') delete acc.benchmark; else acc.benchmark=v;
+  saveAccounts();
+  closeBenchSheet();
+  if(S.screen==='account') renderScreen('account');
+  toast('Indice de comparaison enregistré ✓');
+});
+registerModal('bm-sheet', closeBenchSheet);
+
 
 SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -436,6 +590,13 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-start-btn')?.addEventListener('click',()=>{ if(acc) openStartDate(acc); });
+    el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
+
+    // Indice de comparaison : téléchargement de la série si absente ou périmée
+    if(acc && !S.isDemo){
+      const p=accPerfInfo(acc), key=accBenchmarkKey(acc);
+      if(p && key && benchNeedsLoad(key,p.start)) loadBenchmark(key,p.start);
+    }
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{
