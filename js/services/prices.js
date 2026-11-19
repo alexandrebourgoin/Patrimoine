@@ -173,6 +173,7 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
 
   if (h) {
     h.currentPrice = price;
+    h.priceAt = Date.now();
     recalcHolding(h);
     acc.value = accTotal(acc);
     const cached = loadPrices() || { prices: {} };
@@ -472,6 +473,7 @@ async function fetchLivePrices() {
         // Mettre à jour les holdings
         allH.filter(h => h.ticker === ticker).forEach(h => {
           h.currentPrice = price;
+          h.priceAt = Date.now();
           if (!known && qCur) h.currency = qCur;
           recalcHolding(h);
           updated++;
@@ -490,7 +492,7 @@ async function fetchLivePrices() {
     }
   }
 
-  // ── CoinGecko ──────────────────────────────────
+  // ── CoinGecko ──────────────────────────────
   if (cgIds.length) {
     try {
       const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
@@ -502,7 +504,7 @@ async function fetchLivePrices() {
         const ticker = cgRev[id];
         const price  = data[id]?.usd;  // toujours en USD (devise native des cryptos)
         if (!ticker || !price) return;
-        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; h.priceAt=Date.now(); recalcHolding(h); updated++; });
         // Mettre à jour la watchlist si présente
         const wItem = S.watchlist.find(w => w.ticker === ticker);
         if (wItem) {
@@ -517,7 +519,7 @@ async function fetchLivePrices() {
     }
   }
 
-  // ── Finalisation ───────────────────────────────
+  // ── Finalisation ──────────────────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
   if (updated > 0) {
     S.accounts.forEach(a=>{ a.value=accTotal(a); });
@@ -562,3 +564,78 @@ function applyPrices(priceData) {
   S.accounts.forEach(a=>{ a.value=accTotal(a); });
   S.lastPriceUpdate=priceData.updatedAt;
 }
+
+// ═══════════════════════════════════════════════
+// COURS DÉSYNCHRONISÉS — positions dont le dernier cours reçu en ligne est trop ancien
+// h.priceAt = horodatage (ms) du dernier cours reçu pour la position, posé à chaque mise à jour réussie.
+// Seuils : 4 jours pour actions / ETF / obligations (week-end + jour férié), 24 h pour les cryptos.
+// Jamais d'alerte en mode démo, pour le Cash ni pour une position soldée. Une position jamais synchronisée est signalée.
+// ═══════════════════════════════════════════════
+const STALE_MS_DEFAULT = 4*24*3600*1000;
+const STALE_MS_CRYPTO  = 24*3600*1000;
+function priceStale(h) {
+  if (S.isDemo || !h || h.type==='Cash' || !(h.quantity>0)) return false;
+  const limit = h.type==='Crypto' ? STALE_MS_CRYPTO : STALE_MS_DEFAULT;
+  return !h.priceAt || (Date.now() - h.priceAt) > limit;
+}
+function staleHoldings() {
+  const out = [];
+  S.accounts.forEach(acc => acc.holdings.forEach(h => { if (priceStale(h)) out.push({acc, h}); }));
+  return out;
+}
+function _ageLabel(ts) {
+  if (!ts) return 'Jamais synchronisé';
+  const m = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+  if (m < 60) return 'il y a ' + m + ' min';
+  const hh = Math.floor(m / 60);
+  return hh < 48 ? 'il y a ' + hh + ' h' : 'il y a ' + Math.floor(hh / 24) + ' j';
+}
+
+// Écran « Non synchro » : liste des positions concernées (raccourci optionnel de la barre du bas)
+function renderStale() {
+  const list = staleHoldings().sort((a,b) => (a.h.priceAt||0) - (b.h.priceAt||0));
+  const rows = list.map(({acc,h}) => `<div class='tap' data-sacc='${esc(String(acc.id))}' data-shold='${esc(String(h.id))}' style='display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer'>
+      <div class='ticker'>${esc(h.ticker.slice(0,4))}</div>
+      <div style='flex:1;min-width:0'>
+        <div style='font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>${esc(h.name)}</div>
+        <div class='t-sm'>${esc(acc.name)} · ${esc(h.type)}</div>
+      </div>
+      <div style='text-align:right;flex-shrink:0'>
+        <div style='font-size:12px;font-weight:700;color:var(--loss)'>${_ageLabel(h.priceAt)}</div>
+        <div class='t-sm'>${maskedNative(h.currentPrice, h.currency||'EUR')}</div>
+      </div>
+    </div>`).join('');
+  return `${renderTopBar()}
+  <div style='padding:4px 16px 110px'>
+    <div style='font-size:20px;font-weight:800;margin:6px 0 4px'>Cours non synchronisés</div>
+    <div class='t-sm' style='margin-bottom:14px'>Positions dont le dernier cours reçu a plus de 4 jours (actions, ETF, obligations) ou plus de 24 h (cryptos).</div>
+    <button class='form-submit' data-srefresh='1' style='margin:0 0 14px'>Actualiser les cours</button>
+    ${rows ? `<div style='background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden'>${rows}</div>`
+           : `<div class='t-sm' style='text-align:center;padding:30px 0'>${S.isDemo ? 'Indisponible en mode démo.' : 'Tous les cours sont à jour ✓'}</div>`}
+  </div>`;
+}
+function bindStale(el) {
+  el.onclick = e => {
+    if (e.target.closest('[data-srefresh]')) {
+      fetchLivePrices().then(() => { if (S.screen==='stale') renderScreen('stale'); });
+      return;
+    }
+    const row = e.target.closest('[data-shold]');
+    if (!row) return;
+    const acc = S.accounts.find(a => String(a.id) === row.dataset.sacc);
+    const h = acc && acc.holdings.find(x => String(x.id) === row.dataset.shold);
+    if (!h) return;
+    S.accountId = acc.id; S.holdingId = h.id;
+    go('stock');
+  };
+}
+(function () {
+  const ref = document.getElementById('s-dca');
+  if (ref && !document.getElementById('s-stale')) {
+    const d = document.createElement('div');
+    d.id = 's-stale'; d.className = 'screen no-nav';
+    ref.insertAdjacentElement('afterend', d);
+  }
+})();
+_NAV_PATH.stale = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
+NAV_CATALOG.stale = { label: 'Non synchro', kind: 'screen' };

@@ -63,7 +63,7 @@ function back() {
     // où on doit revenir selon l'écran courant
     const fallbacks = {
       account: 'comptes', stock: 'account',
-      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard', orders: 'dashboard',
+      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard', orders: 'dashboard', stale: 'dashboard',
     };
     const fb = fallbacks[S.screen];
     if (fb) go(fb);
@@ -75,8 +75,9 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  // Ordres limites (js/modals/order.js) : écran autonome, sans bindEvents
+  // Ordres limites (js/modals/order.js) et cours non synchronisés (js/services/prices.js) : écrans autonomes, sans bindEvents
   if(id==='orders') { if(el) { el.innerHTML=renderOrders(); bindOrders(el); } return; }
+  if(id==='stale')  { if(el) { el.innerHTML=renderStale();  bindStale(el);  } return; }
   const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca};
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); if(id==='dca') bindDca(el); }
 }
@@ -89,5 +90,6 @@ function refreshMain() {
   renderScreen('analysis');
   if(S.screen==='recherche') renderScreen('recherche');
   if(S.screen==='orders') renderScreen('orders');
+  if(S.screen==='stale') renderScreen('stale');
   saveData();
 }
