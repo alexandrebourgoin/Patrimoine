@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.125';
+const APP_VERSION = '1.11.126';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -259,11 +259,44 @@ async function loadBenchmark(key, startDay) {
   }));
   if (S.screen === 'account') renderScreen('account');
 }
-const _accBenchHTMLBase = accBenchHTML;
+
+// Comparatif avec l'indice : tableau Période / Compte / Indice / Écart.
+// La performance de l'indice est calculée depuis la même date de début que celle du compte (date d'ouverture saisie, sinon premier mouvement) ;
+// si l'historique déjà téléchargé ne remonte pas jusque-là, il est rechargé sur la bonne durée (une tentative par indice et par date de début).
+function _bmCell(v) {
+  return v == null ? "<span class='t-sm'>—</span>" : `<b class='${v < 0 ? 't-loss' : 't-gain'} t-num'>${fmtPct(v)}</b>`;
+}
 accBenchHTML = function (acc, perf, sum) {
-  const html = _accBenchHTMLBase(acc, perf, sum);
-  if (html.includes("chargement de l'indice")) setTimeout(() => loadBenchmark(accBenchmarkKey(acc), perf && perf.start), 0);
-  return html;
+  const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
+  const chip = `<span id='js-bm-btn' class='tap' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
+  if (!b) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
+  if (!perf || !sum) return `<div class='t-sm' style='margin-top:8px'>${chip} · Ajoute un apport pour comparer</div>`;
+  const t0 = sum.t0, ser = benchSeries(key);
+  const covers = !!ser && new Date(ser.series[0].d + 'T00:00:00').getTime() <= new Date(t0 + 'T00:00:00').getTime() + 7 * 86400000;
+  if (!covers && !_benchTried[key + '|' + t0]) {
+    setTimeout(() => loadBenchmark(key, t0), 0);
+    return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>chargement de l'indice…</span></div>`;
+  }
+  if (!ser) return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>indice indisponible pour le moment</span></div>`;
+  const g = 'display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:6px;align-items:baseline;font-size:12px';
+  const bAll = benchRet(ser.series, t0);
+  const sameYtd = sum.t0 > sum.pye;
+  const bYtd = sameYtd ? bAll : benchRet(ser.series, sum.pye);
+  const row = (lbl, a, r) => {
+    const x = (a == null || r == null) ? null : a - r;
+    return `<div style='${g};padding:7px 0;border-top:1px solid var(--border)'><span style='font-weight:700'>${lbl}</span>${_bmCell(a)}${_bmCell(r)}${x == null ? "<span class='t-sm'>—</span>" : `<b class='${x < 0 ? 't-loss' : 't-gain'} t-num'>${x >= 0 ? '+' : ''}${x.toFixed(1)} pts</b>`}</div>`;
+  };
+  const ccyNote = ser.conv ? 'indice converti en euros' : (b.ccy === 'USD' ? 'indice en dollars (non converti)' : 'indice dans sa devise');
+  const partial = covers ? '' : ` · historique de l'indice disponible depuis le ${fmtDate(ser.series[0].d)} seulement`;
+  return `<div style='margin-top:8px'>
+    <div style='margin-bottom:8px'>${chip}</div>
+    <div style='padding:4px 12px 6px;border-radius:12px;background:var(--card2)'>
+      <div style='${g};padding:6px 0;color:var(--text2);font-size:11px;font-weight:700'><span>Période</span><span>Compte</span><span>${esc(b.label)}</span><span>Écart</span></div>
+      ${sameYtd ? '' : row('Depuis le 1er janv.', sum.ytd ? sum.ytd.pct : null, bYtd)}
+      ${row('Depuis le ' + fmtDate(t0), sum.all ? sum.all.pct : null, bAll)}
+    </div>
+    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${sum.approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · ${ccyNote}${partial}.</div>
+  </div>`;
 };
 
 // Compteurs de la barre du bas : ordres en attente (même en mode démo), alertes de prix déclenchées, titres non synchronisés
@@ -275,6 +308,16 @@ function navBadgeCount(key) {
   } catch (e) {}
   return 0;
 }
+
+// Menu : l'entrée « Alertes » s'affiche juste sous « Ordres »
+const _renderDrawerBase = renderDrawer;
+renderDrawer = function () {
+  _renderDrawerBase();
+  const d = document.getElementById('drawer');
+  if (!d || _drawerEdit || !NAV_CATALOG.alerts) return;
+  const o = d.querySelector('[data-dkey="orders"]');
+  if (o && !d.querySelector('[data-dkey="alerts"]')) o.insertAdjacentHTML('afterend', drawerRow('alerts'));
+};
 
 // ── Régulariser les liquidités : plusieurs poches (devises) fixées à une même date. Corrige le niveau de liquidités, sans effet sur la performance. ──
 let _ca2 = null;
