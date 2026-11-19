@@ -86,7 +86,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const parsed=document.createElement('div');parsed.innerHTML=originalRender();
     const marker=[...parsed.querySelectorAll('[data-imedit]')].find(b=>b.dataset.imedit===p.id);
     const card=marker?.parentElement?.parentElement;
-    if(card && p.otherFees>0){const row=document.createElement('div');row.innerHTML=_immoRow('Autres frais',masked(p.otherFees));card.insertBefore(row,card.children[2]||null);}
+    if(card && p.otherFees>0){
+      const row=document.createElement('div');
+      row.innerHTML=_immoRow('Autres frais',masked(p.otherFees));
+      const rows=[...card.children];
+      const label=el=>el.firstElementChild?.textContent.trim();
+      const notary=rows.find(el=>label(el)==='Frais de notaire');
+      const price=rows.find(el=>label(el)==="Prix d'achat");
+      const anchor=notary||price;
+      if(anchor)anchor.after(row);else card.insertBefore(row,card.children[2]||null);
+    }
     detail.innerHTML=`<div class="back tap" data-imlist>← Retour aux biens</div>${card?card.outerHTML:'<div class="px">Fiche indisponible.</div>'}<div style="height:100px"></div>`;
   }
   const originalScreen=renderScreen;
