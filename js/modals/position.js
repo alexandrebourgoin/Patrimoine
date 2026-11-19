@@ -5,6 +5,7 @@
 // RÈGLES COMPTE ↔ TYPE D'ACTIF
 // Compte Crypto : crypto uniquement. PEA / PEA-PME : actions (Espace économique européen) et ETF. Compte-titres, assurance-vie, PER,
 // épargne salariale, Pilier 3a : actions, ETF, obligations et cash (pas de crypto). Tout autre type de compte : aucune restriction.
+// Les messages d'erreur restent courts : ils s'affichent dans une bulle d'une seule ligne.
 // ═══════════════════════════════════════════════
 function allowedAssetTypes(accType){
   const t=(accType||'').toLowerCase();
@@ -18,11 +19,11 @@ const PEA_COUNTRIES=['france','allemagne','germany','pays-bas','netherlands','be
 // Message d'erreur si `type` (et, pour une action de PEA, `country`) n'est pas autorisé sur ce compte, sinon chaîne vide
 function assetTypeError(acc,type,country){
   const ok=allowedAssetTypes(acc&&acc.type);
-  if(ok&&!ok.includes(type)) return 'Compte « '+acc.type+' » : '+type+' non autorisé (autorisés : '+ok.join(', ')+')';
+  if(ok&&!ok.includes(type)) return type==='Crypto' ? 'Crypto interdite sur ce type de compte' : type+' interdit sur ce type de compte';
   if(type==='Action'&&/\bpea\b/.test(((acc&&acc.type)||'').toLowerCase())){
     const c=(country||'').trim().toLowerCase();
-    if(!c||c==='inconnu') return 'PEA : renseigne le pays de la société (France ou Espace économique européen)';
-    if(!PEA_COUNTRIES.includes(c)) return 'PEA : « '+country+' » n\'est pas éligible (actions de l\'Espace économique européen uniquement)';
+    if(!c||c==='inconnu') return 'PEA : indique le pays (France ou UE)';
+    if(!PEA_COUNTRIES.includes(c)) return 'PEA : actions européennes uniquement';
   }
   return '';
 }
