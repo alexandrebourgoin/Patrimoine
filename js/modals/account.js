@@ -1,7 +1,7 @@
 // Modales de compte : types de compte, ajout, menu d actions, modification, suppression.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
-// ── Types de compte ────────────────────────────────────────────────────
+// ── Types de compte ─────────────────────────────────────────────────────────
 // Liste proposée à la création ET à la modification. Un type absent de la liste
 // (données anciennes, saisie « Autre ») reste conservé : il est ajouté à la volée
 // comme option supplémentaire par setSelectValue.
@@ -26,9 +26,44 @@ const ACCOUNT_TYPES = [
 ];
 const ACC_TYPE_OTHER = '__other__';
 
+// Devise de référence par type de compte : [devise, verrouillée].
+// Verrouillée = la devise est imposée par le produit (un PEA ou un Livret A sont en euros, un Pilier 3a en francs suisses).
+// Non verrouillée = simple valeur par défaut, modifiable. Types absents : aucune présélection (crypto, métaux, « Autre… »).
+const ACC_TYPE_CCY = {
+  "Plan d'Épargne en Actions (PEA)": ['EUR', true],
+  "PEA-PME": ['EUR', true],
+  "Plan d'Épargne Retraite (PER)": ['EUR', true],
+  "Épargne salariale (PEE / PERCO)": ['EUR', true],
+  "Livret A": ['EUR', true],
+  "LDDS": ['EUR', true],
+  "LEP": ['EUR', true],
+  "Livret Jeune": ['EUR', true],
+  "PEL / CEL": ['EUR', true],
+  "Pilier 3a": ['CHF', true],
+  "Assurance-Vie": ['EUR', false],
+  "Compte-Titres Ordinaire": ['EUR', false],
+  "Compte à terme": ['EUR', false],
+  "Compte courant": ['EUR', false],
+  "SCPI / Immobilier": ['EUR', false],
+};
+
+// Aligne le sélecteur de devise sur le type choisi.
+// apply = true (création, changement de type) : impose la devise du type, puis verrouille ou non le sélecteur.
+// apply = false (ouverture d'un compte existant) : ne change pas la devise ; le sélecteur n'est verrouillé que si elle est déjà celle du type.
+function syncAccCurrency(typeSelId, curSelId, apply){
+  const typeSel=document.getElementById(typeSelId);
+  const cur=document.getElementById(curSelId);
+  if(!typeSel||!cur) return;
+  const rule=ACC_TYPE_CCY[typeSel.value];
+  if(apply && rule && [...cur.options].some(o=>o.value===rule[0])) cur.value=rule[0];
+  cur.disabled=!!(rule && rule[1] && cur.value===rule[0]);
+  cur.title=cur.disabled?'Devise imposée par le type de compte':'';
+}
+
 // Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
 // « Préciser le type », affichée quand l'option « Autre… » est choisie.
-function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
+// `curSelId` (optionnel) : sélecteur de devise à aligner quand le type change.
+function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId){
   const sel=document.getElementById(selId); if(!sel) return;
   // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
   const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
@@ -43,6 +78,7 @@ function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
     const isOther=sel.value===ACC_TYPE_OTHER;
     if(otherRow) otherRow.classList.toggle('hidden',!isOther);
     if(isOther && otherInp) otherInp.focus();
+    if(curSelId) syncAccCurrency(selId,curSelId,true);
   };
 }
 
@@ -63,7 +99,10 @@ function openAccModal(){
   setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
-  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
+  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency');
+  const curSel=document.getElementById('acc-currency');
+  if(curSel) curSel.value='EUR';
+  syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
@@ -172,7 +211,8 @@ function openRenameAcc(accId, currentName){
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
-  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'');
+  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency');
+  syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : on ne change pas sa devise
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
