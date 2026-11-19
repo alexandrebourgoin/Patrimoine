@@ -1,12 +1,14 @@
-// DCA & objectifs : plan d investissement programmé + objectifs de capital (calculs théoriques).
+// DCA : plan d investissement programmé + objectifs de capital (calculs théoriques).
 // Dépend, À L APPEL seulement, de S, masked, toast… (mon-patrimoine.js). S.dca est initialisé dans le littéral de S.
 
 // ═══════════════════════════════════════════════
-// DCA & OBJECTIFS
+// DCA
 // Plan d'investissement programmé (budget mensuel réparti en % entre des titres) + objectifs
 // de capital. Calculs 100 % théoriques (apports prévus), aucun achat n'est écrit dans les comptes.
-// Données : S.dca = { plans:[{from,budget,day,lines:[{ticker,name,weight,color}]}], goals:[{id,name,target,date,start,rate}] }
+// Données : S.dca = { plans:[{from,budget,day,lines:[{ticker,name,weight,color,isin?,resolved?,yahooSymbol?,currency?}]}], goals:[{id,name,target,date,start,rate}] }
 // `plans` trié par date d'effet : les échéances passées gardent l'ancien budget / l'ancienne répartition.
+// Une ligne saisie avec un code ISIN non reconnu garde cet ISIN (isin, resolved:false) ; dès que le titre est retrouvé
+// (synchronisation), la ligne reçoit son ticker et son libellé final et l'ISIN reste mémorisé.
 // ═══════════════════════════════════════════════
 // Un slot par mode (comme les comptes) : le DCA démo ne se mélange pas au DCA réel.
 const STORE_DCA_DEMO = 'patrimoine-dca-demo';
@@ -35,6 +37,59 @@ function _ymd(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStar
 function _parseYmd(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function _fmtDate(s) { return _parseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
 function _numIn(v) { return parseFloat(String(v).replace(',', '.')); }
+
+// ── ISIN : mémorisation et résolution en libellé final ──
+function _isIsin(s) { return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(s || '')); }
+// Ticker connu pour un ISIN (table ISIN_MAP de l'appli), sinon null
+function _isinMapped(isin) {
+  try {
+    const m = typeof ISIN_MAP !== 'undefined' ? ISIN_MAP[isin] : null;
+    return typeof m === 'string' ? m : (m && m.ticker) || null;
+  } catch (e) { return null; }
+}
+// Ligne déjà connue dans un plan (par ticker ou par ISIN) : permet de garder le libellé et l'ISIN déjà retrouvés
+function dcaKnown(key) {
+  for (const p of S.dca.plans) for (const l of p.lines) if (l.ticker === key || l.isin === key) return l;
+  return null;
+}
+// Libellé affiché : le libellé final si le titre est reconnu, sinon l'ISIN saisi
+function dcaLabel(l) { return (l.isin && !l.resolved) ? 'ISIN ' + l.isin : (l.name || l.ticker); }
+// Construit la ligne enregistrée à partir de la saisie (ticker ou ISIN)
+function dcaBuildLine(l) {
+  const raw = l.ticker, k = dcaKnown(raw), base = { weight: l.weight, color: l.color };
+  if (_isIsin(raw)) {
+    const m = _isinMapped(raw);
+    if (m) return { ticker: m, isin: raw, name: SECURITIES_DB[m]?.name || m, resolved: true, ...base };
+    if (k && k.resolved) return { ticker: k.ticker, isin: raw, name: k.name, resolved: true, yahooSymbol: k.yahooSymbol, currency: k.currency, ...base };
+    return { ticker: raw, isin: raw, name: raw, resolved: false, ...base };
+  }
+  const name = SECURITIES_DB[raw]?.name || S.watchlist.find(w => w.ticker === raw)?.name || (k && k.resolved ? k.name : null) || raw;
+  return { ticker: raw, name, ...base, ...(k && k.isin ? { isin: k.isin, resolved: k.resolved, yahooSymbol: k.yahooSymbol, currency: k.currency } : {}) };
+}
+// Retrouve en ligne les titres saisis par ISIN : ticker + libellé final. force = ignore les essais déjà faits cette session.
+let _dcaResolving = false;
+const _dcaIsinTried = new Set();
+async function dcaResolveIsins(force) {
+  if (_dcaResolving) return;
+  const todo = [];
+  S.dca.plans.forEach(p => p.lines.forEach(l => { if (l.isin && !l.resolved && (force || !_dcaIsinTried.has(l.isin))) todo.push(l); }));
+  if (!todo.length) { if (force) toast('Tous les titres sont reconnus'); return; }
+  _dcaResolving = true;
+  let ok = 0;
+  try {
+    for (const l of todo) {
+      _dcaIsinTried.add(l.isin);
+      const info = await resolveIsinOnline(l.isin);
+      if (!info) continue;
+      l.ticker = info.ticker; l.name = info.name; l.resolved = true;
+      if (info.yahooSymbol) l.yahooSymbol = info.yahooSymbol;
+      if (info.currency) l.currency = info.currency;
+      ok++;
+    }
+  } finally { _dcaResolving = false; }
+  if (ok) { saveDca(); if (S.screen === 'dca') renderScreen('dca'); }
+  if (force || ok) toast(ok ? `${ok} titre${ok > 1 ? 's' : ''} reconnu${ok > 1 ? 's' : ''} ✓` : 'Titre introuvable pour le moment');
+}
 
 // Plan en vigueur à une date (le dernier dont la date d'effet est passée)
 function dcaPlanAt(ymd) {
@@ -94,8 +149,8 @@ function renderDca() {
     Retour
   </div>
   <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">DCA & objectifs</div>
-    <div class="t-sm" style="margin-top:2px">Investissement programmé — calculs théoriques, aucun ordre passé</div>
+    <div class="t-title">DCA</div>
+    <div class="t-sm" style="margin-top:2px">Investissement programmé et objectifs — calculs théoriques, aucun ordre passé</div>
   </div>`;
   const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;
   if (!plan) return header + `<div style="text-align:center;padding:50px 20px;color:var(--text2)">
@@ -106,12 +161,15 @@ function renderDca() {
   </div>` + renderDcaGoals(null);
 
   const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
+  const unresolved = plan.lines.filter(l => l.isin && !l.resolved).length;
   const lines = plan.lines.map(l => {
     const amt = plan.budget * l.weight / 100, px = dcaPriceRef(l.ticker);
+    const unres = l.isin && !l.resolved;
+    const sub = unres ? `libellé non reconnu` : esc(l.ticker) + (l.isin ? ' · ' + esc(l.isin) : '');
     return `<div class="s-item" style="cursor:default">
       <div class="s-ico" style="background:${l.color}22"><span style="width:12px;height:12px;border-radius:50%;background:${l.color}"></span></div>
-      <div class="flex1 col gap4"><div class="s-name">${esc(l.name || l.ticker)}</div>
-        <div class="s-sub">${esc(l.ticker)} · ${pct(l.weight)} %${px ? ` · ≈ ${(amt / px).toLocaleString('fr-FR', { maximumFractionDigits: 3 })} part(s)` : ''}</div></div>
+      <div class="flex1 col gap4"><div class="s-name">${esc(dcaLabel(l))}</div>
+        <div class="s-sub">${sub} · ${pct(l.weight)} %${px ? ` · ≈ ${(amt / px).toLocaleString('fr-FR', { maximumFractionDigits: 3 })} part(s)` : ''}</div></div>
       <div style="font-weight:700">${masked(amt)}</div>
     </div>`;
   }).join('');
@@ -121,12 +179,18 @@ function renderDca() {
 
   const hist = [...S.dca.plans].reverse().map(p => `<div class="s-item" style="cursor:default">
       <div class="flex1 col gap4"><div class="s-name">${_fmtDate(p.from)}${p === plan ? ' · en vigueur' : ''}</div>
-        <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(l.ticker) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
+        <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(dcaLabel(l)) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
       <div class="dr-btn" data-plandel="${p.from}">✕</div>
     </div>`).join('');
 
+  const syncCard = unresolved ? `<div class="px" style="margin-top:12px"><div style="padding:12px 14px;border-radius:14px;background:var(--card2);display:flex;align-items:center;gap:10px">
+      <div class="t-sm" style="flex:1">${unresolved} titre${unresolved > 1 ? 's' : ''} saisi${unresolved > 1 ? 's' : ''} par code ISIN, libellé non reconnu pour l'instant. L'ISIN est conservé.</div>
+      <button class="form-submit" id="js-dca-sync" style="margin:0;width:auto;padding:0 14px;height:38px">Synchroniser</button>
+    </div></div>` : '';
+
   return header + `
   <div class="px" style="margin-top:14px"><button class="form-submit" id="js-dca-cfg" style="margin-top:0">Modifier le plan / changer de stratégie</button></div>
+  ${syncCard}
   ${sec('Mon rythme')}
   <div class="s-group">
     <div class="s-item" style="cursor:default"><div class="flex1 s-name">Budget mensuel</div><div style="font-weight:800">${masked(plan.budget)}</div></div>
@@ -189,7 +253,7 @@ function dcaPlanModalHTML() {
     <div class="form-row"><div class="form-field"><div class="form-label">Date d'effet</div><input class="form-input" id="dca-from" type="date" value="${p.from}"></div></div>
     <div class="form-label" style="margin-bottom:8px">Répartition (total = 100 %)</div>
     ${p.lines.map((l, i) => `<div class="dca-line" data-i="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker" value="${esc(l.ticker)}" style="flex:1;min-width:0">
+      <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker ou ISIN" value="${esc(l.ticker)}" style="flex:1;min-width:0">
       <input class="form-input dl-w" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="%" value="${l.weight}" style="width:76px">
       <input class="dl-c" type="color" value="${l.color}" style="width:34px;height:34px;border:none;background:none;padding:0">
       <div class="dr-btn${p.lines.length <= 1 ? ' off' : ''}" data-ldel="${i}">✕</div></div>`).join('')}
@@ -218,6 +282,7 @@ function dcaUpdateTotal() {
 }
 function openDcaPlanModal() {
   const cur = dcaStats().current, today = _ymd(new Date());
+  // Une ligne non reconnue est réaffichée avec son ISIN (c'est lui qui est stocké comme ticker)
   _dcaDraft = cur
     ? { budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
     : { budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
@@ -229,16 +294,14 @@ function saveDcaPlan() {
   if (!(p.budget > 0)) return toast('Indique un budget mensuel');
   if (p.day < 1 || p.day > 31) return toast('Jour du mois entre 1 et 31');
   if (!p.from) return toast("Indique une date d'effet");
-  if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker de chaque ligne');
-  if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un ticker apparaît deux fois');
+  if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker ou l\'ISIN de chaque ligne');
+  if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un titre apparaît deux fois');
   if (Math.abs(p.lines.reduce((s, l) => s + l.weight, 0) - 100) > 0.01) return toast('Le total doit faire exactement 100 %');
-  const plan = {
-    from: p.from, budget: p.budget, day: p.day,
-    lines: p.lines.map(l => ({ ticker: l.ticker, name: SECURITIES_DB[l.ticker]?.name || S.watchlist.find(w => w.ticker === l.ticker)?.name || l.ticker, weight: l.weight, color: l.color })),
-  };
+  const plan = { from: p.from, budget: p.budget, day: p.day, lines: p.lines.map(dcaBuildLine) };
   // Même date d'effet : on remplace ; sinon on ajoute (l'historique des stratégies est conservé)
   S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
   saveDca(); closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
+  if (!S.isDemo) dcaResolveIsins(false);   // retrouve en arrière-plan le libellé des ISIN saisis
 }
 
 function openDcaGoalModal(id) {
@@ -302,6 +365,7 @@ document.getElementById('dca-modal-body').addEventListener('input', e => { if (e
 function bindDca(el) {
   el.querySelector('#js-back')?.addEventListener('click', back);
   el.querySelector('#js-dca-cfg')?.addEventListener('click', openDcaPlanModal);
+  el.querySelector('#js-dca-sync')?.addEventListener('click', () => dcaResolveIsins(true));
   el.querySelector('#js-goal-add')?.addEventListener('click', () => openDcaGoalModal());
   el.querySelectorAll('[data-goal]').forEach(i => i.addEventListener('click', () => openDcaGoalModal(i.dataset.goal)));
   el.querySelectorAll('[data-plandel]').forEach(b => b.addEventListener('click', () => {
@@ -315,6 +379,7 @@ function bindDca(el) {
     el.querySelectorAll('.dca-bar').forEach(x => x.style.opacity = x === b ? 1 : .55);
     el.querySelector('#dca-bar-info').innerHTML = `${_fmtDate(b.dataset.date)} · ${masked(+b.dataset.cumul)} cumulés`;
   }));
+  if (!S.isDemo) dcaResolveIsins(false);   // une tentative par ISIN et par session
 }
 
 

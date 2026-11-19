@@ -103,10 +103,10 @@ function sanitizeNavItems(arr) {
 let _drawerEdit = false;
 function drawerRow(key, opts={}) {
   const badge = key==='assistant' && S.assistantEnabled ? assistantAlertCount() : 0;
+  // Un seul nom par module : celui du catalogue (barre du bas, menu, écran). Exceptions : actions explicites.
   const lbl = key==='privacy' ? (S.privacy ? 'Afficher les montants' : 'Masquer les montants')
             : key==='refresh' ? 'Actualiser les cours'
             : key==='assistant' ? 'Assistant IA'
-            : key==='dca' ? 'DCA & objectifs'
             : NAV_CATALOG[key].label;
   const on = NAV_CATALOG[key].kind==='screen' && key===S.screen;
   return `<div class="dr-row${on?' on':''}" data-dkey="${key}"${key==='refresh'?' id="js-refresh-btn"':''}>
