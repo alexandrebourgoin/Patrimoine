@@ -1,11 +1,12 @@
-// DCA : plan d investissement programmé + objectifs de capital (calculs théoriques).
+// DCA : plan d investissement programmé + objectifs de capital + projection du patrimoine (calculs théoriques).
 // Dépend, À L APPEL seulement, de S, masked, toast… (mon-patrimoine.js). S.dca est initialisé dans le littéral de S.
 
 // ═══════════════════════════════════════════════
 // DCA
-// Plan d'investissement programmé (budget mensuel réparti en % entre des titres) + objectifs
-// de capital. Calculs 100 % théoriques (apports prévus), aucun achat n'est écrit dans les comptes.
+// Plan d'investissement programmé (budget mensuel réparti entre des titres, en % ou en montants) + objectifs
+// de capital + projection (js/screens/analysis.js). Calculs 100 % théoriques (apports prévus), aucun achat n'est écrit dans les comptes.
 // Données : S.dca = { plans:[{from,budget,day,lines:[{ticker,name,weight,color,isin?,resolved?,yahooSymbol?,currency?}]}], goals:[{id,name,target,date,start,rate}] }
+// `weight` est toujours stocké en % ; la saisie en montants est convertie (montant / budget).
 // `plans` trié par date d'effet : les échéances passées gardent l'ancien budget / l'ancienne répartition.
 // Une ligne saisie avec un code ISIN non reconnu garde cet ISIN (isin, resolved:false) ; dès que le titre est retrouvé
 // (synchronisation), la ligne reçoit son ticker et son libellé final et l'ISIN reste mémorisé.
@@ -150,15 +151,17 @@ function renderDca() {
   </div>
   <div class="settings-top" style="padding-top:4px">
     <div class="t-title">DCA</div>
-    <div class="t-sm" style="margin-top:2px">Investissement programmé et objectifs — calculs théoriques, aucun ordre passé</div>
+    <div class="t-sm" style="margin-top:2px">Investissement programmé, objectifs et projection — calculs théoriques, aucun ordre passé</div>
   </div>`;
   const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;
+  // Projection du patrimoine (patrimoine actuel + versements du plan) : js/screens/analysis.js
+  const projSec = typeof projectionBodyHTML === 'function' ? sec('Projection du patrimoine') + projectionBodyHTML() : '';
   if (!plan) return header + `<div style="text-align:center;padding:50px 20px;color:var(--text2)">
     <div style="font-size:40px;margin-bottom:12px">📈</div>
     <div style="font-size:15px;font-weight:600">Aucun plan DCA</div>
-    <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres.</div>
+    <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres, en pourcentages ou en montants.</div>
     <button class="form-submit" id="js-dca-cfg" style="max-width:260px">Configurer le plan</button>
-  </div>` + renderDcaGoals(null);
+  </div>` + renderDcaGoals(null) + projSec;
 
   const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
   const unresolved = plan.lines.filter(l => l.isin && !l.resolved).length;
@@ -205,6 +208,7 @@ function renderDca() {
     <div id="dca-bar-info" class="t-sm" style="margin-top:10px;text-align:center">${st.proj.length ? `${_fmtDate(st.proj[0].date)} → ${_fmtDate(st.proj[st.proj.length - 1].date)} · ${masked(maxC)} cumulés (sans rendement)` : '—'}</div>
   </div>
   ${renderDcaGoals(plan)}
+  ${projSec}
   ${sec('Historique des stratégies')}
   <div class="s-group">${hist}</div>
   <div class="t-sm px" style="padding:14px 20px 30px">Cumul = somme des apports prévus par le plan, pas une valeur de portefeuille. Les données sont stockées sur cet appareil.</div>`;
@@ -242,19 +246,26 @@ const _dcaHead = t => `<div style="display:flex;align-items:center;justify-conte
   <div class="modal-title" style="margin-bottom:0">${t}</div>
   <div id="dca-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div></div>`;
 
+// Montant d'une ligne (devise appli) à partir de son poids en % et du budget, arrondi au centime
+const _dcaAmt = (budget, weight) => Math.round((budget || 0) * (weight || 0)) / 100;
+
 function dcaPlanModalHTML() {
-  const p = _dcaDraft;
+  const p = _dcaDraft, amt = p.mode === 'amt';
   const opts = Object.entries(SECURITIES_DB).map(([t, d]) => `<option value="${esc(t)}">${esc(d.name)}</option>`).join('');
+  const chip = (m, l) => `<span data-dmode="${m}" class="tap" style="padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;${p.mode === m ? 'background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)' : 'color:var(--text2)'}">${l}</span>`;
   return _dcaHead('Plan DCA') + `<datalist id="dca-tickers">${opts}</datalist>
     <div class="form-row">
       <div class="form-field"><div class="form-label">Budget mensuel</div><input class="form-input" id="dca-budget" type="number" min="0" step="any" inputmode="decimal" value="${p.budget || ''}" placeholder="500"></div>
       <div class="form-field"><div class="form-label">Jour du mois</div><input class="form-input" id="dca-day" type="number" min="1" max="31" inputmode="numeric" value="${p.day}"></div>
     </div>
     <div class="form-row"><div class="form-field"><div class="form-label">Date d'effet</div><input class="form-input" id="dca-from" type="date" value="${p.from}"></div></div>
-    <div class="form-label" style="margin-bottom:8px">Répartition (total = 100 %)</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div class="form-label" style="margin:0">Répartition</div>
+      <div style="display:flex;gap:2px;padding:2px;border-radius:20px;background:rgba(127,127,127,.15)">${chip('pct', 'En %')}${chip('amt', 'En €')}</div>
+    </div>
     ${p.lines.map((l, i) => `<div class="dca-line" data-i="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
       <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker ou ISIN" value="${esc(l.ticker)}" style="flex:1;min-width:0">
-      <input class="form-input dl-w" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="%" value="${l.weight}" style="width:76px">
+      <input class="form-input dl-w" type="number" min="0" ${amt ? '' : 'max="100"'} step="any" inputmode="decimal" placeholder="${amt ? '€' : '%'}" value="${amt ? _dcaAmt(p.budget, l.weight) : l.weight}" style="width:86px">
       <input class="dl-c" type="color" value="${l.color}" style="width:34px;height:34px;border:none;background:none;padding:0">
       <div class="dr-btn${p.lines.length <= 1 ? ' off' : ''}" data-ldel="${i}">✕</div></div>`).join('')}
     <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px">
@@ -262,21 +273,31 @@ function dcaPlanModalHTML() {
       <div id="dca-total" class="t-sm" style="font-weight:700"></div></div>
     <button class="form-submit" id="dca-save">Enregistrer le plan</button>`;
 }
+// Lit le formulaire dans le brouillon ; les poids restent en % (en saisie par montants : montant / budget)
 function readDcaPlanForm() {
   const b = document.getElementById('dca-modal-body'), p = _dcaDraft;
   p.budget = _numIn(b.querySelector('#dca-budget').value) || 0;
   p.day = parseInt(b.querySelector('#dca-day').value, 10) || 1;
   p.from = b.querySelector('#dca-from').value || p.from;
-  p.lines = [...b.querySelectorAll('.dca-line')].map(r => ({
-    ticker: r.querySelector('.dl-t').value.trim().toUpperCase(),
-    weight: _numIn(r.querySelector('.dl-w').value) || 0,
-    color: r.querySelector('.dl-c').value,
-  }));
+  p.lines = [...b.querySelectorAll('.dca-line')].map(r => {
+    const raw = _numIn(r.querySelector('.dl-w').value) || 0;
+    return {
+      ticker: r.querySelector('.dl-t').value.trim().toUpperCase(),
+      weight: p.mode === 'amt' ? (p.budget > 0 ? raw / p.budget * 100 : 0) : raw,
+      color: r.querySelector('.dl-c').value,
+    };
+  });
 }
 function dcaUpdateTotal() {
-  const b = document.getElementById('dca-modal-body'); if (!b) return;
+  const b = document.getElementById('dca-modal-body'); if (!b || !_dcaDraft) return;
   const t = [...b.querySelectorAll('.dl-w')].reduce((s, i) => s + (_numIn(i.value) || 0), 0);
   const el = b.querySelector('#dca-total'); if (!el) return;
+  if (_dcaDraft.mode === 'amt') {
+    const budget = _numIn(b.querySelector('#dca-budget').value) || 0;
+    el.textContent = `Total : ${(Math.round(t * 100) / 100).toLocaleString('fr-FR')} / ${budget.toLocaleString('fr-FR')}`;
+    el.style.color = Math.abs(t - budget) < 0.01 ? 'var(--gain)' : 'var(--loss)';
+    return;
+  }
   el.textContent = `Total : ${Math.round(t * 100) / 100} %`;
   el.style.color = Math.abs(t - 100) < 0.01 ? 'var(--gain)' : 'var(--loss)';
 }
@@ -284,8 +305,8 @@ function openDcaPlanModal() {
   const cur = dcaStats().current, today = _ymd(new Date());
   // Une ligne non reconnue est réaffichée avec son ISIN (c'est lui qui est stocké comme ticker)
   _dcaDraft = cur
-    ? { budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
-    : { budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
+    ? { mode: 'pct', budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
+    : { mode: 'pct', budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
   openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
 }
 function saveDcaPlan() {
@@ -296,7 +317,8 @@ function saveDcaPlan() {
   if (!p.from) return toast("Indique une date d'effet");
   if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker ou l\'ISIN de chaque ligne');
   if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un titre apparaît deux fois');
-  if (Math.abs(p.lines.reduce((s, l) => s + l.weight, 0) - 100) > 0.01) return toast('Le total doit faire exactement 100 %');
+  if (Math.abs(p.lines.reduce((s, l) => s + l.weight, 0) - 100) > 0.01)
+    return toast(p.mode === 'amt' ? 'Le total des montants doit égaler le budget mensuel' : 'Le total doit faire exactement 100 %');
   const plan = { from: p.from, budget: p.budget, day: p.day, lines: p.lines.map(dcaBuildLine) };
   // Même date d'effet : on remplace ; sinon on ajoute (l'historique des stratégies est conservé)
   S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
@@ -349,6 +371,12 @@ document.getElementById('dca-modal-body').addEventListener('click', e => {
     closeDcaModal();
     return openConfirm('Supprimer cet objectif ?', () => { S.dca.goals = S.dca.goals.filter(x => x.id !== id); saveDca(); renderScreen('dca'); });
   }
+  const mode = t.closest('[data-dmode]');
+  if (mode && _dcaDraft && mode.dataset.dmode !== _dcaDraft.mode) {
+    readDcaPlanForm();                       // lit les saisies dans l'ancien mode, puis bascule
+    _dcaDraft.mode = mode.dataset.dmode;
+    openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal(); return;
+  }
   if (t.closest('#dca-ladd')) {
     readDcaPlanForm();
     if (_dcaDraft.lines.length < 8) _dcaDraft.lines.push({ ticker: '', weight: 0, color: DCA_COLORS[_dcaDraft.lines.length % DCA_COLORS.length] });
@@ -360,7 +388,9 @@ document.getElementById('dca-modal-body').addEventListener('click', e => {
     openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
   }
 });
-document.getElementById('dca-modal-body').addEventListener('input', e => { if (e.target.classList.contains('dl-w')) dcaUpdateTotal(); });
+document.getElementById('dca-modal-body').addEventListener('input', e => {
+  if (e.target.classList.contains('dl-w') || e.target.id === 'dca-budget') dcaUpdateTotal();
+});
 
 function bindDca(el) {
   el.querySelector('#js-back')?.addEventListener('click', back);
@@ -379,6 +409,8 @@ function bindDca(el) {
     el.querySelectorAll('.dca-bar').forEach(x => x.style.opacity = x === b ? 1 : .55);
     el.querySelector('#dca-bar-info').innerHTML = `${_fmtDate(b.dataset.date)} · ${masked(+b.dataset.cumul)} cumulés`;
   }));
+  // Hypothèses de rendement de la projection (js/screens/analysis.js)
+  if (typeof bindProjectionInputs === 'function') bindProjectionInputs(el, () => renderScreen('dca'));
   if (!S.isDemo) dcaResolveIsins(false);   // une tentative par ISIN et par session
 }
 

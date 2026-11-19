@@ -1,5 +1,5 @@
-// Écran Analyse : comment le patrimoine est placé aujourd'hui (grandes classes, types d'actifs, types de compte)
-// + écran Projection (patrimoine actuel + DCA) + binding.
+// Écran Analyse : comment le patrimoine est placé aujourd'hui (grandes classes, types d'actifs, types de compte, géographie, secteurs)
+// + projection du patrimoine (affichée dans l'écran DCA) + binding.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
 // ── TARGETS BLOCK ──
@@ -59,6 +59,8 @@ function accPocket(acc) {
   if (/pea|titres|assurance|retraite|\bper\b|épargne salariale|pee|perco|pilier/.test(t)) return 'Bourse';
   return 'Autres';
 }
+// Pays / secteur affichables : un tiret, « Inconnu » ou vide devient « Non renseigné » ; une crypto n'a ni pays ni secteur
+const _unk = v => !v || /^\s*(—|-|inconnu|autre)?\s*$/i.test(String(v));
 // Toutes les répartitions du patrimoine (comptes non « observateur »), en devise appli.
 function analysisData() {
   const accs = S.accounts.filter(a => !a.observer);
@@ -73,10 +75,12 @@ function analysisData() {
     if (cash) { byAsset['Cash'] = (byAsset['Cash'] || 0) + cash; byRaw['Cash'] = (byRaw['Cash'] || 0) + cash; }
     (a.holdings || []).forEach(h => {
       const hv = h.valueRef ?? h.value;
-      const cls = pk === 'Immobilier' ? 'Immobilier' : (h.type === 'Crypto' || pk === 'Crypto') ? 'Crypto' : (ASSET_LABEL[h.type] || h.type || 'Autres');
+      const crypto = h.type === 'Crypto' || pk === 'Crypto';
+      const cls = pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : (ASSET_LABEL[h.type] || h.type || 'Autres');
       byAsset[cls] = (byAsset[cls] || 0) + hv;
       byRaw[h.type] = (byRaw[h.type] || 0) + hv;
-      const g = h.country || 'Autre', s = h.sector || 'Autre';
+      const g = crypto ? 'Crypto (sans pays)' : (_unk(h.country) ? 'Non renseigné' : h.country);
+      const s = crypto ? 'Crypto' : (_unk(h.sector) ? 'Non renseigné' : h.sector);
       byGeo[g] = (byGeo[g] || 0) + hv;
       bySec[s] = (bySec[s] || 0) + hv;
     });
@@ -96,17 +100,36 @@ function buildSegs(obj, colors) {
     pct: tot>0?(value/tot*100).toFixed(1):'0.0'
   }));
 }
+// Donut + légende : le nom se tronque (jamais de débordement), montant et pourcentage restent sur la même ligne
 function donutBlock(title, segs) {
-  const legend=segs.map(s=>`<div class="legend-row">
-    <div class="leg-dot" style="background:${s.color}"></div>
-    <div class="leg-name">${esc(s.name)}</div>
-    <div class="t-sm t-num" style="margin-right:8px">${masked(s.value)}</div>
-    <div class="leg-pct" style="color:${s.color}">${s.pct}%</div>
+  const legend=segs.map(s=>`<div class="legend-row" style="display:flex;align-items:center;gap:8px">
+    <div class="leg-dot" style="background:${s.color};flex-shrink:0"></div>
+    <div class="leg-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div>
+    <div class="t-sm t-num" style="flex-shrink:0">${masked(s.value)}</div>
+    <div class="leg-pct" style="color:${s.color};flex-shrink:0;min-width:46px;text-align:right">${s.pct}%</div>
   </div>`).join('');
   return `<div class="donut-block anim">
     ${donutSvg(segs,108,16)}
-    <div class="legend">${legend}</div>
+    <div class="legend" style="flex:1;min-width:0">${legend}</div>
   </div>`;
+}
+// Liste en barres (géographie, secteurs) : 7 premières lignes + « Autres », pourcentage et montant alignés à droite
+function barList(obj) {
+  const entries = Object.entries(obj).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const tot = entries.reduce((s, [, v]) => s + v, 0);
+  if (!(tot > 0)) return `<div class="t-sm" style="padding:6px 0">Aucune donnée</div>`;
+  const top = entries.slice(0, 7), rest = entries.slice(7).reduce((s, [, v]) => s + v, 0);
+  if (rest > 0) top.push(['Autres', rest]);
+  return top.map(([n, v], i) => {
+    const p = v / tot * 100;
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px">
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600">${esc(n)}</span>
+        <span class="t-num" style="flex-shrink:0"><b>${p.toFixed(1)} %</b> <span class="t-sm">· ${masked(v)}</span></span>
+      </div>
+      <div style="height:6px;border-radius:3px;background:var(--card2);margin-top:5px;overflow:hidden"><div style="width:${p.toFixed(1)}%;height:100%;background:${SEC_C[i % SEC_C.length]}"></div></div>
+    </div>`;
+  }).join('');
 }
 
 function renderAnalysis() {
@@ -123,7 +146,7 @@ function renderAnalysis() {
     <div class="t-label">Patrimoine total</div>
     <div style="font-size:28px;font-weight:800;margin-top:4px" class="t-num">${masked(d.tot)}</div>
     <div class="t-sm" style="margin-top:2px">${d.accs.length} compte${d.accs.length>1?'s':''} · comment il est placé aujourd'hui</div>
-    <div id="js-go-proj" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Voir la projection →</div>
+    <div id="js-go-proj" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">DCA et projection →</div>
   </div>
   ${sec('Grandes classes')}
   ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}
@@ -131,7 +154,11 @@ function renderAnalysis() {
   ${donutBlock('',buildSegs(d.byAsset,ASSET_C))}
   ${sec('Par type de compte')}
   ${donutBlock('',buildSegs(d.byAccType,ACCTYPE_C))}
-  ${fold('Géographie et secteurs', `<div class="t-sm" style="margin:4px 0 8px">Titres seulement (les liquidités n'ont ni pays ni secteur).</div>${donutBlock('',buildSegs(d.byGeo,GEO_C))}${donutBlock('',buildSegs(d.bySec,SEC_C))}`)}
+  ${sec('Répartition géographique')}
+  <div style="padding:0 20px 6px">${barList(d.byGeo)}</div>
+  ${sec('Par secteur')}
+  <div style="padding:0 20px 6px">${barList(d.bySec)}</div>
+  <div class="t-sm px" style="padding:0 20px 10px">Titres seulement : les liquidités n'ont ni pays ni secteur, les cryptos sont regroupées.</div>
   ${fold('Objectifs d\'allocation ⓘ', renderTargetsBlock(d.byRaw, d.totRaw))}`;
 }
 
@@ -139,7 +166,7 @@ function renderAnalysis() {
 SCREEN_BIND.analysis = function (el, id) {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
-    el.querySelector('#js-go-proj')?.addEventListener('click', ()=>go('projection'));
+    el.querySelector('#js-go-proj')?.addEventListener('click', ()=>go('dca'));
     // Delegation : un seul écouteur par élément écran (l'élément persiste entre les rendus)
     if (el._tgtBound) return;
     el._tgtBound = true;
@@ -177,22 +204,11 @@ SCREEN_BIND.analysis = function (el, id) {
 
 
 // ═══════════════════════════════════════════════
-// PROJECTION — patrimoine actuel + versements du DCA, sur 1, 3, 5, 10, 15 et 20 ans
+// PROJECTION — patrimoine actuel + versements du DCA, sur 1, 3, 5, 10, 15 et 20 ans (affichée en bas de l'écran DCA)
 // Hypothèses simples et modifiables : rendement annuel des liquidités et des actifs risqués (bourse, crypto, immobilier, autres).
 // Le budget mensuel du DCA est supposé investi en actifs risqués. Ni frais, ni impôts, ni inflation. Ce ne sont pas des prévisions.
 // Scénarios : prudent / central / optimiste = rendement risqué − 3 / 0 / +3 points.
 // ═══════════════════════════════════════════════
-(function () {
-  const ref = document.getElementById('s-dca');
-  if (ref && !document.getElementById('s-projection')) {
-    const d = document.createElement('div');
-    d.id = 's-projection'; d.className = 'screen no-nav';
-    ref.insertAdjacentElement('afterend', d);
-  }
-})();
-_NAV_PATH.projection = 'M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z';
-NAV_CATALOG.projection = { label: 'Projection', kind: 'screen' };
-
 const PROJ_KEY = 'patrimoine-proj';
 function projSettings() {
   try {
@@ -208,7 +224,8 @@ function projFV(P, C, r, months) {
 function _projK(v) {
   return S.privacy ? '● ● ●' : new Intl.NumberFormat('fr-FR', { style: 'currency', currency: S.currency, maximumFractionDigits: 0 }).format(v);
 }
-function renderProjection() {
+// Corps de la projection (sans en-tête) : résumé, hypothèses modifiables, tableau 1 à 20 ans
+function projectionBodyHTML() {
   const d = analysisData();
   const st = typeof dcaStats === 'function' ? dcaStats() : null, plan = st && st.current, C = plan ? plan.budget : 0;
   const set = projSettings();
@@ -223,37 +240,30 @@ function renderProjection() {
     <b class="t-num">${_projK(val(n, 0))}</b>
     <span class="t-num">${_projK(val(n, 3))}</span></div>`).join('');
   const inp = (id, v, lbl) => `<label style="flex:1;display:block"><span class="form-label">${lbl}</span><input class="form-input" id="${id}" type="number" step="0.1" inputmode="decimal" value="${v}"></label>`;
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Projection</div>
-    <div class="t-sm" style="margin-top:2px">Ton patrimoine actuel et ton DCA, dans le temps — hypothèses théoriques</div>
-  </div>
-  <div style="margin:14px 20px 0;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--border)">
+  return `<div style="margin:0 20px;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--border)">
     <div style="display:flex;justify-content:space-between;font-size:13px"><span>Patrimoine actuel</span><b class="t-num">${masked(d.tot)}</b></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:6px"><span class="t-sm">dont liquidités</span><span class="t-num t-sm">${masked(liq)}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px"><span class="t-sm">dont actifs risqués</span><span class="t-num t-sm">${masked(risk)}</span></div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)"><span>DCA mensuel</span><b class="t-num">${plan ? masked(C) : '—'}</b></div>
-    ${plan ? '' : `<div class="t-sm" style="margin-top:8px">Aucun plan DCA : projection sans versements. <span id="js-go-dca" class="tap" style="color:var(--accent);cursor:pointer;font-weight:700">Configurer le DCA</span></div>`}
+    ${plan ? '' : `<div class="t-sm" style="margin-top:8px">Aucun plan DCA : projection sans versements.</div>`}
   </div>
   <div style="display:flex;gap:10px;margin:12px 20px 0">${inp('proj-rl', set.rl, 'Liquidités (%/an)')}${inp('proj-rr', set.rr, 'Actifs risqués (%/an)')}</div>
-  <div class="t-section px" style="padding:18px 20px 6px">Patrimoine estimé</div>
-  <div style="margin:0 20px;padding:4px 14px 8px;border-radius:14px;background:var(--card);border:1px solid var(--border)">
+  <div style="margin:12px 20px 0;padding:4px 14px 8px;border-radius:14px;background:var(--card);border:1px solid var(--border)">
     <div style="${grid};padding:8px 0;color:var(--text2);font-size:11px;font-weight:700"><span>Horizon</span><span>Versements</span><span>Prudent</span><span>Central</span><span>Optimiste</span></div>
     ${rows}
   </div>
-  <div class="t-sm px" style="padding:12px 20px 30px">Central = ${set.rr} %/an sur les actifs risqués, prudent ${Math.max(-50, set.rr - 3)} %, optimiste ${set.rr + 3} %. Le DCA est supposé investi en actifs risqués ; les liquidités progressent à ${set.rl} %/an. Ni frais, ni impôts, ni inflation : ce sont des hypothèses, pas des prévisions.</div>`;
+  <div class="t-sm px" style="padding:12px 20px 10px">Central = ${set.rr} %/an sur les actifs risqués, prudent ${Math.max(-50, set.rr - 3)} %, optimiste ${set.rr + 3} %. Le DCA est supposé investi en actifs risqués ; les liquidités progressent à ${set.rl} %/an. Ni frais, ni impôts, ni inflation : ce sont des hypothèses, pas des prévisions.</div>`;
 }
-function bindProjection(el) {
-  el.querySelector('#js-back')?.addEventListener('click', back);
-  el.querySelector('#js-go-dca')?.addEventListener('click', () => go('dca'));
+// Hypothèses de rendement : enregistrées puis `after()` redéssine l'écran qui affiche la projection
+function bindProjectionInputs(el, after) {
   ['rl', 'rr'].forEach(k => el.querySelector('#proj-' + k)?.addEventListener('change', e => {
     const s = projSettings();
     const v = parseFloat(String(e.target.value).replace(',', '.'));
     if (Number.isFinite(v)) s[k] = Math.max(-50, Math.min(50, v));
     try { localStorage.setItem(PROJ_KEY, JSON.stringify(s)); } catch (err) {}
-    renderScreen('projection');
+    if (after) after();
   }));
 }
+// Compatibilité : l'ancien écran « projection » n'existe plus (fusionné dans DCA) ; ces deux fonctions évitent toute erreur d'ancien appel
+function renderProjection() { return projectionBodyHTML(); }
+function bindProjection(el) { bindProjectionInputs(el, () => renderScreen('dca')); }
