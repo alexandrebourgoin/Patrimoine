@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.128';
+const APP_VERSION = '1.11.129';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
