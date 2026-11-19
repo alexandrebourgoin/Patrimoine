@@ -17,24 +17,9 @@ function accHeroValHTML(acc) {
   return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
 }
 
-// Relevé de référence : dernière régularisation de nature 'baseline' (solde de relevé, origine de l'écart inconnue)
-// datée au plus tard d'aujourd'hui. Elle devient le point de départ de la performance : l'écart n'est ni un gain ni un apport.
-function accPerfReleve(acc, today) {
-  return (acc.cashAdjust || []).reduce((last, a) =>
-    a?.nature === 'baseline' && a.date && a.date <= today && (!last || a.date > last.date) ? a : last, null);
-}
-// Performance depuis le relevé : valeur totale du compte sur le relevé comme valeur de départ, puis flux postérieurs pondérés.
-function accPerfFromReleve(acc, releve, today = _dayKey(Date.now())) {
-  const amount = releve.totalAtDate;
-  const opening = Number.isFinite(amount) ? toRefCcy(amount, releve.totalCcy) : null;
-  const pct = today > releve.date && opening > 0 ? accDietz(acc, releve.date, opening, false) : null;
-  return { opening, pct };
-}
-// Variation de l'indice depuis une date, seulement si la série couvre réellement la période (sinon null, pas d'approximation)
-function accReleveBenchmarkRet(series, fromDay) {
-  if (!series?.length || series[0].d > fromDay || series.at(-1).d <= fromDay) return null;
-  return benchRet(series, fromDay);
-}
+// Mode d'affichage de la performance (mémorisé) : 'ytd' (depuis le 1er janvier) ou 'all' (historique)
+function _perfModeGet() { try { return localStorage.getItem('accPerfMode') === 'all' ? 'all' : 'ytd'; } catch (e) { return 'ytd'; } }
+function _perfModeSet(m) { try { localStorage.setItem('accPerfMode', m); } catch (e) {} }
 
 // Performance d'un compte = valorisation actuelle − apports nets (apports − retraits saisis).
 // Perf. annuelle moyenne = taux annuel équivalent sur les apports nets depuis la date de début du compte
@@ -157,8 +142,9 @@ function accValueOnDay(acc, day) {
   tot += accCash(acc, day);
   return { v: tot, approx };
 }
-// Performance pondérée des flux (Dietz modifié) depuis t0Day : (V1 − V0 − flux) / (V0 + flux pondérés par leur ancienneté)
-function accDietz(acc, t0Day, v0, inclusive) {
+// Performance pondérée des flux (Dietz modifié) depuis t0Day : gain = V1 − V0 − flux ; % = gain / (V0 + flux pondérés par leur ancienneté).
+// Les régularisations de liquidités sont des apports/retraits : elles ne comptent pas comme un gain.
+function accPerfPeriod(acc, t0Day, v0, inclusive) {
   const ccy = acc.currency || S.currency, T = Date.now(), t0 = new Date(t0Day + 'T00:00:00').getTime();
   if (!(T > t0)) return null;
   let F = 0, W = 0;
@@ -169,60 +155,50 @@ function accDietz(acc, t0Day, v0, inclusive) {
     F += a; W += a * Math.max(0, (T - t) / (T - t0));
   });
   const denom = v0 + W;
-  return denom > 0 ? (acc.value - v0 - F) / denom * 100 : null;
+  if (!(denom > 0)) return null;
+  const gain = acc.value - v0 - F;
+  return { pct: gain / denom * 100, gain };
+}
+// Résumé de performance : YTD (depuis le 31 décembre précédent) et historique (depuis le début du compte).
+// Si le compte est plus récent que l'année, le YTD est l'historique. approx = historique de cours incomplet pour le YTD.
+function accPerfSummary(acc, perf) {
+  if (!perf) return null;
+  const cfDates = (acc.cashflows || []).map(c => c.date).filter(Boolean).sort();
+  const t0 = perf.start && cfDates[0] ? (perf.start < cfDates[0] ? perf.start : cfDates[0]) : (perf.start || cfDates[0]);
+  if (!t0) return null;
+  const pye = (new Date().getFullYear() - 1) + '-12-31';
+  const all = accPerfPeriod(acc, t0, 0, true);
+  if (!all) return null;
+  let ytd = all, approx = false;
+  if (t0 <= pye) {
+    const v0 = accValueOnDay(acc, pye); approx = v0.approx;
+    ytd = accPerfPeriod(acc, pye, v0.v, false);
+  }
+  return { t0, pye, all, ytd, approx };
 }
 function _bmRow(lbl, a, r, name) {
   const A = a == null ? '—' : fmtPct(a), R = r == null ? '—' : fmtPct(r);
   const d = (a == null || r == null) ? null : a - r;
   return `<div style='display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12px'><span style='font-weight:700'>${lbl}</span><span style='text-align:right'>Compte <b class='${a != null && a < 0 ? 't-loss' : 't-gain'}'>${A}</b> · ${esc(name)} <b class='${r != null && r < 0 ? 't-loss' : 't-gain'}'>${R}</b>${d == null ? '' : ` · écart <b class='${d < 0 ? 't-loss' : 't-gain'}'>${d >= 0 ? '+' : ''}${d.toFixed(1)} pts</b>`}</span></div>`;
 }
-function accBenchHTML(acc, perf) {
+function accBenchHTML(acc, perf, sum) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
   const chip = `<span id='js-bm-btn' class='tap' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
   if (!b) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
-  const today = _dayKey(Date.now());
-  const releve = accPerfReleve(acc, today);
+  if (!perf || !sum) return `<div class='t-sm' style='margin-top:8px'>${chip} · Ajoute un apport ou régularise les liquidités pour comparer</div>`;
   const ser = benchSeries(key);
-  if (releve) {
-    const { opening, pct } = accPerfFromReleve(acc, releve, today);
-    const pye = (Number(today.slice(0, 4)) - 1) + '-12-31';
-    let ytd = null;
-    if (releve.date === pye) ytd = pct;
-    else if (releve.date < pye && opening > 0) {
-      const v0 = accValueOnDay(acc, pye);
-      if (!v0.approx && v0.v > 0) ytd = accDietz(acc, pye, v0.v, false);
-    }
-    const comparable = b.ccy === S.currency || ser?.conv;
-    const ref = day => comparable ? accReleveBenchmarkRet(ser?.series, day) : null;
-    return `<div style='margin-top:8px'>${chip}
-      ${ytd == null ? '<div class="t-sm">YTD : historique insuffisant</div>' : _bmRow('YTD', ytd, ref(pye), b.label)}
-      <div class='t-sm'>Depuis le début : historique insuffisant avant le relevé</div>
-      ${pct == null ? `<div class='t-sm'>Depuis le relevé du ${fmtDate(releve.date)} : en attente d’une valorisation ultérieure et d’une base positive</div>` : _bmRow('Depuis le relevé du ' + fmtDate(releve.date), pct, ref(releve.date), b.label)}
-      ${!comparable || !ser ? '<div class="t-sm">Indice indisponible dans la devise du compte affiché.</div>' : ''}
-    </div>`;
-  }
-  if (!perf) return `<div class='t-sm' style='margin-top:8px'>${chip} · Historique insuffisant pour la performance du compte</div>`;
   if (!ser) {
     const tried = _benchTried[key + '|' + (perf.start || '')];
     return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>${tried ? 'indice indisponible pour le moment' : 'chargement de l\'indice…'}</span></div>`;
   }
-  const cfDates = (acc.cashflows || []).map(c => c.date).filter(Boolean).sort();
-  const t0 = perf.start && cfDates[0] ? (perf.start < cfDates[0] ? perf.start : cfDates[0]) : (perf.start || cfDates[0]);
-  if (!t0) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
-  const pye = (new Date().getFullYear() - 1) + '-12-31';
-  const since = accDietz(acc, t0, 0, true), bSince = benchRet(ser.series, t0);
-  let ytd, bYtd, approx = false;
-  if (t0 > pye) { ytd = since; bYtd = bSince; }
-  else {
-    const v0 = accValueOnDay(acc, pye); approx = v0.approx;
-    ytd = accDietz(acc, pye, v0.v, false); bYtd = benchRet(ser.series, pye);
-  }
+  const bAll = benchRet(ser.series, sum.t0);
+  const bYtd = sum.t0 > sum.pye ? bAll : benchRet(ser.series, sum.pye);
   const ccyNote = ser.conv ? 'indice converti en euros' : (b.ccy === 'USD' ? 'indice en dollars (non converti)' : 'indice dans sa devise');
   return `<div style='margin-top:8px'>
     <div class='t-sm' style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px'>${chip}</div>
-    ${_bmRow('YTD', ytd, bYtd, b.label)}
-    ${_bmRow('Depuis le début', since, bSince, b.label)}
-    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · ${ccyNote}.</div>
+    ${_bmRow('YTD', sum.ytd ? sum.ytd.pct : null, bYtd, b.label)}
+    ${_bmRow('Depuis le début', sum.all.pct, bAll, b.label)}
+    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${sum.approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · ${ccyNote}.</div>
   </div>`;
 }
 
@@ -230,27 +206,49 @@ function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
   const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
-  const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
-  const cash=accCash(acc);                    // liquidités non investies
-  const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
+  const secVal=accSum(acc.holdings);          // positions seules (devise appli)
+  const cash=accCash(acc);                    // liquidités (devise appli)
+  const costBase=secVal-totPnl;
   const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
-  const releve=accPerfReleve(acc,_dayKey(Date.now()));   // solde de relevé = nouveau point de départ
-  const perf=releve?null:accPerfInfo(acc);    // gain vs apports/retraits (si des apports sont saisis)
-  const gainVal=perf?perf.gain:totPnl;
-  const gainPct=releve?accPerfFromReleve(acc,releve).pct:(perf?perf.pct:totPnlPct);
+  const perf=accPerfInfo(acc);
+  const sum=accPerfSummary(acc,perf);
+  const mode=_perfModeGet();
+  const cur=sum?(mode==='all'?sum.all:sum.ytd):null;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
     return `<div class="sort-pill${on?' on':''}" data-sort="${o.key}" data-label="${o.label}">${o.label}${arrow}</div>`;
   }).join('');
-  // Cashflow total
-  const cfs=acc.cashflows||[];
   const adj=PU.accCashAnchor(acc);             // dernière régularisation des liquidités
-  const hasCash=cfs.length>0||!!adj;
-  const totalDep=cfs.filter(c=>c.type==='DEP').reduce((s,c)=>s+c.amount,0);
-  const totalWit=cfs.filter(c=>c.type==='WIT').reduce((s,c)=>s+c.amount,0);
-  const netCf=totalDep-totalWit;
   const chipStyle='padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer';
+  const smallChip='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer';
+  const modeBtn=(k,l)=>`<span data-pm="${k}" class="tap" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;${mode===k?'background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)':'color:var(--text2)'}">${l}</span>`;
+  let perfCard;
+  if(cur){
+    const sub=mode==='all'
+      ? `Depuis le ${fmtDate(sum.t0)}${perf&&perf.annual!=null?' · '+fmtPct(perf.annual)+' / an':''} <span id="js-start-btn" class="tap" style="${smallChip};margin-left:6px">Date de début</span>`
+      : `Depuis le 1er janvier${sum.approx?' · approximatif (historique de cours incomplet)':''}`;
+    perfCard=`<div style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div class="t-label">Performance ${mode==='all'?'historique':'YTD'}</div>
+        <div style="display:flex;gap:2px;padding:2px;border-radius:20px;background:rgba(127,127,127,.15)">${modeBtn('ytd','YTD')}${modeBtn('all','Historique')}</div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap">
+        <div style="font-size:26px;font-weight:800" class="${cur.pct>=0?'t-gain':'t-loss'} t-num">${fmtPct(cur.pct)}</div>
+        <div style="font-size:14px;font-weight:700" class="${cur.gain>=0?'t-gain':'t-loss'} t-num">${cur.gain>=0?'+':''}${accNative(acc,cur.gain)}</div>
+      </div>
+      <div class="t-sm" style="margin-top:4px">${sub}</div>
+    </div>`;
+  } else {
+    perfCard=`<div style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)">
+      <div class="t-label">P&amp;L des positions</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap">
+        <div style="font-size:26px;font-weight:800" class="${totPnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(totPnlPct)}</div>
+        <div style="font-size:14px;font-weight:700" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${accNative(acc,totPnl)}</div>
+      </div>
+      <div class="t-sm" style="margin-top:4px">Ajoute un apport ou régularise les liquidités pour calculer la performance du compte.</div>
+    </div>`;
+  }
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     Retour
@@ -264,29 +262,15 @@ function renderAccount() {
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
-    ${hasCash?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
-    <div class="stat-row">
-      <div class="stat-box"><div class="t-label">${releve?'P&amp;L des titres':perf?'Gain total':'P&amp;L Total'}</div>
-        <div style="font-size:15px;font-weight:800" class="${gainVal>=0?'t-gain':'t-loss'} t-num">${gainVal>=0?'+':''}${masked(gainVal)}</div></div>
-      <div class="stat-box"><div class="t-label">${releve?'Perf. depuis le relevé du '+fmtDate(releve.date):'Performance'}</div>
-        <div style="font-size:15px;font-weight:800" class="${gainPct==null?'':gainPct>=0?'t-gain':'t-loss'} t-num">${gainPct==null?'—':fmtPct(gainPct)}</div></div>
-      <div class="stat-box"><div class="t-label">Variation J</div>
-        <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
-    </div>
-    ${perf?`<div class="t-sm" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Perf. annuelle moy. : <b class="${perf.annual!=null&&perf.annual<0?'t-loss':'t-gain'}">${perf.annual!=null?fmtPct(perf.annual)+' / an':'—'}</b></span><span>· depuis ${perf.start?fmtDate(perf.start):'—'}${perf.auto?' (auto)':''}${perf.years!=null&&perf.years<1?' · calcul après 1 an':''}</span><span id="js-start-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Date de début</span></div>`:''}
-    ${accBenchHTML(acc,perf)}
-    ${hasCash?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
-      <div style="flex:1">
-        <div class="t-label">Apport net</div>
-        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${maskedNative(netCf,acc.currency||S.currency)}</div>
-      </div>
-      <div style="flex:1">
-        <div class="t-label">Liquidités</div>
-        <div style="font-size:14px;font-weight:800" class="${cash>=0?'':'t-loss'} t-num">${masked(cash)}</div>
-      </div>
+    <div class="t-sm" style="margin-top:6px;display:flex;gap:16px;flex-wrap:wrap"><span>Liquidités <b class="t-num">${accNative(acc,cash)}</b></span><span>Positions <b class="t-num">${accNative(acc,secVal)}</b></span></div>
+    ${perfCard}
+    ${accBenchHTML(acc,perf,sum)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
       <div id="js-cf-btn" class="tap" style="${chipStyle}">Apports / Retraits</div>
+      <div id="js-ca-btn" class="tap" style="${chipStyle}">Régulariser les liquidités</div>
+      ${adj?`<span class="t-sm">régularisé le ${fmtDate(adj.date)}</span>`:''}
     </div>
-    <div class="t-sm" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span id="js-ca-btn" class="tap" style="${chipStyle}">Régulariser les liquidités</span>${adj?`<span>régularisé le ${fmtDate(adj.date)}</span>`:''}</div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport, ou régularisez les liquidités.</div>`:''}`:`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><div id="js-cf-btn" class="tap" style="${chipStyle}">+ Apport / Retrait</div><div id="js-ca-btn" class="tap" style="${chipStyle}">Régulariser les liquidités</div></div>`}
+    ${cash<0?`<div class="t-sm" style="margin-top:8px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis. Régularisez les liquidités ou ajoutez l'apport manquant.</div>`:''}
   </div>
   <div class="search-wrap">
     <div class="search-box">
@@ -651,33 +635,26 @@ document.getElementById('bm-ok').addEventListener('click',()=>{
 });
 registerModal('bm-sheet', closeBenchSheet);
 
-// ── Régularisation des liquidités (soldes réels par devise à une date) ──
-// acc.cashAdjust = [{ id, date, balances:{EUR:…,USD:…}, nature, totalAtDate?, totalCcy? }] ; voir PU.accCash dans utils.js.
-// nature 'baseline' : solde de relevé, origine de l'écart inconnue → nouveau point de départ de la performance (valeur totale du compte saisie).
-// nature 'gain' : écart = gain, intérêts ou frais (reste dans la performance).
-// nature 'flow' : écart = apport/retrait manquant (crée un apport ou retrait à cette date, repéré par adjId, hors performance).
+// ── Régularisation des liquidités : une devise, un montant ──
+// acc.cashAdjust = [{ id, date, balances:{DEVISE:montant}, nature:'cash' }] ; voir PU.accCash dans utils.js.
+// L'écart avec le calcul est enregistré comme apport/retrait « Régularisation des liquidités » daté du jour (repéré par adjId) :
+// la valeur du compte devient liquidités + positions, sans que l'écart compte comme un gain.
 let _caAccId=null;
 const CASH_CCYS=['EUR','USD','GBP','CHF','JPY'];
 (function(){
-  const fields=CASH_CCYS.map(c=>`<div class='form-field' style='flex:1;min-width:30%'><div class='form-label'>${c}</div><input class='form-input' type='number' step='0.01' inputmode='decimal' id='ca-${c}' placeholder='0'></div>`).join('');
+  const opts=CASH_CCYS.map(c=>`<option value='${c}'>${c}</option>`).join('');
   document.body.insertAdjacentHTML('beforeend',`
 <div id='ca-bg' class='add-modal-bg'></div>
 <div id='ca-sheet' class='add-modal-sheet'>
   <div class='modal-drag'></div>
   <div class='modal-body' style='max-height:85vh;overflow-y:auto'>
     <div class='modal-title' style='margin-bottom:6px'>Régulariser les liquidités</div>
-    <div class='t-sm' style='margin-bottom:12px'>Saisis les liquidités réelles du compte, par devise, à une date (solde en fin de journée). L'appli repart de ces soldes, puis ajoute les apports, retraits et ordres postérieurs.</div>
-    <div class='form-row'><div class='form-field'><div class='form-label'>Date du relevé</div><input class='form-input' type='date' id='ca-date'></div></div>
-    <div class='form-row' style='flex-wrap:wrap;gap:8px'>${fields}</div>
-    <div class='t-sm' id='ca-sum' style='margin:6px 0 10px'></div>
-    <div class='form-row'><div class='form-field'><div class='form-label'>Nature de l'écart avec le calcul</div>
-      <select class='form-input' id='ca-nature' style='cursor:pointer'>
-        <option value='baseline'>Solde du relevé, origine de l’écart inconnue (nouveau point de départ)</option>
-        <option value='gain'>Gain, intérêts ou frais (compte dans la performance)</option>
-        <option value='flow'>Apport ou retrait non saisi (hors performance)</option>
-      </select></div></div>
-    <div class='form-row' id='ca-total-row'><label class='form-field'><span class='form-label' id='ca-total-label'>Valeur totale du compte sur le relevé (titres + liquidités)</span><input class='form-input' type='number' id='ca-total' step='any' inputmode='decimal'></label></div>
-    <div class='t-sm' id='ca-flow-help' hidden>N’utilise cette option que si l’écart affiché correspond au montant du mouvement réel et si le relevé est daté du jour de ce mouvement. Sinon, saisis le mouvement à sa date via « Apports / Retraits », puis régularise.</div>
+    <div class='t-sm' style='margin-bottom:12px'>Saisis le montant réel des liquidités du compte. La valeur du compte devient liquidités + positions. L'écart est enregistré comme mouvement « Régularisation des liquidités » et ne compte pas comme un gain.</div>
+    <div class='form-row'>
+      <div class='form-field' style='flex:1'><div class='form-label'>Devise</div><select class='form-input' id='ca-ccy' style='cursor:pointer'>${opts}</select></div>
+      <div class='form-field' style='flex:2'><div class='form-label'>Montant des liquidités</div><input class='form-input' type='number' step='0.01' inputmode='decimal' id='ca-amount' placeholder='0'></div>
+    </div>
+    <div class='t-sm' id='ca-sum' style='margin:6px 0 12px'></div>
     <button class='form-submit' id='ca-ok'>Enregistrer</button>
     <div id='ca-list' style='margin-top:14px'></div>
   </div>
@@ -689,24 +666,20 @@ function _caRest(acc,d){
     cashAdjust:(acc.cashAdjust||[]).filter(a=>a.date!==d),
     cashflows:(acc.cashflows||[]).filter(c=>!ids.includes(c.adjId))};
 }
-function _caCompute(acc){
-  const d=document.getElementById('ca-date').value||_dayKey(Date.now());
-  const bal={}; let total=0;
-  CASH_CCYS.forEach(c=>{
-    const v=parseFloat(document.getElementById('ca-'+c).value);
-    if(!isNaN(v)&&v!==0){ bal[c]=v; total+=toRefCcy(v,c); }
-  });
-  const before=accCash(_caRest(acc,d),d);
-  return {d,bal,total,before,diff:total-before};
+// Liquidités actuelles (hors régularisation du jour), converties dans la devise choisie
+function _caCurrentIn(acc,ccy){
+  const d=_dayKey(Date.now());
+  return +(accCash(_caRest(acc,d),d)*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1)).toFixed(2);
 }
 function _caUpdate(){
   const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
-  const r=_caCompute(acc);
-  const nature=document.getElementById('ca-nature').value;
-  document.getElementById('ca-total-row').hidden=nature!=='baseline';
-  document.getElementById('ca-total-row').style.display=nature==='baseline'?'':'none';
-  document.getElementById('ca-flow-help').hidden=nature!=='flow';
-  document.getElementById('ca-sum').innerHTML=`Total saisi : <b>${fmtCur(r.total)}</b> · calcul actuel à cette date : ${fmtCur(r.before)} · écart : <b>${r.diff>=0?'+':''}${fmtCur(r.diff)}</b>`;
+  const d=_dayKey(Date.now()), ccy=document.getElementById('ca-ccy').value;
+  const v=parseFloat(document.getElementById('ca-amount').value);
+  const before=accCash(_caRest(acc,d),d);
+  const el=document.getElementById('ca-sum');
+  if(!Number.isFinite(v)){ el.innerHTML=`Liquidités actuelles : <b>${fmtCur(before)}</b>`; return; }
+  const total=toRefCcy(v,ccy), diff=total-before;
+  el.innerHTML=`Liquidités : ${fmtCur(before)} → <b>${fmtCur(total)}</b> (écart ${diff>=0?'+':''}${fmtCur(diff)})<br>Valeur du compte : <b>${fmtCur(accSum(acc.holdings)+total)}</b>`;
 }
 function _caList(acc){
   const el=document.getElementById('ca-list');
@@ -730,20 +703,9 @@ function _caList(acc){
 }
 function openCashAdjust(acc){
   _caAccId=acc.id;
-  document.getElementById('ca-date').value=_dayKey(Date.now());
-  CASH_CCYS.forEach(c=>{ document.getElementById('ca-'+c).value=''; });
-  const last=PU.accCashAnchor(acc);
-  if(last){
-    Object.entries(last.balances||{}).forEach(([c,v])=>{ const el=document.getElementById('ca-'+c); if(el) el.value=v; });
-  } else {
-    const ccy=CASH_CCYS.includes(acc.currency)?acc.currency:S.currency;
-    const cash=accCash(acc);
-    const el=document.getElementById('ca-'+ccy);
-    if(el&&cash) el.value=+(cash*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1)).toFixed(2);
-  }
-  document.getElementById('ca-nature').value='baseline';
-  document.getElementById('ca-total-label').textContent=`Valeur totale du compte sur le relevé (titres + liquidités, en ${S.currency})`;
-  document.getElementById('ca-total').value='';
+  const ccy=CASH_CCYS.includes(acc.currency)?acc.currency:S.currency;
+  document.getElementById('ca-ccy').value=ccy;
+  document.getElementById('ca-amount').value=_caCurrentIn(acc,ccy);
   _caList(acc); _caUpdate();
   document.getElementById('ca-bg').classList.add('show');
   document.getElementById('ca-sheet').classList.add('show');
@@ -753,24 +715,27 @@ function closeCashAdjust(){
   document.getElementById('ca-sheet').classList.remove('show');
 }
 document.getElementById('ca-bg').addEventListener('click',closeCashAdjust);
-document.getElementById('ca-nature').addEventListener('change',_caUpdate);
-['ca-date',...CASH_CCYS.map(c=>'ca-'+c)].forEach(id=>document.getElementById(id).addEventListener('input',_caUpdate));
+document.getElementById('ca-ccy').addEventListener('change',()=>{
+  const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
+  document.getElementById('ca-amount').value=_caCurrentIn(acc,document.getElementById('ca-ccy').value);
+  _caUpdate();
+});
+document.getElementById('ca-amount').addEventListener('input',_caUpdate);
 document.getElementById('ca-ok').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
-  const r=_caCompute(acc);
-  if(r.d>_dayKey(Date.now())){ toast('La date ne peut pas être dans le futur'); return; }
-  const nature=document.getElementById('ca-nature').value;
-  const totalAtDate=document.getElementById('ca-total').valueAsNumber;
-  if(nature==='baseline' && !Number.isFinite(totalAtDate)){ toast('Indique la valeur totale du compte sur le relevé'); return; }
-  const rest=_caRest(acc,r.d);
+  const v=parseFloat(document.getElementById('ca-amount').value);
+  if(!Number.isFinite(v)){ toast('Indique le montant des liquidités'); return; }
+  const ccy=document.getElementById('ca-ccy').value, d=_dayKey(Date.now());
+  const rest=_caRest(acc,d);
+  const diff=toRefCcy(v,ccy)-accCash(rest,d);
   acc.cashAdjust=rest.cashAdjust;
   acc.cashflows=rest.cashflows;
   const adjId='ca'+Date.now().toString(36);
-  acc.cashAdjust.push({id:adjId,date:r.d,balances:r.bal,nature,...(nature==='baseline'?{totalAtDate,totalCcy:S.currency}:{})});
-  if(nature==='flow' && Math.abs(r.diff)>=0.005){
-    const ccy=acc.currency||S.currency;
-    const amt=Math.abs(r.diff)*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1);
-    acc.cashflows.push({id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:r.diff>0?'DEP':'WIT',amount:+amt.toFixed(2),date:r.d,note:'Régularisation des liquidités',adjId});
+  acc.cashAdjust.push({id:adjId,date:d,balances:{[ccy]:v},nature:'cash'});
+  if(Math.abs(diff)>=0.005){
+    const accCcy=acc.currency||S.currency;
+    const amt=Math.abs(diff)*(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
+    acc.cashflows.push({id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:diff>0?'DEP':'WIT',amount:+amt.toFixed(2),date:d,note:'Régularisation des liquidités',adjId});
   }
   acc.value=accTotal(acc);
   saveAccounts();
@@ -797,15 +762,15 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-start-btn')?.addEventListener('click',()=>{ if(acc) openStartDate(acc); });
     el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
     el.querySelector('#js-ca-btn')?.addEventListener('click',()=>{ if(acc) openCashAdjust(acc); });
+    el.querySelectorAll('[data-pm]').forEach(b=>b.addEventListener('click',()=>{
+      _perfModeSet(b.dataset.pm);
+      renderScreen('account');
+    }));
 
     // Indice de comparaison : téléchargement de la série si absente ou périmée
     if(acc && !S.isDemo){
       const p=accPerfInfo(acc), key=accBenchmarkKey(acc);
-      const releve=accPerfReleve(acc,_dayKey(Date.now()));
-      const pye=(new Date().getFullYear()-1)+'-12-31';
-      const start=releve?.date || p?.start;
-      const historyStart=start && start>pye && releve ? pye : start;
-      if(historyStart && key && benchNeedsLoad(key,historyStart)) loadBenchmark(key,historyStart);
+      if(p && key && benchNeedsLoad(key,p.start)) loadBenchmark(key,p.start);
     }
 
     // Search
