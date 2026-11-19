@@ -1,5 +1,6 @@
 // Modales d ordres : modification d une transaction et ajout d un ordre (achat / vente / dividende).
-// + ordres limites suivis à la main (écran « Ordres en cours », raccourci optionnel de la barre du bas).
+// + ordres limites suivis à la main (écran « Ordres », modifiables, raccourci optionnel de la barre du bas)
+// + alertes de prix (écran « Alertes », compteur dans la barre du bas).
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
 // ═══════════════════════════════════════════════
@@ -160,8 +161,9 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
 
 // ═══════════════════════════════════════════════
 // ORDRES LIMITES — suivi manuel (aucun mouvement n'est créé automatiquement)
-// Stockés à part (clé patrimoine-orders) : [{id, accId, holdId, type:'BUY'|'SELL', qty, limit, createdAt}]
+// Stockés à part (clé patrimoine-orders) : [{id, accId, holdId, type:'BUY'|'SELL', qty, limit, createdAt, updatedAt?}]
 // À la réouverture de l'appli, l'utilisateur confirme l'exécution : le mouvement est alors ajouté au compte.
+// Un ordre en attente peut être modifié (compte, titre, sens, quantité, prix limite) ou annulé.
 // ═══════════════════════════════════════════════
 const STORE_ORDERS='patrimoine-orders';
 function loadOrders(){
@@ -210,6 +212,7 @@ function renderOrders(){
       ${hint.hit?`<div style='margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);color:#F59E0B;font-size:12px;font-weight:600'>⚠ ${hint.html}</div>`:''}
       <div style='display:flex;gap:8px;margin-top:12px'>
         <button class='form-submit' data-oexec='${esc(o.id)}' style='margin:0;flex:2;height:42px'>Exécuté ✓</button>
+        <button class='confirm-cancel' data-oedit='${esc(o.id)}' style='flex:1;height:42px;border-radius:12px;font-weight:700;cursor:pointer'>Modifier</button>
         <button class='confirm-cancel' data-ocancel='${esc(o.id)}' style='flex:1;height:42px;border-radius:12px;font-weight:700;cursor:pointer'>Annuler</button>
       </div>
     </div>`;
@@ -218,15 +221,19 @@ function renderOrders(){
   <div style='padding:4px 16px 110px'>
     <div style='font-size:20px;font-weight:800;margin:6px 0 4px'>Ordres en cours</div>
     <div class='t-sm' style='margin-bottom:14px'>Ordres limites passés chez ton courtier. Confirme l'exécution ici pour ajouter le mouvement au compte.</div>
-    <button class='form-submit' data-onew='1' style='margin:0 0 14px'>+ Nouvel ordre limite</button>
+    <button class='form-submit' data-onew='1' style='margin:0 0 10px'>+ Nouvel ordre limite</button>
+    <div data-ogo-alerts='1' class='tap' style='display:inline-block;margin:0 0 14px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>Alertes de prix →</div>
     ${cards||`<div class='t-sm' style='text-align:center;padding:30px 0'>Aucun ordre en cours.</div>`}
   </div>`;
 }
 function bindOrders(el){
   el.onclick=e=>{
     if(e.target.closest('[data-onew]')){ openOrdNew(); return; }
+    if(e.target.closest('[data-ogo-alerts]')){ go('alerts'); return; }
     const ex=e.target.closest('[data-oexec]');
     if(ex){ openOrdExec(ex.dataset.oexec); return; }
+    const ed=e.target.closest('[data-oedit]');
+    if(ed){ openOrdNew(ed.dataset.oedit); return; }
     const ca=e.target.closest('[data-ocancel]');
     if(ca){
       saveOrders(loadOrders().filter(o=>o.id!==ca.dataset.ocancel));
@@ -244,6 +251,11 @@ function bindOrders(el){
     d.id='s-orders'; d.className='screen no-nav';
     ref.insertAdjacentElement('afterend',d);
   }
+  if(ref && !document.getElementById('s-alerts')){
+    const d=document.createElement('div');
+    d.id='s-alerts'; d.className='screen no-nav';
+    ref.insertAdjacentElement('afterend',d);
+  }
   const closeBtn=`width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0`;
   document.body.insertAdjacentHTML('beforeend',`
 <div id='ord-bg' class='add-modal-bg'></div>
@@ -251,7 +263,7 @@ function bindOrders(el){
   <div class='modal-drag'></div>
   <div class='modal-body'>
     <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:16px'>
-      <div class='modal-title' style='margin-bottom:0'>Nouvel ordre limite</div>
+      <div class='modal-title' id='ord-title' style='margin-bottom:0'>Nouvel ordre limite</div>
       <div id='ord-close' style='${closeBtn}'>✕</div>
     </div>
     <div class='form-row'><div class='form-field'><div class='form-label'>Compte</div><select class='form-input' id='ord-acc' style='cursor:pointer'></select></div></div>
@@ -271,25 +283,49 @@ function bindOrders(el){
 <div id='oexec-sheet' class='add-modal-sheet' style='max-height:92vh;overflow-y:auto'>
   <div class='modal-drag'></div>
   <div class='modal-body' id='oexec-body'></div>
+</div>
+<div id='alt-bg' class='add-modal-bg'></div>
+<div id='alt-sheet' class='add-modal-sheet'>
+  <div class='modal-drag'></div>
+  <div class='modal-body'>
+    <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:16px'>
+      <div class='modal-title' style='margin-bottom:0'>Nouvelle alerte de prix</div>
+      <div id='alt-close' style='${closeBtn}'>✕</div>
+    </div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Titre</div><select class='form-input' id='alt-tick' style='cursor:pointer'></select></div></div>
+    <div class='type-btns' id='alt-dir-btns'>
+      <div class='type-btn buy on' data-adir='above'>Au-dessus de</div>
+      <div class='type-btn sell' data-adir='below'>En dessous de</div>
+    </div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Prix (devise du titre)</div><input class='form-input' type='number' id='alt-price' min='0' step='any' placeholder='0.00' inputmode='decimal'></div></div>
+    <button class='form-submit' id='alt-submit'>Enregistrer l'alerte</button>
+  </div>
 </div>`);
 })();
 
-// ── Nouvel ordre limite ──
-let _ordType='BUY';
+// ── Nouvel ordre limite / modification d'un ordre ──
+let _ordType='BUY', _ordEditId=null;
 function _ordFillHoldings(){
   const acc=S.accounts.find(a=>String(a.id)===document.getElementById('ord-acc').value);
   const hs=(acc?acc.holdings:[]).filter(h=>h.type!=='Cash');
   document.getElementById('ord-hold').innerHTML=hs.map(h=>`<option value='${esc(String(h.id))}'>${esc(h.ticker)} — ${esc(h.name)} (détenu : ${_fmtQty(_holdingQty(h))})</option>`).join('')||`<option value=''>Aucune position</option>`;
 }
-function openOrdNew(){
+// editId : ordre à modifier (champs préremplis), sinon nouvel ordre
+function openOrdNew(editId){
   const accs=S.accounts.filter(a=>a.holdings.some(h=>h.type!=='Cash'));
   if(!accs.length){ toast('Aucune position sur laquelle passer un ordre'); return; }
-  _ordType='BUY';
-  document.querySelectorAll('#ord-type-btns .type-btn').forEach(b=>b.classList.toggle('on',b.dataset.otype==='BUY'));
+  const o=editId?loadOrders().find(x=>x.id===editId):null;
+  _ordEditId=o?o.id:null;
+  _ordType=o?o.type:'BUY';
+  document.querySelectorAll('#ord-type-btns .type-btn').forEach(b=>b.classList.toggle('on',b.dataset.otype===_ordType));
   document.getElementById('ord-acc').innerHTML=accs.map(a=>`<option value='${esc(String(a.id))}'>${esc(a.icon||'')} ${esc(a.name)}</option>`).join('');
+  if(o) document.getElementById('ord-acc').value=String(o.accId);
   _ordFillHoldings();
-  document.getElementById('ord-qty').value='';
-  document.getElementById('ord-limit').value='';
+  if(o) document.getElementById('ord-hold').value=String(o.holdId);
+  document.getElementById('ord-qty').value=o?o.qty:'';
+  document.getElementById('ord-limit').value=o?o.limit:'';
+  document.getElementById('ord-title').textContent=o?"Modifier l'ordre":'Nouvel ordre limite';
+  document.getElementById('ord-submit').textContent=o?'Enregistrer les modifications':"Enregistrer l'ordre";
   document.getElementById('ord-bg').classList.add('show');
   document.getElementById('ord-sheet').classList.add('show');
 }
@@ -315,12 +351,19 @@ document.getElementById('ord-submit').addEventListener('click',()=>{
   if(_ordType==='SELL'&&qty>_holdingQty(h)+1e-9){
     toast('Vente impossible : vous ne détenez que '+_fmtQty(Math.max(_holdingQty(h),0))+' titre(s)'); return;
   }
-  const id='o'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  const all=loadOrders(); all.push({id,accId:acc.id,holdId:h.id,type:_ordType,qty,limit,createdAt:Date.now()});
+  const all=loadOrders();
+  const edit=!!_ordEditId&&all.some(o=>o.id===_ordEditId);
+  if(edit){
+    const i=all.findIndex(o=>o.id===_ordEditId);
+    all[i]={...all[i],accId:acc.id,holdId:h.id,type:_ordType,qty,limit,updatedAt:Date.now()};
+  } else {
+    const id='o'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    all.push({id,accId:acc.id,holdId:h.id,type:_ordType,qty,limit,createdAt:Date.now()});
+  }
   saveOrders(all);
   closeOrdNew();
-  if(S.screen==='orders') renderScreen('orders');
-  toast('Ordre limite enregistré ✓');
+  if(S.screen==='orders') renderScreen('orders'); else renderNav();
+  toast(edit?'Ordre modifié ✓':'Ordre limite enregistré ✓');
 });
 
 // ── Validation de l'exécution : récapitulatif puis ajout du mouvement ──
@@ -412,8 +455,126 @@ setTimeout(()=>{
 },1800);
 
 
+// ═══════════════════════════════════════════════
+// ALERTES DE PRIX — stockées à part (clé patrimoine-alerts) : [{id, ticker, name, dir:'above'|'below', price, createdAt}]
+// Une alerte est « déclenchée » tant que le dernier cours connu (position d'un compte, sinon liste de suivi) est au-dessus / en dessous du prix.
+// Vérification à l'ouverture de l'appli et à chaque actualisation des cours seulement : rien n'est surveillé application fermée.
+// Le compteur de la barre du bas (raccourci « Alertes ») indique le nombre d'alertes déclenchées.
+// ═══════════════════════════════════════════════
+const STORE_ALERTS='patrimoine-alerts';
+function loadAlerts(){
+  try{ const a=JSON.parse(localStorage.getItem(STORE_ALERTS)||'[]'); return Array.isArray(a)?a:[]; }
+  catch(e){ return []; }
+}
+function saveAlerts(a){ try{ localStorage.setItem(STORE_ALERTS,JSON.stringify(a)); }catch(e){} }
+// Dernier cours connu d'un ticker : {p, ccy, name} ou null
+function _altQuote(ticker){
+  for(const a of S.accounts) for(const h of a.holdings) if(h.ticker===ticker&&h.currentPrice>0) return {p:h.currentPrice,ccy:h.currency||'EUR',name:h.name};
+  const w=S.watchlist.find(x=>x.ticker===ticker);
+  return w&&w.price>0?{p:w.price,ccy:w.currency||'EUR',name:w.name}:null;
+}
+function alertHit(a){
+  const q=_altQuote(a.ticker); if(!q) return false;
+  return a.dir==='above'?q.p>=a.price:q.p<=a.price;
+}
+function alertsTriggeredCount(){ return loadAlerts().filter(alertHit).length; }
+
+function renderAlerts(){
+  const list=loadAlerts().map(a=>({a,q:_altQuote(a.ticker),hit:alertHit(a)})).sort((x,y)=>(y.hit-x.hit)||(x.a.createdAt-y.a.createdAt));
+  const cards=list.map(({a,q,hit})=>{
+    const ccy=q?q.ccy:'EUR', above=a.dir==='above';
+    return `<div style='background:var(--card2);border:1px solid ${hit?'#F59E0B':'var(--border)'};border-radius:var(--r);padding:14px;margin-bottom:10px'>
+      <div style='display:flex;justify-content:space-between;align-items:center;gap:8px'>
+        <div style='font-weight:800;font-size:15px'>${esc(a.ticker)} <span style='font-size:12px;font-weight:600;color:var(--text2)'>${esc(a.name||'')}</span></div>
+        <span style='font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;${hit?'background:rgba(245,158,11,.15);color:#F59E0B':'background:var(--card);color:var(--text2)'}'>${hit?'Déclenchée':'En attente'}</span>
+      </div>
+      <div style='margin-top:8px;font-size:14px'>Cours ${above?'≥':'≤'} <b>${maskedNative(a.price,ccy)}</b></div>
+      <div class='t-sm' style='margin-top:2px'>${q?'Cours actuel : '+maskedNative(q.p,q.ccy):'Cours actuel inconnu (titre absent des comptes et du suivi)'}</div>
+      <div style='margin-top:10px'><button class='confirm-cancel' data-adel='${esc(a.id)}' style='height:38px;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer'>Supprimer</button></div>
+    </div>`;
+  }).join('');
+  return `${renderTopBar()}
+  <div style='padding:4px 16px 110px'>
+    <div style='font-size:20px;font-weight:800;margin:6px 0 4px'>Alertes</div>
+    <div class='t-sm' style='margin-bottom:14px'>Alertes de prix, vérifiées à l'ouverture et à chaque actualisation des cours (pas quand l'appli est fermée). Le compteur de la barre du bas indique les alertes déclenchées.</div>
+    <button class='form-submit' data-anew='1' style='margin:0 0 10px'>+ Nouvelle alerte</button>
+    <div data-ago-orders='1' class='tap' style='display:inline-block;margin:0 0 14px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>Ordres en cours →</div>
+    ${cards||`<div class='t-sm' style='text-align:center;padding:30px 0'>Aucune alerte.</div>`}
+  </div>`;
+}
+function bindAlerts(el){
+  el.onclick=e=>{
+    if(e.target.closest('[data-anew]')){ openAltNew(); return; }
+    if(e.target.closest('[data-ago-orders]')){ go('orders'); return; }
+    const d=e.target.closest('[data-adel]');
+    if(d){
+      saveAlerts(loadAlerts().filter(a=>a.id!==d.dataset.adel));
+      renderScreen('alerts');
+      toast('Alerte supprimée');
+    }
+  };
+}
+
+let _altDir='above';
+function _altTickers(){
+  const m=new Map();
+  S.accounts.forEach(a=>a.holdings.forEach(h=>{ if(h.type!=='Cash'&&!m.has(h.ticker)) m.set(h.ticker,h.name); }));
+  S.watchlist.forEach(w=>{ if(!m.has(w.ticker)) m.set(w.ticker,w.name); });
+  return [...m.entries()];
+}
+function openAltNew(){
+  const ts=_altTickers();
+  if(!ts.length){ toast('Aucun titre : ajoute une position ou un favori'); return; }
+  _altDir='above';
+  document.querySelectorAll('#alt-dir-btns .type-btn').forEach(b=>b.classList.toggle('on',b.dataset.adir==='above'));
+  document.getElementById('alt-tick').innerHTML=ts.map(([t,n])=>`<option value='${esc(t)}'>${esc(t)} — ${esc(n||'')}</option>`).join('');
+  _altPrefill();
+  document.getElementById('alt-bg').classList.add('show');
+  document.getElementById('alt-sheet').classList.add('show');
+}
+function _altPrefill(){
+  const q=_altQuote(document.getElementById('alt-tick').value);
+  document.getElementById('alt-price').value=q?q.p:'';
+}
+function closeAltNew(){
+  document.getElementById('alt-bg').classList.remove('show');
+  document.getElementById('alt-sheet').classList.remove('show');
+}
+document.getElementById('alt-bg').addEventListener('click',closeAltNew);
+document.getElementById('alt-close').addEventListener('click',closeAltNew);
+document.getElementById('alt-tick').addEventListener('change',_altPrefill);
+document.querySelectorAll('#alt-dir-btns .type-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#alt-dir-btns .type-btn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  _altDir=b.dataset.adir;
+}));
+document.getElementById('alt-submit').addEventListener('click',()=>{
+  const ticker=document.getElementById('alt-tick').value;
+  const price=parseFloat(document.getElementById('alt-price').value);
+  if(!ticker){ toast('Titre requis'); return; }
+  if(!(price>0)){ toast('Prix requis'); return; }
+  const q=_altQuote(ticker);
+  const all=loadAlerts();
+  all.push({id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ticker,name:q?q.name:'',dir:_altDir,price,createdAt:Date.now()});
+  saveAlerts(all);
+  closeAltNew();
+  if(S.screen==='alerts') renderScreen('alerts'); else renderNav();
+  toast('Alerte enregistrée ✓');
+});
+
+_NAV_PATH.alerts='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
+NAV_CATALOG.alerts={ label:'Alertes', kind:'screen' };
+
+// Rappel à l'ouverture : alertes de prix déjà déclenchées
+setTimeout(()=>{
+  const n=alertsTriggeredCount();
+  if(n) toast(n+' alerte(s) de prix déclenchée(s)');
+},2600);
+
+
 // Fermée par le bouton retour Android et la touche Échap (voir js/core/modals.js).
 registerModal('edit-tx-sheet', closeEditTx);
 registerModal('modal-sheet', closeModal);
 registerModal('ord-sheet', closeOrdNew);
 registerModal('oexec-sheet', closeOrdExec);
+registerModal('alt-sheet', closeAltNew);
