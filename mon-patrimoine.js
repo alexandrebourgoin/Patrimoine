@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.123';
+const APP_VERSION = '1.11.124';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -264,11 +264,12 @@ accBenchHTML = function (acc, perf, sum) {
   return html;
 };
 
-// Compteurs de la barre du bas : les ordres en attente sont comptés même en mode démo
+// Compteurs de la barre du bas : ordres en attente (même en mode démo), alertes de prix déclenchées, titres non synchronisés
 function navBadgeCount(key) {
   try {
     if (key === 'stale')  return S.isDemo ? 0 : staleHoldings().length;
     if (key === 'orders') return loadOrders().filter(o => _ordLookup(o)).length;
+    if (key === 'alerts') return alertsTriggeredCount();
   } catch (e) {}
   return 0;
 }
