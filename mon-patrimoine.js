@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════
+// ═══════════════════════════════════════���═══════
 // MON PATRIMOINE — point d'entrée. Scripts classiques (pas d'ES modules), chargés dans l'ordre de mon-patrimoine.html :
 //   utils.js (PU, fonctions pures) → js/core/dom-guard.js → js/data/*  (tables, démo, changelog)
 //   → js/core/{screens,modals,storage,ui,navigation,shell}.js → js/services/* (cours, CSV)
@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.121';
+const APP_VERSION = '1.11.122';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
