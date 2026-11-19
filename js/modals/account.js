@@ -1,7 +1,7 @@
 // Modales de compte : types de compte, ajout, menu d actions, modification, suppression.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
-// ── Types de compte ─────────────────────────────────────────────────────────
+// ── Types de compte ─────────────────────────────────────────────────────────────────
 // Liste proposée à la création ET à la modification. Un type absent de la liste
 // (données anciennes, saisie « Autre ») reste conservé : il est ajouté à la volée
 // comme option supplémentaire par setSelectValue.
@@ -60,6 +60,22 @@ function syncAccCurrency(typeSelId, curSelId, apply){
   cur.title=cur.disabled?'Devise imposée par le type de compte':'';
 }
 
+// Date d'ouverture du compte : champ ajouté sous la banque, à la création et à la modification (jamais depuis la consultation du compte).
+// Elle fixe le début de la performance historique ; vide = premier apport ou mouvement du compte.
+function _accEnsureStartField(inputId, afterId){
+  let inp=document.getElementById(inputId);
+  if(!inp){
+    const ref=document.getElementById(afterId); if(!ref) return null;
+    const row=ref.closest('.form-row')||ref.parentElement;
+    const wrap=document.createElement('div');
+    wrap.className='form-row';
+    wrap.innerHTML='<div class="form-field"><div class="form-label">Date d\'ouverture</div><input class="form-input" type="date" id="'+inputId+'"></div>';
+    row.insertAdjacentElement('afterend',wrap);
+    inp=document.getElementById(inputId);
+  }
+  return inp;
+}
+
 // Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
 // « Préciser le type », affichée quand l'option « Autre… » est choisie.
 // `curSelId` (optionnel) : sélecteur de devise à aligner quand le type change.
@@ -99,6 +115,7 @@ function openAccModal(){
   setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
+  const st=_accEnsureStartField('acc-start','acc-bank'); if(st) st.value='';
   fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency');
   const curSel=document.getElementById('acc-currency');
   if(curSel) curSel.value='EUR';
@@ -124,12 +141,13 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const name=document.getElementById('acc-name').value.trim();
   const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
+  const startDate=document.getElementById('acc-start')?.value||'';
   if(!name){toast('Nom du compte requis');return;}
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver});
+  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver,...(startDate?{startDate}:{})});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -198,7 +216,7 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 
 
 // ═══════════════════════════════════════════════
-// EDIT ACCOUNT (nom, icône, type, devise)
+// EDIT ACCOUNT (nom, icône, type, devise, date d'ouverture)
 // ═══════════════════════════════════════════════
 let _renameAccId=null;
 function openRenameAcc(accId, currentName){
@@ -210,6 +228,7 @@ function openRenameAcc(accId, currentName){
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
+  const st=_accEnsureStartField('rename-acc-start','rename-acc-bank'); if(st) st.value=acc?.startDate||'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
   fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency');
   syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : on ne change pas sa devise
@@ -235,6 +254,8 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.type=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
+  const sd=document.getElementById('rename-acc-start')?.value||'';
+  if(sd) acc.startDate=sd; else delete acc.startDate;
   acc.value=accTotal(acc); // la devise du compte entre dans la conversion des apports/retraits
   saveAccounts();
   closeRenameAcc();

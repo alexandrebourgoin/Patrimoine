@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.124';
+const APP_VERSION = '1.11.125';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -105,26 +105,32 @@ function maskedNative(v,cur) { return S.privacy?'<span class="prv">● ● ●</
 function esc(s) { return PU.esc(s); }
 
 // ═══════════════════════════════════════════════
-// COMPTES — performance par flux, liquidités par devise, régularisation, indice
+// COMPTES — performance, liquidités par devise, régularisation, indice
 // Ces fonctions REMPLACENT celles de js/screens/account.js (chargé avant ce fichier) : même nom, comportement corrigé.
 // Dette technique assumée : l'ancien code reste dans account.js, inutilisé ; à nettoyer quand ce fichier pourra être modifié en entier.
 // ═══════════════════════════════════════════════
-function _accSim(acc) { return PU.accFlowSim(acc, FX_RATES, S.currency); }
+// Flux externes d'un compte = UNIQUEMENT les apports et retraits saisis (devise appli, au change du jour).
+// Les achats, les ventes et les régularisations de liquidités ne sont pas des flux : une régularisation corrige le niveau de liquidités, elle n'apporte ni ne retire d'argent.
+function _accFlows(acc) {
+  return (acc.cashflows || [])
+    .filter(c => c.date && (c.type === 'DEP' || c.type === 'WIT'))
+    .map(c => ({ date: c.date, amt: (c.type === 'WIT' ? -1 : 1) * toRefCcy(+c.amount || 0, c.ccy || acc.currency || 'EUR') }));
+}
 
-// Perf. d'un compte = valeur (titres + liquidités) − flux externes nets (apports saisis, achats sans apport, régularisations).
+// Plus-value du compte = valorisation (titres + liquidités) − apports nets saisis (apports − retraits).
 function accPerfInfo(acc) {
-  const sim = _accSim(acc);
-  if (!sim.flows.length) return null;
-  const sum = f => sim.flows.filter(f).reduce((s, x) => s + x.amt, 0);
-  const dep = sum(x => x.kind === 'cf' && x.amt > 0), wit = -sum(x => x.kind === 'cf' && x.amt < 0);
-  const adj = sum(x => x.kind === 'adj'), fund = sum(x => x.kind === 'funding');
-  const net = sim.flows.reduce((s, x) => s + x.amt, 0);
+  const fl = _accFlows(acc);
+  if (!fl.length) return null;
+  const dep = fl.filter(f => f.amt > 0).reduce((s, f) => s + f.amt, 0);
+  const wit = Math.abs(fl.filter(f => f.amt < 0).reduce((s, f) => s + f.amt, 0));
+  const net = dep - wit;
   if (!(net > 0)) return null;
-  const val = accSum(acc.holdings || []) + sim.cashNow;
+  const val = acc.value;
   const gain = val - net, pct = gain / net * 100;
+  // Date de début : date d'ouverture saisie sur le compte, sinon le plus ancien apport ou mouvement
   let start = acc.startDate || null, auto = false;
   if (!start) {
-    const ds = [...sim.flows.map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
+    const ds = [...fl.map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
     start = ds[0] || null; auto = true;
   }
   let years = null, annual = null;
@@ -132,7 +138,7 @@ function accPerfInfo(acc) {
     years = (Date.now() - new Date(start + 'T00:00:00').getTime()) / (365.25 * 86400000);
     if (years >= 1 && val > 0) annual = (Math.pow(val / net, 1 / years) - 1) * 100;
   }
-  return { net, gain, pct, start, auto, years, annual, dep, wit, adj, fund };
+  return { net, gain, pct, start, auto, years, annual, dep, wit };
 }
 
 // Valeur du compte à une date passée (devise appli) : quantités détenues ce jour-là × clôture connue + liquidités du jour.
@@ -150,7 +156,7 @@ function accValueOnDay(acc, day) {
     if (!found) approx = true;
     tot += toRefCcy(q * price, h.currency);
   });
-  tot += _accSim(acc).cashAt(day);
+  tot += accCash(acc, day);
   return { v: tot, approx };
 }
 
@@ -158,10 +164,10 @@ function accValueOnDay(acc, day) {
 function accPerfPeriod(acc, t0Day, v0, inclusive) {
   const T = Date.now(), t0 = new Date(t0Day + 'T00:00:00').getTime();
   if (!(T > t0)) return null;
-  const sim = _accSim(acc), today = _dayKey(T);
+  const today = _dayKey(T);
   let F = 0, W = 0, P = 0;
-  sim.flows.forEach(f => {
-    if (!f.date || f.date > today || (inclusive ? f.date < t0Day : f.date <= t0Day)) return;
+  _accFlows(acc).forEach(f => {
+    if (f.date > today || (inclusive ? f.date < t0Day : f.date <= t0Day)) return;
     const t = new Date(f.date + 'T00:00:00').getTime();
     F += f.amt; if (f.amt > 0) P += f.amt;
     W += f.amt * Math.max(0, (T - t) / (T - t0));
@@ -169,15 +175,13 @@ function accPerfPeriod(acc, t0Day, v0, inclusive) {
   let denom = v0 + W;
   if (denom < 0.02 * (v0 + P)) denom = v0 + P;   // flux tout récents : on retombe sur le capital investi
   if (!(denom > 0)) return null;
-  const gain = accSum(acc.holdings || []) + sim.cashNow - v0 - F;
-  return { pct: gain / denom * 100, gain };
+  return { pct: (acc.value - v0 - F) / denom * 100, gain: acc.value - v0 - F };
 }
 
-// Résumé : YTD (depuis le 31 décembre précédent) et historique (depuis le début du compte).
+// Résumé : YTD (depuis le 31 décembre précédent) et historique (depuis l'ouverture du compte).
 function accPerfSummary(acc, perf) {
   if (!perf) return null;
-  const sim = _accSim(acc);
-  const ds = [...sim.flows.map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
+  const ds = [..._accFlows(acc).map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
   const first = ds[0] || null;
   const t0 = perf.start && first ? (perf.start < first ? perf.start : first) : (perf.start || first);
   if (!t0) return null;
@@ -218,21 +222,19 @@ function _accExtraHTML(acc) {
   let h = '';
   if (pk.length > 1 || (pk.length === 1 && pk[0][0] !== ccy))
     h += `<div class='t-sm' style='margin-top:6px'>Poches de liquidités : ${pk.map(([c, v]) => `<b class='t-num'>${maskedNative(v, c)}</b>`).join(' · ')}</div>`;
-  if (perf) {
-    const bits = [`Apports cumulés <b class='t-num'>${accNative(acc, perf.dep)}</b>`, `Retraits cumulés <b class='t-num'>${accNative(acc, perf.wit)}</b>`];
-    if (Math.abs(perf.adj) > 0.5) bits.push(`Régularisations ${perf.adj > 0 ? '+' : '−'}<b class='t-num'>${accNative(acc, Math.abs(perf.adj))}</b>`);
-    if (perf.fund > 0.5) bits.push(`Achats sans apport saisi <b class='t-num'>${accNative(acc, perf.fund)}</b>`);
-    h += `<div class='t-sm' style='margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap'>${bits.map(b => `<span>${b}</span>`).join('')}</div>`;
-  }
+  if (perf)
+    h += `<div class='t-sm' style='margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap'><span>Apports cumulés <b class='t-num'>${accNative(acc, perf.dep)}</b></span><span>Retraits cumulés <b class='t-num'>${accNative(acc, perf.wit)}</b></span></div>`;
   const bad = (acc.holdings || []).filter(x => typeof assetTypeError === 'function' && assetTypeError(acc, x.type, x.country));
   if (bad.length) h += `<div class='t-sm' style='margin-top:8px;color:var(--loss)'>Position non autorisée sur ce type de compte : ${bad.map(x => esc(x.ticker)).join(', ')}. Supprime-la ou change le type du compte.</div>`;
   return h;
 }
 const _renderAccountBase = renderAccount;
 renderAccount = function () {
-  const html = _renderAccountBase();
+  let html = _renderAccountBase();
   const acc = S.accounts.find(a => a.id === S.accountId);
   if (!html || !acc) return html;
+  // La date d'ouverture se saisit uniquement à la création ou à la modification du compte : le bouton « Date de début » de la consultation est masqué
+  html = html.replace(/<span id="js-start-btn"[^>]*>[^<]*<\/span>/, '<span id="js-start-btn" style="display:none"></span>');
   const marker = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
   const i = html.indexOf(marker);
   return i < 0 ? html : html.slice(0, i) + _accExtraHTML(acc) + html.slice(i);
@@ -274,7 +276,7 @@ function navBadgeCount(key) {
   return 0;
 }
 
-// ── Régulariser les liquidités : plusieurs poches (devises) fixées à une même date ; l'écart est un apport/retrait, jamais un gain ──
+// ── Régulariser les liquidités : plusieurs poches (devises) fixées à une même date. Corrige le niveau de liquidités, sans effet sur la performance. ──
 let _ca2 = null;
 document.body.insertAdjacentHTML('beforeend', `<div id='ca2-bg' class='add-modal-bg'></div>
 <div id='ca2-sheet' class='add-modal-sheet' style='max-height:92vh;overflow-y:auto'><div class='modal-drag'></div><div class='modal-body' id='ca2-body'></div></div>`);
@@ -307,7 +309,7 @@ function renderCa2() {
   document.getElementById('ca2-body').innerHTML = `<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
     <div class='modal-title' style='margin-bottom:0'>Régulariser les liquidités</div>
     <div id='ca2-close' style='width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0'>✕</div></div>
-    <div class='t-sm' style='margin-bottom:12px'>Indique, pour une même date, le solde réel de chaque poche de liquidités (relevé du courtier). L'écart avec le solde calculé est traité comme un apport ou un retrait, jamais comme un gain.</div>
+    <div class='t-sm' style='margin-bottom:12px'>Indique, pour une même date, le solde réel de chaque poche de liquidités (relevé du courtier). Cela corrige le niveau de liquidités du compte ; ce n'est ni un apport ni un retrait.</div>
     <div class='form-row'><div class='form-field'><div class='form-label'>Date</div><input class='form-input' type='date' id='ca2-date' value='${esc(_ca2.date)}'></div></div>
     ${rows}
     ${free.length ? `<div style='display:flex;gap:8px;align-items:center;margin:4px 0 10px'><select class='form-input' id='ca2-add-sel' style='flex:1;cursor:pointer'>${free.map(c => `<option value='${c}'>${c}</option>`).join('')}</select><div id='ca2-add' class='tap' style='padding:8px 14px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2);cursor:pointer'>+ Devise</div></div>` : ''}
