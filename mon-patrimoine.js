@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.126';
+const APP_VERSION = '1.11.127';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -299,25 +299,14 @@ accBenchHTML = function (acc, perf, sum) {
   </div>`;
 };
 
-// Compteurs de la barre du bas : ordres en attente (même en mode démo), alertes de prix déclenchées, titres non synchronisés
+// Compteurs de la barre du bas : « Ordres » = ordres en cours + alertes de prix déclenchées (même en mode démo) ; « Non synchro » = titres sans cours récent
 function navBadgeCount(key) {
   try {
     if (key === 'stale')  return S.isDemo ? 0 : staleHoldings().length;
-    if (key === 'orders') return loadOrders().filter(o => _ordLookup(o)).length;
-    if (key === 'alerts') return alertsTriggeredCount();
+    if (key === 'orders') return loadOrders().filter(o => _ordLookup(o)).length + alertsTriggeredCount();
   } catch (e) {}
   return 0;
 }
-
-// Menu : l'entrée « Alertes » s'affiche juste sous « Ordres »
-const _renderDrawerBase = renderDrawer;
-renderDrawer = function () {
-  _renderDrawerBase();
-  const d = document.getElementById('drawer');
-  if (!d || _drawerEdit || !NAV_CATALOG.alerts) return;
-  const o = d.querySelector('[data-dkey="orders"]');
-  if (o && !d.querySelector('[data-dkey="alerts"]')) o.insertAdjacentHTML('afterend', drawerRow('alerts'));
-};
 
 // ── Régulariser les liquidités : plusieurs poches (devises) fixées à une même date. Corrige le niveau de liquidités, sans effet sur la performance. ──
 let _ca2 = null;
