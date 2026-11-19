@@ -4,7 +4,7 @@
 //   → js/core/{screens,modals,storage,ui,navigation,shell}.js → js/services/* (cours, CSV)
 //   → js/features/* (verrou, DCA, assistant, glisser-déposer, graphiques, confidentialité)
 //   → js/modals/* → js/screens/* → CE FICHIER.
-// Ici : état global S, version, wrappers de formatage/devises, correctifs de comptes, initialisation, retour Android, mise à jour, SW.
+// Ici : état global S, version, wrappers de formatage/devises, correctifs de comptes, écran Immobilier, initialisation, retour Android, mise à jour, SW.
 // Chaque nouveau fichier de js/ doit être ajouté AU HTML (ordre = dépendances) ET à SHELL de sw.js.
 // ═══════════════════════════════════════════════
 
@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.127';
+const APP_VERSION = '1.11.128';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -399,6 +399,311 @@ document.addEventListener('click', e => {
   openCa2(S.accountId);
 }, true);
 registerModal('ca2-sheet', closeCa2);
+
+// ═══════════════════════════════════════════════
+// IMMOBILIER — biens (résidence principale, bien locatif), valeur estimée, crédit simplifié et tableau d'amortissement.
+// Volontairement simple : ni loyers, ni fiscalité. On suit seulement : combien le bien a coûté, combien il vaut (hypothèse de prise de valeur
+// annuelle constante) et combien du crédit est remboursé. Données dans localStorage (clé patrimoine-immo), hors patrimoine total pour l'instant.
+// Bien : { id, name, kind:'main'|'rental', buyDate, price, notary, works, growth,
+//          loan: null | { amount, rate (%/an), years, payment (mensualité totale saisie, optionnelle), first (1re échéance, optionnelle) } }
+// ═══════════════════════════════════════════════
+const STORE_IMMO = 'patrimoine-immo';
+function loadImmo() {
+  try { const a = JSON.parse(localStorage.getItem(STORE_IMMO) || '[]'); return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+function saveImmo(a) { try { localStorage.setItem(STORE_IMMO, JSON.stringify(a)); } catch (e) {} }
+const IMMO_KIND = { main: 'Résidence principale', rental: 'Bien locatif' };
+
+// Date + n mois, en gardant le jour (ramené à la fin du mois si besoin)
+function _immoAddMonths(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const base = new Date(y, m - 1 + n, 1);
+  const last = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  return _dayKey(new Date(base.getFullYear(), base.getMonth(), Math.min(d, last)));
+}
+// Crédit : mensualité théorique (hors assurance), assurance déduite de la mensualité saisie, tableau complet, échéances passées / à venir
+function immoLoan(p) {
+  const L = p.loan;
+  if (!L || !(L.amount > 0) || !(L.years > 0)) return null;
+  const n = Math.round(L.years * 12), r = (L.rate || 0) / 1200;
+  const pmt = r > 0 ? L.amount * r / (1 - Math.pow(1 + r, -n)) : L.amount / n;
+  const ins = L.payment > 0 ? Math.max(0, L.payment - pmt) : 0;
+  const first = L.first || _immoAddMonths(p.buyDate || _dayKey(Date.now()), 1);
+  const today = _dayKey(Date.now());
+  const rows = [];
+  let bal = L.amount;
+  for (let k = 1; k <= n; k++) {
+    const interest = bal * r;
+    let princ = pmt - interest;
+    if (k === n || princ > bal) princ = bal;
+    bal = Math.max(0, bal - princ);
+    const date = _immoAddMonths(first, k - 1);
+    rows.push({ k, date, pmt: princ + interest, princ, interest, ins, bal, past: date <= today });
+  }
+  const past = rows.filter(x => x.past);
+  const repaid = past.reduce((s, x) => s + x.princ, 0);
+  return {
+    n, pmt, ins, rows, repaid, remaining: L.amount - repaid, pct: repaid / L.amount * 100,
+    interestPaid: past.reduce((s, x) => s + x.interest, 0), insPaid: past.reduce((s, x) => s + x.ins, 0),
+    next: rows.find(x => !x.past) || null, end: rows[rows.length - 1].date,
+    warn: L.payment > 0 && L.payment < pmt - 1,
+  };
+}
+// Valeurs d'un bien : coût d'acquisition, valeur estimée (prix d'achat × (1 + croissance)^années écoulées), dette restante, patrimoine net
+function immoCalc(p) {
+  const cost = (p.price || 0) + (p.notary || 0) + (p.works || 0);
+  const t = Math.max(0, (Date.now() - new Date(p.buyDate + 'T00:00:00').getTime()) / (365.25 * 86400000));
+  const value = (p.price || 0) * Math.pow(1 + (p.growth || 0) / 100, t);
+  const loan = immoLoan(p), debt = loan ? loan.remaining : 0;
+  return { cost, t, value, loan, debt, equity: value - debt, gap: value - cost };
+}
+function _immoAge(t) {
+  const y = Math.floor(t), m = Math.floor((t - y) * 12);
+  return y ? `${y} an${y > 1 ? 's' : ''}${m ? ' ' + m + ' mois' : ''}` : (m ? m + ' mois' : "moins d'un mois");
+}
+function _immoRow(k, v, strong) {
+  return `<div style='display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:${strong ? 14 : 13}px;${strong ? 'font-weight:800' : ''}'><span style='color:${strong ? 'var(--text)' : 'var(--text2)'}'>${k}</span><span class='t-num' style='text-align:right'>${v}</span></div>`;
+}
+function _immoSigned(v) { return `<span class='${v < 0 ? 't-loss' : 't-gain'}'>${v >= 0 ? '+' : '−'}${masked(Math.abs(v))}</span>`; }
+
+function renderImmo() {
+  const list = loadImmo().filter(p => p.buyDate).map(p => ({ p, c: immoCalc(p) }));
+  const sum = k => list.reduce((s, x) => s + x.c[k], 0);
+  const summary = list.length ? `<div style='margin:14px 20px 0;padding:14px;border-radius:14px;background:var(--card);border:1px solid var(--border)'>
+      ${_immoRow('Valeur estimée', `<b>${masked(sum('value'))}</b>`)}
+      ${_immoRow('Capital restant dû', masked(sum('debt')))}
+      ${_immoRow('Patrimoine immobilier net', masked(sum('equity')), true)}
+      <div style='border-top:1px solid var(--border);margin:6px 0'></div>
+      ${_immoRow('Coût total d\'acquisition', masked(sum('cost')))}
+      ${_immoRow('Écart valeur − coût', _immoSigned(sum('gap')))}
+    </div>` : '';
+  const cards = list.map(({ p, c }) => {
+    const L = c.loan;
+    const loanBlock = L ? `
+      <div style='margin-top:12px;padding-top:10px;border-top:1px solid var(--border)'>
+        <div style='display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:6px'><span>Crédit remboursé</span><span class='t-num'>${L.pct.toFixed(1)} %</span></div>
+        <div style='height:8px;border-radius:4px;background:var(--card);overflow:hidden'><div style='width:${Math.min(100, L.pct).toFixed(1)}%;height:100%;background:var(--gain)'></div></div>
+        ${_immoRow('Capital remboursé', `${masked(L.repaid)} <span class='t-sm'>/ ${masked(p.loan.amount)}</span>`)}
+        ${_immoRow('Capital restant dû', masked(L.remaining))}
+        ${_immoRow('Mensualité', `${masked(p.loan.payment > 0 ? p.loan.payment : L.pmt)}${L.ins > 0.005 ? ` <span class='t-sm'>dont assurance ≈ ${masked(L.ins)}</span>` : ''}`)}
+        ${_immoRow('Intérêts payés' + (L.ins > 0.005 ? ' + assurance' : ''), masked(L.interestPaid + L.insPaid))}
+        ${L.next ? _immoRow('Prochaine échéance', fmtDate(L.next.date)) : ''}
+        ${_immoRow('Fin du prêt', fmtDate(L.end))}
+        ${L.warn ? `<div class='t-sm' style='color:var(--loss);margin-top:4px'>La mensualité saisie est inférieure à la mensualité calculée (${masked(L.pmt)}) : vérifie le taux ou la durée.</div>` : ''}
+      </div>` : '';
+    return `<div style='margin:14px 20px 0;padding:14px;border-radius:14px;background:var(--card2);border:1px solid var(--border)'>
+      <div style='display:flex;justify-content:space-between;align-items:center;gap:8px'>
+        <div style='font-size:16px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>🏠 ${esc(p.name)}</div>
+        <span style='font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--card);color:var(--text2);flex-shrink:0'>${esc(IMMO_KIND[p.kind] || 'Bien')}</span>
+      </div>
+      <div class='t-sm' style='margin:2px 0 8px'>Acheté le ${fmtDate(p.buyDate)} · il y a ${_immoAge(c.t)}</div>
+      ${_immoRow("Prix d'achat", masked(p.price))}
+      ${p.notary > 0 ? _immoRow('Frais de notaire', masked(p.notary)) : ''}
+      ${p.works > 0 ? _immoRow('Travaux', masked(p.works)) : ''}
+      ${_immoRow('Coût total', `<b>${masked(c.cost)}</b>`)}
+      <div style='border-top:1px solid var(--border);margin:6px 0'></div>
+      ${_immoRow(`Valeur estimée <span class='t-sm'>(+${p.growth || 0} %/an)</span>`, `<b>${masked(c.value)}</b>`)}
+      ${_immoRow('Écart valeur − coût', _immoSigned(c.gap))}
+      ${loanBlock}
+      <div style='border-top:1px solid var(--border);margin:8px 0 2px'></div>
+      ${_immoRow('Patrimoine net du bien' + (L ? ' <span class="t-sm">(valeur − capital restant dû)</span>' : ''), masked(c.equity), true)}
+      <div style='display:flex;gap:8px;margin-top:12px;flex-wrap:wrap'>
+        <button class='confirm-cancel' data-imedit='${esc(p.id)}' style='flex:1;height:40px;border-radius:12px;font-weight:700;cursor:pointer'>Modifier</button>
+        ${L ? `<button class='confirm-cancel' data-imamort='${esc(p.id)}' style='flex:2;height:40px;border-radius:12px;font-weight:700;cursor:pointer'>Tableau d'amortissement</button>` : ''}
+        <button class='confirm-cancel' data-imdel='${esc(p.id)}' style='height:40px;padding:0 14px;border-radius:12px;font-weight:700;cursor:pointer;color:var(--loss)'>Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class='back tap' id='js-back'>
+    <svg viewBox='0 0 24 24' fill='currentColor'><path d='M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z'/></svg>
+    Retour
+  </div>
+  <div class='settings-top' style='padding-top:4px'>
+    <div class='t-title'>Immobilier</div>
+    <div class='t-sm' style='margin-top:2px'>Ce que t'a coûté chaque bien, ce qu'il vaut (hypothèse de prise de valeur annuelle) et ce que tu as remboursé. Ni loyers, ni fiscalité.</div>
+  </div>
+  ${summary}
+  <div style='margin:14px 20px 0'><button class='form-submit' data-imnew='1' style='margin:0'>+ Ajouter un bien</button></div>
+  ${cards || "<div class='t-sm' style='text-align:center;padding:30px 20px'>Aucun bien. Ajoute ta résidence principale ou un bien locatif.</div>"}
+  <div style='height:100px'></div>`;
+}
+function bindImmo(el) {
+  el.querySelector('#js-back')?.addEventListener('click', back);
+  el.onclick = e => {
+    if (e.target.closest('[data-imnew]')) return openImmoForm();
+    const ed = e.target.closest('[data-imedit]'); if (ed) return openImmoForm(ed.dataset.imedit);
+    const am = e.target.closest('[data-imamort]'); if (am) return openImmoAmort(am.dataset.imamort);
+    const de = e.target.closest('[data-imdel]');
+    if (de) {
+      const id = de.dataset.imdel, p = loadImmo().find(x => x.id === id);
+      openConfirm(`Supprimer le bien "${p ? p.name : ''}" ?`, () => { saveImmo(loadImmo().filter(x => x.id !== id)); renderScreen('immo'); toast('Bien supprimé'); });
+    }
+  };
+}
+
+// Écran + feuilles créés ici (le HTML n'a pas à les déclarer)
+(function () {
+  const ref = document.getElementById('s-dca');
+  if (ref && !document.getElementById('s-immo')) {
+    const d = document.createElement('div');
+    d.id = 's-immo'; d.className = 'screen no-nav';
+    ref.insertAdjacentElement('afterend', d);
+  }
+  const closeBtn = `width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0`;
+  const fld = (id, label, extra) => `<div class='form-field'><div class='form-label'>${label}</div><input class='form-input' id='${id}' ${extra || "type='number' step='any' inputmode='decimal'"}></div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+<div id='im-bg' class='add-modal-bg'></div>
+<div id='im-sheet' class='add-modal-sheet' style='max-height:92vh;overflow-y:auto'>
+  <div class='modal-drag'></div>
+  <div class='modal-body'>
+    <div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:14px'>
+      <div class='modal-title' id='im-title' style='margin-bottom:0'>Nouveau bien</div>
+      <div id='im-close' style='${closeBtn}'>✕</div>
+    </div>
+    <div class='form-row'>${fld('im-name', 'Nom du bien', "type='text' placeholder='Appartement, maison…'")}</div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Type</div><select class='form-input' id='im-kind' style='cursor:pointer'><option value='main'>Résidence principale</option><option value='rental'>Bien locatif</option></select></div></div>
+    <div class='t-label' style='margin:6px 0 6px'>Achat</div>
+    <div class='form-row'>${fld('im-date', "Date d'achat", "type='date'")}${fld('im-price', "Prix d'achat", "type='number' step='any' inputmode='decimal' placeholder='100000'")}</div>
+    <div class='form-row'>${fld('im-notary', 'Frais de notaire', "type='number' step='any' inputmode='decimal' placeholder='10000'")}${fld('im-works', 'Travaux', "type='number' step='any' inputmode='decimal' placeholder='0'")}</div>
+    <div class='t-sm' style='margin:-4px 0 10px'>Frais de notaire : environ 7,5 à 8 % dans l'ancien, 2 à 3 % dans le neuf. <span id='im-notary-est' class='tap' style='color:var(--accent);font-weight:700;cursor:pointer'>Estimer à 8 %</span></div>
+    <div class='form-row'>${fld('im-growth', 'Prise de valeur annuelle estimée (%/an)', "type='number' step='0.1' inputmode='decimal' placeholder='2'")}</div>
+    <div class='t-label' style='margin:10px 0 6px'>Crédit immobilier <span class='t-sm'>(facultatif)</span></div>
+    <div class='form-row'>${fld('im-l-amt', 'Montant emprunté', "type='number' step='any' inputmode='decimal' placeholder='90000'")}${fld('im-l-rate', 'Taux annuel (%)', "type='number' step='0.01' inputmode='decimal' placeholder='3.5'")}</div>
+    <div class='form-row'>${fld('im-l-years', 'Durée (années)', "type='number' step='any' inputmode='decimal' placeholder='20'")}${fld('im-l-pay', 'Mensualité totale (assurance comprise)', "type='number' step='any' inputmode='decimal' placeholder='facultatif'")}</div>
+    <div class='form-row'>${fld('im-l-first', 'Première échéance (si différente)', "type='date'")}</div>
+    <div id='im-prev' class='t-sm' style='margin:2px 0 12px'></div>
+    <button class='form-submit' id='im-save'>Enregistrer</button>
+  </div>
+</div>
+<div id='ima-bg' class='add-modal-bg'></div>
+<div id='ima-sheet' class='add-modal-sheet' style='max-height:92vh;overflow-y:auto'>
+  <div class='modal-drag'></div>
+  <div class='modal-body' id='ima-body'></div>
+</div>`);
+})();
+
+let _imEditId = null;
+function _imNum(id) { return parseFloat(String(document.getElementById(id).value).replace(',', '.')) || 0; }
+function _imRead() {
+  const g = id => document.getElementById(id).value;
+  const amt = _imNum('im-l-amt');
+  return {
+    name: g('im-name').trim(), kind: g('im-kind'), buyDate: g('im-date'),
+    price: _imNum('im-price'), notary: _imNum('im-notary'), works: _imNum('im-works'), growth: _imNum('im-growth'),
+    loan: amt > 0 ? { amount: amt, rate: _imNum('im-l-rate'), years: _imNum('im-l-years'), payment: _imNum('im-l-pay'), first: g('im-l-first') || '' } : null,
+  };
+}
+// Aperçu du crédit pendant la saisie : mensualité théorique et assurance déduite de la mensualité saisie
+function _imPreview() {
+  const el = document.getElementById('im-prev'); if (!el) return;
+  const p = _imRead(), L = immoLoan(p);
+  if (!L) { el.innerHTML = p.loan ? "Indique la durée du crédit pour calculer l'échéancier." : ''; return; }
+  const financed = (p.price + p.notary + p.works) > 0 ? ` · ${(p.loan.amount / (p.price + p.notary + p.works) * 100).toFixed(0)} % du coût total financé` : '';
+  el.innerHTML = `Mensualité calculée (hors assurance) : <b>${masked(L.pmt)}</b> sur ${L.n} mois${financed}.` +
+    (p.loan.payment > 0 ? (L.ins > 0.005 ? ` Assurance déduite : <b>≈ ${masked(L.ins)}</b>/mois.` : (L.warn ? ' <span style="color:var(--loss)">La mensualité saisie est inférieure au calcul : vérifie taux et durée.</span>' : ' Aucune assurance détectée.')) : ' Saisis ta mensualité totale pour en déduire l\'assurance.');
+}
+function openImmoForm(id) {
+  const p = id ? loadImmo().find(x => x.id === id) : null;
+  _imEditId = p ? p.id : null;
+  const set = (i, v) => { document.getElementById(i).value = (v === undefined || v === null || v === 0 && i !== 'im-growth') ? '' : v; };
+  document.getElementById('im-title').textContent = p ? 'Modifier le bien' : 'Nouveau bien';
+  set('im-name', p ? p.name : ''); document.getElementById('im-kind').value = p ? p.kind : 'main';
+  set('im-date', p ? p.buyDate : ''); set('im-price', p ? p.price : ''); set('im-notary', p ? p.notary : ''); set('im-works', p ? p.works : '');
+  set('im-growth', p ? p.growth : 2);
+  const L = p && p.loan;
+  set('im-l-amt', L ? L.amount : ''); set('im-l-rate', L ? L.rate : ''); set('im-l-years', L ? L.years : ''); set('im-l-pay', L ? L.payment : ''); set('im-l-first', L ? L.first : '');
+  _imPreview();
+  document.getElementById('im-bg').classList.add('show');
+  document.getElementById('im-sheet').classList.add('show');
+}
+function closeImmoForm() {
+  document.getElementById('im-bg').classList.remove('show');
+  document.getElementById('im-sheet').classList.remove('show');
+  _imEditId = null;
+}
+document.getElementById('im-bg').addEventListener('click', closeImmoForm);
+document.getElementById('im-close').addEventListener('click', closeImmoForm);
+document.getElementById('im-sheet').addEventListener('input', _imPreview);
+document.getElementById('im-notary-est').addEventListener('click', () => {
+  const price = _imNum('im-price');
+  if (!(price > 0)) return toast("Saisis d'abord le prix d'achat");
+  document.getElementById('im-notary').value = Math.round(price * 0.08);
+  _imPreview();
+});
+document.getElementById('im-save').addEventListener('click', () => {
+  const p = _imRead();
+  if (!p.buyDate) return toast("La date d'achat est obligatoire");
+  if (!(p.price > 0)) return toast("Indique le prix d'achat");
+  if (p.loan && !(p.loan.years > 0)) return toast('Indique la durée du crédit');
+  if (!p.name) p.name = IMMO_KIND[p.kind] || 'Bien';
+  const all = loadImmo();
+  if (_imEditId && all.some(x => x.id === _imEditId)) {
+    const i = all.findIndex(x => x.id === _imEditId);
+    all[i] = { ...all[i], ...p, id: _imEditId };
+  } else {
+    all.push({ id: 'im' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...p });
+  }
+  saveImmo(all);
+  closeImmoForm();
+  if (S.screen === 'immo') renderScreen('immo');
+  toast('Bien enregistré ✓');
+});
+
+// Tableau d'amortissement : une ligne par année, dépliable en échéances mensuelles (passées en gris, prochaine mise en évidence)
+function openImmoAmort(id) {
+  const p = loadImmo().find(x => x.id === id), L = p && immoLoan(p);
+  if (!L) return;
+  const years = {};
+  L.rows.forEach(r => { (years[r.date.slice(0, 4)] = years[r.date.slice(0, 4)] || []).push(r); });
+  const g = 'display:grid;grid-template-columns:1.3fr 1fr 1fr 1.2fr;gap:6px;align-items:baseline;font-size:12px';
+  const head = `<div style='${g};padding:6px 0;color:var(--text2);font-size:11px;font-weight:700'><span>Date</span><span>Capital</span><span>Intérêts</span><span>Reste dû</span></div>`;
+  const body = Object.entries(years).map(([y, rows]) => {
+    const cap = rows.reduce((s, r) => s + r.princ, 0), int = rows.reduce((s, r) => s + r.interest, 0), last = rows[rows.length - 1];
+    const allPast = rows.every(r => r.past), somePast = rows.some(r => r.past);
+    const months = rows.map(r => `<div style='${g};padding:5px 0;border-top:1px solid var(--border);${r.past ? 'opacity:.55' : ''}${L.next && r.k === L.next.k ? ';font-weight:800;color:var(--accent)' : ''}'><span>${fmtDate(r.date)}</span><span class='t-num'>${masked(r.princ)}</span><span class='t-num'>${masked(r.interest)}</span><span class='t-num'>${masked(r.bal)}</span></div>`).join('');
+    return `<details ${somePast && !allPast ? 'open' : ''} style='border-top:1px solid var(--border)'>
+      <summary style='cursor:pointer;padding:9px 0;${g};list-style:none;${allPast ? 'opacity:.6' : ''}'><b>${y}${allPast ? ' ✓' : ''}</b><span class='t-num'>${masked(cap)}</span><span class='t-num'>${masked(int)}</span><span class='t-num'>${masked(last.bal)}</span></summary>
+      ${months}
+    </details>`;
+  }).join('');
+  document.getElementById('ima-body').innerHTML = `<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px'>
+      <div class='modal-title' style='margin-bottom:0'>Amortissement — ${esc(p.name)}</div>
+      <div id='ima-close' style='width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0'>✕</div></div>
+    <div class='t-sm' style='margin-bottom:8px'>${L.n} échéances · mensualité ${masked(L.pmt)}${L.ins > 0.005 ? ` + assurance ≈ ${masked(L.ins)}` : ''} · échéances passées en gris, prochaine en couleur. Touche une année pour voir les mois.</div>
+    ${head}${body}`;
+  document.getElementById('ima-bg').classList.add('show');
+  document.getElementById('ima-sheet').classList.add('show');
+}
+function closeImmoAmort() {
+  document.getElementById('ima-bg').classList.remove('show');
+  document.getElementById('ima-sheet').classList.remove('show');
+}
+document.getElementById('ima-bg').addEventListener('click', closeImmoAmort);
+document.getElementById('ima-body').addEventListener('click', e => { if (e.target.closest('#ima-close')) closeImmoAmort(); });
+registerModal('im-sheet', closeImmoForm);
+registerModal('ima-sheet', closeImmoAmort);
+
+// Raccourci « Immobilier » (barre du bas personnalisable) + entrée de menu sous « DCA » ; l'écran est rendu ici (navigation.js ne le connaît pas)
+_NAV_PATH.immo = 'M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z';
+NAV_CATALOG.immo = { label: 'Immobilier', kind: 'screen' };
+const _renderScreenBase = renderScreen;
+renderScreen = function (id) {
+  if (id === 'immo') {
+    const el = document.getElementById('s-immo');
+    if (el) { el.innerHTML = renderImmo(); bindImmo(el); }
+    return;
+  }
+  return _renderScreenBase(id);
+};
+const _renderDrawerImmoBase = renderDrawer;
+renderDrawer = function () {
+  _renderDrawerImmoBase();
+  const d = document.getElementById('drawer');
+  if (!d || _drawerEdit) return;
+  const o = d.querySelector('[data-dkey="dca"]');
+  if (o && !d.querySelector('[data-dkey="immo"]')) o.insertAdjacentHTML('afterend', drawerRow('immo'));
+};
 
 // ═══════════════════════════════════════════════
 // INIT — charge les données puis dessine l'appli (les modules ci-dessus sont déjà évalués)
