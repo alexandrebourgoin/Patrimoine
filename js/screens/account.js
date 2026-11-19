@@ -17,6 +17,33 @@ function accHeroValHTML(acc) {
   return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
 }
 
+// Performance d'un compte = valorisation actuelle − apports nets (apports − retraits saisis).
+// Perf. annuelle moyenne = taux annuel équivalent sur les apports nets depuis la date de début du compte
+// (acc.startDate, sinon date la plus ancienne parmi apports et mouvements) ; calculée seulement à partir d'un an.
+// Approximation : si les apports sont répartis dans le temps, le taux réel est plus élevé. Renvoie null sans apport saisi.
+function accPerfInfo(acc) {
+  const cfs = acc.cashflows || [];
+  if (!cfs.length) return null;
+  const ccy = acc.currency || S.currency;
+  const dep = cfs.filter(c => c.type === 'DEP').reduce((s, c) => s + c.amount, 0);
+  const wit = cfs.filter(c => c.type === 'WIT').reduce((s, c) => s + c.amount, 0);
+  const net = toRefCcy(dep - wit, ccy);
+  if (!(net > 0)) return null;
+  const gain = acc.value - net;
+  const pct = gain / net * 100;
+  let start = acc.startDate || null, auto = false;
+  if (!start) {
+    const ds = [...cfs.map(c => c.date), ...acc.holdings.flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
+    start = ds[0] || null; auto = true;
+  }
+  let years = null, annual = null;
+  if (start) {
+    years = (Date.now() - new Date(start + 'T00:00:00').getTime()) / (365.25 * 86400000);
+    if (years >= 1 && acc.value > 0) annual = (Math.pow(acc.value / net, 1 / years) - 1) * 100;
+  }
+  return { net, gain, pct, start, auto, years, annual };
+}
+
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
@@ -25,6 +52,8 @@ function renderAccount() {
   const cash=accCash(acc);                    // liquidités non investies
   const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
   const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
+  const perf=accPerfInfo(acc);                // gain vs apports/retraits (si des apports sont saisis)
+  const gainVal=perf?perf.gain:totPnl, gainPct=perf?perf.pct:totPnlPct;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
@@ -50,13 +79,14 @@ function renderAccount() {
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
     ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
     <div class="stat-row">
-      <div class="stat-box"><div class="t-label">P&amp;L Total</div>
-        <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
+      <div class="stat-box"><div class="t-label">${perf?'Gain total':'P&amp;L Total'}</div>
+        <div style="font-size:15px;font-weight:800" class="${gainVal>=0?'t-gain':'t-loss'} t-num">${gainVal>=0?'+':''}${masked(gainVal)}</div></div>
       <div class="stat-box"><div class="t-label">Performance</div>
-        <div style="font-size:15px;font-weight:800" class="${totPnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(totPnlPct)}</div></div>
+        <div style="font-size:15px;font-weight:800" class="${gainPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(gainPct)}</div></div>
       <div class="stat-box"><div class="t-label">Variation J</div>
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
+    ${perf?`<div class="t-sm" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Perf. annuelle moy. : <b class="${perf.annual!=null&&perf.annual<0?'t-loss':'t-gain'}">${perf.annual!=null?fmtPct(perf.annual)+' / an':'—'}</b></span><span>· depuis ${perf.start?fmtDate(perf.start):'—'}${perf.auto?' (auto)':''}${perf.years!=null&&perf.years<1?' · calcul après 1 an':''}</span><span id="js-start-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Date de début</span></div>`:''}
     ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
@@ -351,6 +381,49 @@ function initPTR(screenEl, onRefresh) {
 }
 
 
+// ── Date de début du compte (sert à la perf. annuelle moyenne) ──
+let _startAccId=null;
+(function(){
+  document.body.insertAdjacentHTML('beforeend',`
+<div id='start-bg' class='add-modal-bg'></div>
+<div id='start-sheet' class='add-modal-sheet'>
+  <div class='modal-drag'></div>
+  <div class='modal-body'>
+    <div class='modal-title' style='margin-bottom:6px'>Date de début du compte</div>
+    <div class='t-sm' style='margin-bottom:14px'>Sert à calculer la performance annuelle moyenne. Choisis « Automatique » pour utiliser la date du premier apport ou mouvement.</div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Date</div><input class='form-input' type='date' id='start-date'></div></div>
+    <div style='display:flex;gap:10px;margin-top:6px'>
+      <button class='confirm-cancel' id='start-clear' style='flex:1;height:46px;border-radius:12px;font-weight:700;cursor:pointer'>Automatique</button>
+      <button class='form-submit' id='start-ok' style='flex:2;height:46px;margin:0'>Enregistrer</button>
+    </div>
+  </div>
+</div>`);
+})();
+function openStartDate(acc){
+  _startAccId=acc.id;
+  document.getElementById('start-date').value=acc.startDate||'';
+  document.getElementById('start-bg').classList.add('show');
+  document.getElementById('start-sheet').classList.add('show');
+}
+function closeStartDate(){
+  document.getElementById('start-bg').classList.remove('show');
+  document.getElementById('start-sheet').classList.remove('show');
+}
+function _saveStartDate(value){
+  const acc=S.accounts.find(a=>a.id===_startAccId); if(!acc) return;
+  if(value && value>_dayKey(Date.now())){ toast('La date ne peut pas être dans le futur'); return; }
+  if(value) acc.startDate=value; else delete acc.startDate;
+  saveAccounts();
+  closeStartDate();
+  if(S.screen==='account') renderScreen('account');
+  toast(value?'Date de début enregistrée ✓':'Date de début automatique');
+}
+document.getElementById('start-bg').addEventListener('click',closeStartDate);
+document.getElementById('start-ok').addEventListener('click',()=>_saveStartDate(document.getElementById('start-date').value));
+document.getElementById('start-clear').addEventListener('click',()=>_saveStartDate(''));
+registerModal('start-sheet', closeStartDate);
+
+
 SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     el.querySelector('#js-back')?.addEventListener('click',back);
@@ -362,6 +435,7 @@ SCREEN_BIND.account = function (el, id) {
     // Cashflows button
     el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
+    el.querySelector('#js-start-btn')?.addEventListener('click',()=>{ if(acc) openStartDate(acc); });
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{
