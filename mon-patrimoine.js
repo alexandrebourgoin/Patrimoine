@@ -1,10 +1,10 @@
-// ═══════════════════════════════════════���═══════
+// ═══════════════════════════════════════════════
 // MON PATRIMOINE — point d'entrée. Scripts classiques (pas d'ES modules), chargés dans l'ordre de mon-patrimoine.html :
 //   utils.js (PU, fonctions pures) → js/core/dom-guard.js → js/data/*  (tables, démo, changelog)
 //   → js/core/{screens,modals,storage,ui,navigation,shell}.js → js/services/* (cours, CSV)
 //   → js/features/* (verrou, DCA, assistant, glisser-déposer, graphiques, confidentialité)
 //   → js/modals/* → js/screens/* → CE FICHIER.
-// Ici : état global S, version, wrappers de formatage/devises, initialisation, retour Android, mise à jour, SW.
+// Ici : état global S, version, wrappers de formatage/devises, correctifs de comptes, initialisation, retour Android, mise à jour, SW.
 // Chaque nouveau fichier de js/ doit être ajouté AU HTML (ordre = dépendances) ET à SHELL de sw.js.
 // ═══════════════════════════════════════════════
 
@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.122';
+const APP_VERSION = '1.11.123';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -89,7 +89,7 @@ function fmtNative(v, cur) { return PU.fmtNative(v, cur); }
 function toRefCcy(amount, fromCcy) { return PU.toRefCcy(amount, fromCcy, FX_RATES, S.currency); }
 // Sum holdings values converted to app currency
 function accSum(holdings) { return PU.accSum(holdings); }
-// Liquidités non investies du compte (devise appli) — apports nets − achats nets.
+// Liquidités non investies du compte (devise appli) — somme des poches par devise.
 // `upTo` borne le calcul à une date passée (reconstruction de l'historique).
 function accCash(acc, upTo) { return PU.accCash(acc, FX_RATES, S.currency, upTo); }
 // Solde du compte = valeur des titres + liquidités. À utiliser partout où `acc.value` est (re)calculé.
@@ -103,6 +103,267 @@ function masked(v) { return S.privacy?'<span class="prv">● ● ●</span>':fmt
 function maskedNative(v,cur) { return S.privacy?'<span class="prv">● ● ●</span>':fmtNative(v,cur); }
 // Échappement innerHTML — implémentation dans utils.js
 function esc(s) { return PU.esc(s); }
+
+// ═══════════════════════════════════════════════
+// COMPTES — performance par flux, liquidités par devise, régularisation, indice
+// Ces fonctions REMPLACENT celles de js/screens/account.js (chargé avant ce fichier) : même nom, comportement corrigé.
+// Dette technique assumée : l'ancien code reste dans account.js, inutilisé ; à nettoyer quand ce fichier pourra être modifié en entier.
+// ═══════════════════════════════════════════════
+function _accSim(acc) { return PU.accFlowSim(acc, FX_RATES, S.currency); }
+
+// Perf. d'un compte = valeur (titres + liquidités) − flux externes nets (apports saisis, achats sans apport, régularisations).
+function accPerfInfo(acc) {
+  const sim = _accSim(acc);
+  if (!sim.flows.length) return null;
+  const sum = f => sim.flows.filter(f).reduce((s, x) => s + x.amt, 0);
+  const dep = sum(x => x.kind === 'cf' && x.amt > 0), wit = -sum(x => x.kind === 'cf' && x.amt < 0);
+  const adj = sum(x => x.kind === 'adj'), fund = sum(x => x.kind === 'funding');
+  const net = sim.flows.reduce((s, x) => s + x.amt, 0);
+  if (!(net > 0)) return null;
+  const val = accSum(acc.holdings || []) + sim.cashNow;
+  const gain = val - net, pct = gain / net * 100;
+  let start = acc.startDate || null, auto = false;
+  if (!start) {
+    const ds = [...sim.flows.map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
+    start = ds[0] || null; auto = true;
+  }
+  let years = null, annual = null;
+  if (start) {
+    years = (Date.now() - new Date(start + 'T00:00:00').getTime()) / (365.25 * 86400000);
+    if (years >= 1 && val > 0) annual = (Math.pow(val / net, 1 / years) - 1) * 100;
+  }
+  return { net, gain, pct, start, auto, years, annual, dep, wit, adj, fund };
+}
+
+// Valeur du compte à une date passée (devise appli) : quantités détenues ce jour-là × clôture connue + liquidités du jour.
+function accValueOnDay(acc, day) {
+  let tot = 0, approx = false;
+  (acc.holdings || []).forEach(h => {
+    const q = _qtyOnDay(h, day); if (q <= 0) return;
+    const hist = getHistorySeries(h.ticker);
+    let price = h.currentPrice, found = false;
+    if (hist) {
+      let c = null;
+      for (const p of hist.series) { if (p.d <= day) c = p.c; else break; }
+      if (c != null) { price = c; found = true; }
+    }
+    if (!found) approx = true;
+    tot += toRefCcy(q * price, h.currency);
+  });
+  tot += _accSim(acc).cashAt(day);
+  return { v: tot, approx };
+}
+
+// Performance pondérée des flux (Dietz modifié) depuis t0Day : gain = V1 − V0 − flux ; % = gain / (V0 + flux pondérés par leur ancienneté).
+function accPerfPeriod(acc, t0Day, v0, inclusive) {
+  const T = Date.now(), t0 = new Date(t0Day + 'T00:00:00').getTime();
+  if (!(T > t0)) return null;
+  const sim = _accSim(acc), today = _dayKey(T);
+  let F = 0, W = 0, P = 0;
+  sim.flows.forEach(f => {
+    if (!f.date || f.date > today || (inclusive ? f.date < t0Day : f.date <= t0Day)) return;
+    const t = new Date(f.date + 'T00:00:00').getTime();
+    F += f.amt; if (f.amt > 0) P += f.amt;
+    W += f.amt * Math.max(0, (T - t) / (T - t0));
+  });
+  let denom = v0 + W;
+  if (denom < 0.02 * (v0 + P)) denom = v0 + P;   // flux tout récents : on retombe sur le capital investi
+  if (!(denom > 0)) return null;
+  const gain = accSum(acc.holdings || []) + sim.cashNow - v0 - F;
+  return { pct: gain / denom * 100, gain };
+}
+
+// Résumé : YTD (depuis le 31 décembre précédent) et historique (depuis le début du compte).
+function accPerfSummary(acc, perf) {
+  if (!perf) return null;
+  const sim = _accSim(acc);
+  const ds = [...sim.flows.map(f => f.date), ...(acc.holdings || []).flatMap(h => (h.transactions || []).map(t => t.date))].filter(Boolean).sort();
+  const first = ds[0] || null;
+  const t0 = perf.start && first ? (perf.start < first ? perf.start : first) : (perf.start || first);
+  if (!t0) return null;
+  const pye = (new Date().getFullYear() - 1) + '-12-31';
+  const all = accPerfPeriod(acc, t0, 0, true);
+  if (!all) return null;
+  let ytd = all, approx = false;
+  if (t0 <= pye) {
+    const v0 = accValueOnDay(acc, pye); approx = v0.approx;
+    ytd = accPerfPeriod(acc, pye, v0.v, false);
+  }
+  return { t0, pye, all, ytd, approx };
+}
+// Performance affichée dans la liste des comptes : la même que sur l'écran du compte (mode YTD ou historique mémorisé).
+function accPerfPct(acc) {
+  const sum = accPerfSummary(acc, accPerfInfo(acc));
+  if (!sum) return null;
+  const cur = _perfModeGet() === 'all' ? sum.all : sum.ytd;
+  return cur ? cur.pct : null;
+}
+
+// Mouvements : un apport/retrait saisi dans une autre devise que celle du compte garde sa devise
+const _getAccountMovesBase = getAccountMoves;
+getAccountMoves = function (acc) {
+  const mv = _getAccountMovesBase(acc);
+  mv.forEach(m => {
+    if (!m.cfId) return;
+    const c = (acc.cashflows || []).find(x => x.id === m.cfId);
+    if (c && c.ccy) m.ccy = c.ccy;
+  });
+  return mv;
+};
+
+// Bloc ajouté sous le résumé du compte : poches de liquidités, cumul des apports et des retraits, positions non autorisées
+function _accExtraHTML(acc) {
+  const perf = accPerfInfo(acc), ccy = acc.currency || S.currency;
+  const pk = Object.entries(PU.accCashByCcy(acc)).filter(([, v]) => Math.abs(v) > 0.005);
+  let h = '';
+  if (pk.length > 1 || (pk.length === 1 && pk[0][0] !== ccy))
+    h += `<div class='t-sm' style='margin-top:6px'>Poches de liquidités : ${pk.map(([c, v]) => `<b class='t-num'>${maskedNative(v, c)}</b>`).join(' · ')}</div>`;
+  if (perf) {
+    const bits = [`Apports cumulés <b class='t-num'>${accNative(acc, perf.dep)}</b>`, `Retraits cumulés <b class='t-num'>${accNative(acc, perf.wit)}</b>`];
+    if (Math.abs(perf.adj) > 0.5) bits.push(`Régularisations ${perf.adj > 0 ? '+' : '−'}<b class='t-num'>${accNative(acc, Math.abs(perf.adj))}</b>`);
+    if (perf.fund > 0.5) bits.push(`Achats sans apport saisi <b class='t-num'>${accNative(acc, perf.fund)}</b>`);
+    h += `<div class='t-sm' style='margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap'>${bits.map(b => `<span>${b}</span>`).join('')}</div>`;
+  }
+  const bad = (acc.holdings || []).filter(x => typeof assetTypeError === 'function' && assetTypeError(acc, x.type, x.country));
+  if (bad.length) h += `<div class='t-sm' style='margin-top:8px;color:var(--loss)'>Position non autorisée sur ce type de compte : ${bad.map(x => esc(x.ticker)).join(', ')}. Supprime-la ou change le type du compte.</div>`;
+  return h;
+}
+const _renderAccountBase = renderAccount;
+renderAccount = function () {
+  const html = _renderAccountBase();
+  const acc = S.accounts.find(a => a.id === S.accountId);
+  if (!html || !acc) return html;
+  const marker = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+  const i = html.indexOf(marker);
+  return i < 0 ? html : html.slice(0, i) + _accExtraHTML(acc) + html.slice(i);
+};
+
+// Comparaison à un indice : téléchargement avec délai maximal (plus de « chargement » sans fin) et déclenchement garanti
+async function loadBenchmark(key, startDay) {
+  const b = BENCHMARKS[key]; if (!b) return;
+  const tag = key + '|' + (startDay || '');
+  if (_benchTried[tag]) return;
+  _benchTried[tag] = true;
+  const years = startDay ? (Date.now() - new Date(startDay + 'T00:00:00').getTime()) / (365.25 * 86400000) : 1;
+  const range = years <= 0.9 ? '1y' : years <= 1.9 ? '2y' : years <= 4.9 ? '5y' : years <= 9.9 ? '10y' : 'max';
+  const jobs = [['IDX:' + key, b.sym]];
+  if (_benchNeedsFx(key)) jobs.push(['IDX:EURUSD', 'EURUSD=X']);
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('délai dépassé')), ms))]);
+  await Promise.all(jobs.map(async ([id, sym]) => {
+    try {
+      const s = await withTimeout(_fetchYahooHistory(sym, range), 15000);
+      if (s && s.length >= 2) saveHistory(id, s, 'USD');
+    } catch (e) { dbgLog('[ERR]', 'Indice ' + id + ' : ' + (e?.message || e)); }
+  }));
+  if (S.screen === 'account') renderScreen('account');
+}
+const _accBenchHTMLBase = accBenchHTML;
+accBenchHTML = function (acc, perf, sum) {
+  const html = _accBenchHTMLBase(acc, perf, sum);
+  if (html.includes("chargement de l'indice")) setTimeout(() => loadBenchmark(accBenchmarkKey(acc), perf && perf.start), 0);
+  return html;
+};
+
+// Compteurs de la barre du bas : les ordres en attente sont comptés même en mode démo
+function navBadgeCount(key) {
+  try {
+    if (key === 'stale')  return S.isDemo ? 0 : staleHoldings().length;
+    if (key === 'orders') return loadOrders().filter(o => _ordLookup(o)).length;
+  } catch (e) {}
+  return 0;
+}
+
+// ── Régulariser les liquidités : plusieurs poches (devises) fixées à une même date ; l'écart est un apport/retrait, jamais un gain ──
+let _ca2 = null;
+document.body.insertAdjacentHTML('beforeend', `<div id='ca2-bg' class='add-modal-bg'></div>
+<div id='ca2-sheet' class='add-modal-sheet' style='max-height:92vh;overflow-y:auto'><div class='modal-drag'></div><div class='modal-body' id='ca2-body'></div></div>`);
+function _ca2Num(v) { return parseFloat(String(v).replace(',', '.')) || 0; }
+function _ca2Rows(acc, date) {
+  const pk = PU.accCashByCcy(acc, date);
+  const set = new Set([acc.currency || S.currency, ...(acc.holdings || []).map(h => h.currency || 'EUR'), ...Object.keys(pk)]);
+  return [...set].map(c => ({ ccy: c, val: String(Math.round((pk[c] || 0) * 100) / 100) }));
+}
+function openCa2(accId) {
+  const acc = S.accounts.find(a => a.id === accId); if (!acc) return;
+  const date = _dayKey(Date.now());
+  _ca2 = { accId, date, rows: _ca2Rows(acc, date) };
+  renderCa2();
+  document.getElementById('ca2-bg').classList.add('show');
+  document.getElementById('ca2-sheet').classList.add('show');
+}
+function closeCa2() {
+  document.getElementById('ca2-bg').classList.remove('show');
+  document.getElementById('ca2-sheet').classList.remove('show');
+  _ca2 = null;
+}
+function renderCa2() {
+  const acc = S.accounts.find(a => a.id === (_ca2 && _ca2.accId)); if (!acc) return;
+  const adjs = [...(acc.cashAdjust || [])].sort((a, b) => b.date.localeCompare(a.date));
+  const free = Object.keys(FX_RATES).filter(c => !_ca2.rows.some(r => r.ccy === c));
+  const tot = _ca2.rows.reduce((s, r) => s + toRefCcy(_ca2Num(r.val), r.ccy), 0);
+  const rows = _ca2.rows.map(r => `<div class='form-row'><div class='form-field'><div class='form-label'>Liquidités en ${esc(r.ccy)}</div><input class='form-input ca2-v' data-c='${esc(r.ccy)}' type='number' step='any' inputmode='decimal' value='${esc(r.val)}'></div></div>`).join('');
+  const list = adjs.length ? `<div class='t-label' style='margin:16px 0 4px'>Régularisations enregistrées</div>` + adjs.map(a => `<div class='tx-item' style='padding:8px 0'><div class='flex1 col gap4' style='min-width:0'><div style='font-size:13px;font-weight:700'>${fmtDate(a.date)}</div><div class='t-sm'>${Object.entries(a.balances || {}).map(([c, v]) => maskedNative(+v || 0, c)).join(' · ')}</div></div><div class='tx-del-btn' data-ca2del='${esc(a.id)}' title='Supprimer'><svg viewBox='0 0 24 24' fill='currentColor'><path d='M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'/></svg></div></div>`).join('') : '';
+  document.getElementById('ca2-body').innerHTML = `<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:12px'>
+    <div class='modal-title' style='margin-bottom:0'>Régulariser les liquidités</div>
+    <div id='ca2-close' style='width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0'>✕</div></div>
+    <div class='t-sm' style='margin-bottom:12px'>Indique, pour une même date, le solde réel de chaque poche de liquidités (relevé du courtier). L'écart avec le solde calculé est traité comme un apport ou un retrait, jamais comme un gain.</div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Date</div><input class='form-input' type='date' id='ca2-date' value='${esc(_ca2.date)}'></div></div>
+    ${rows}
+    ${free.length ? `<div style='display:flex;gap:8px;align-items:center;margin:4px 0 10px'><select class='form-input' id='ca2-add-sel' style='flex:1;cursor:pointer'>${free.map(c => `<option value='${c}'>${c}</option>`).join('')}</select><div id='ca2-add' class='tap' style='padding:8px 14px;border-radius:20px;border:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text2);cursor:pointer'>+ Devise</div></div>` : ''}
+    <div class='t-sm' style='margin-bottom:10px'>Total : <b id='ca2-tot' class='t-num'>${masked(tot)}</b> (devise de l'appli)</div>
+    <button class='form-submit' id='ca2-save'>Enregistrer</button>
+    ${list}`;
+}
+function saveCa2() {
+  const acc = S.accounts.find(a => a.id === (_ca2 && _ca2.accId)); if (!acc) return;
+  const date = _ca2.date || _dayKey(Date.now());
+  const balances = {};
+  _ca2.rows.forEach(r => { balances[r.ccy] = Math.round(_ca2Num(r.val) * 100) / 100; });
+  acc.cashAdjust = (acc.cashAdjust || []).filter(a => a.date !== date).concat({ id: 'ca_' + Date.now().toString(36), date, balances }).sort((a, b) => a.date < b.date ? -1 : 1);
+  acc.value = accTotal(acc);
+  closeCa2();
+  renderScreen('account');
+  refreshMain();
+  toast('Liquidités régularisées ✓');
+}
+document.getElementById('ca2-bg').addEventListener('click', closeCa2);
+document.getElementById('ca2-body').addEventListener('click', e => {
+  if (!_ca2) return;
+  if (e.target.closest('#ca2-close')) return closeCa2();
+  if (e.target.closest('#ca2-add')) {
+    const v = document.getElementById('ca2-add-sel').value;
+    if (v) { _ca2.rows.push({ ccy: v, val: '0' }); renderCa2(); }
+    return;
+  }
+  if (e.target.closest('#ca2-save')) return saveCa2();
+  const d = e.target.closest('[data-ca2del]');
+  if (d) {
+    const acc = S.accounts.find(a => a.id === _ca2.accId); if (!acc) return;
+    acc.cashAdjust = (acc.cashAdjust || []).filter(a => a.id !== d.dataset.ca2del);
+    acc.value = accTotal(acc);
+    renderCa2(); renderScreen('account'); refreshMain();
+  }
+});
+document.getElementById('ca2-body').addEventListener('input', e => {
+  const i = e.target.closest('.ca2-v'); if (!i || !_ca2) return;
+  const r = _ca2.rows.find(x => x.ccy === i.dataset.c); if (r) r.val = i.value;
+  const el = document.getElementById('ca2-tot');
+  if (el) el.innerHTML = masked(_ca2.rows.reduce((s, x) => s + toRefCcy(_ca2Num(x.val), x.ccy), 0));
+});
+document.getElementById('ca2-body').addEventListener('change', e => {
+  if (e.target.id !== 'ca2-date' || !_ca2) return;
+  const acc = S.accounts.find(a => a.id === _ca2.accId); if (!acc) return;
+  _ca2.date = e.target.value || _ca2.date;
+  _ca2.rows = _ca2Rows(acc, _ca2.date);
+  renderCa2();
+});
+// Le bouton « Régulariser les liquidités » de l'écran du compte ouvre cette fenêtre (capture : l'ancien gestionnaire n'est pas appelé)
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('#js-ca-btn')) return;
+  e.stopPropagation(); e.preventDefault();
+  openCa2(S.accountId);
+}, true);
+registerModal('ca2-sheet', closeCa2);
 
 // ═══════════════════════════════════════════════
 // INIT — charge les données puis dessine l'appli (les modules ci-dessus sont déjà évalués)
