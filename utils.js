@@ -10,8 +10,8 @@
 
   function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
-  //   = espace fine insécable (typographie française), identique à l'implémentation historique
-  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %'; }
+  //   = espace fine insécable (typographie française), identique à l'implémentation historique
+  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %'; }
 
   function fmtDate(s) {
     return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -58,15 +58,17 @@
     return holdings.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
   }
 
-  // ── Trésorerie d'un compte ─────────────────────────────────────────────
-  // `upTo` (clé jour 'YYYY-MM-DD', optionnel) borne le calcul à une date : utilisé
-  // pour reconstruire la valeur du patrimoine à une date passée.
+  // ── Trésorerie d'un compte ──────────────────────────────────────────────────────
+  // `upTo` (clé jour 'YYYY-MM-DD', optionnel) borne le calcul à une date : utilisé pour reconstruire
+  // la valeur du patrimoine à une date passée. `after` (optionnel, exclusif) ignore tout ce qui est daté
+  // de cette date ou avant : sert à repartir d'une régularisation (acc.cashAdjust).
 
   // Apports − retraits, saisis dans la devise du compte, convertis en devise appli.
-  function accCashflowNet(acc, fxRates, appCcy = 'EUR', upTo) {
+  function accCashflowNet(acc, fxRates, appCcy = 'EUR', upTo, after) {
     let net = 0;
     (acc.cashflows || []).forEach(c => {
       if (upTo && c.date > upTo) return;
+      if (after && c.date <= after) return;
       const a = +c.amount || 0;
       net += (c.type === 'WIT' ? -a : a);
     });
@@ -75,12 +77,13 @@
 
   // Montant net sorti de la trésorerie pour investir : achats − ventes − dividendes
   // encaissés. Chaque transaction est dans la devise native du titre.
-  function accInvestedNet(acc, fxRates, appCcy = 'EUR', upTo) {
+  function accInvestedNet(acc, fxRates, appCcy = 'EUR', upTo, after) {
     let net = 0;
     (acc.holdings || []).forEach(h => {
       let n = 0;
       (h.transactions || []).forEach(tx => {
         if (upTo && tx.date > upTo) return;
+        if (after && tx.date <= after) return;
         const amt = (+tx.qty || 0) * (+tx.price || 0);
         if (tx.type === 'BUY') n += amt;
         else if (tx.type === 'SELL' || tx.type === 'DIV') n -= amt;
@@ -90,11 +93,36 @@
     return net;
   }
 
-  // Liquidités disponibles sur le compte (devise appli) = apports nets − investi net.
-  // Renvoie 0 tant qu'aucun apport/retrait n'est saisi : le compte n'est alors pas
-  // suivi en trésorerie et ses titres seuls font le solde (comportement historique).
+  // Dernière régularisation des liquidités (acc.cashAdjust : [{ id, date, balances: { EUR: 1200, USD: 300 } }])
+  // datée au plus tard de `upTo` ; null s'il n'y en a pas.
+  function accCashAnchor(acc, upTo) {
+    let best = null;
+    ((acc && acc.cashAdjust) || []).forEach(a => {
+      if (!a || !a.date) return;
+      if (upTo && a.date > upTo) return;
+      if (!best || a.date >= best.date) best = a;
+    });
+    return best;
+  }
+
+  // Liquidités disponibles sur le compte (devise appli).
+  // Sans régularisation : apports nets − investi net, et 0 tant qu'aucun apport/retrait n'est saisi
+  // (le compte n'est alors pas suivi en trésorerie : ses titres seuls font le solde, comportement historique).
+  // Avec régularisation : soldes saisis (par devise, convertis) à la date de la dernière régularisation,
+  // puis apports/retraits et mouvements postérieurs (fin de journée : les mouvements du jour sont inclus dans le solde saisi).
   function accCash(acc, fxRates, appCcy = 'EUR', upTo) {
-    if (!acc || !acc.cashflows || !acc.cashflows.length) return 0;
+    if (!acc) return 0;
+    const anchor = accCashAnchor(acc, upTo);
+    if (anchor) {
+      let base = 0;
+      Object.entries(anchor.balances || {}).forEach(([ccy, v]) => {
+        base += toRefCcy(+v || 0, ccy, fxRates, appCcy);
+      });
+      return +(base
+             + accCashflowNet(acc, fxRates, appCcy, upTo, anchor.date)
+             - accInvestedNet(acc, fxRates, appCcy, upTo, anchor.date)).toFixed(2);
+    }
+    if (!acc.cashflows || !acc.cashflows.length) return 0;
     return +(accCashflowNet(acc, fxRates, appCcy, upTo)
            - accInvestedNet(acc, fxRates, appCcy, upTo)).toFixed(2);
   }
@@ -168,7 +196,7 @@
 
   root.PU = {
     mkTx, fmtPct, fmtDate, initials, fmtNative, fmtCur, esc, dayKey,
-    toRefCcy, accSum, accCashflowNet, accInvestedNet, accCash, accTotal,
+    toRefCcy, accSum, accCashflowNet, accInvestedNet, accCashAnchor, accCash, accTotal,
     computeRealizedPnL, recalcHolding, timeSince, fxSubText,
   };
 })(globalThis);

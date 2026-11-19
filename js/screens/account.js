@@ -46,15 +46,17 @@ function accPerfInfo(acc) {
 
 // ── COMPARAISON À UN INDICE ──
 // Indice choisi par compte (acc.benchmark : clé ci-dessous, '' = aucun ; absent = défaut selon le type de compte :
-// Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun sinon). Cours via le proxy Yahoo, séries gardées
-// dans l'historique local sous la clé 'IDX:<clé>'. MSCI World / ACWI sont suivis via les ETF iShares URTH / ACWI.
-// Les indices restent dans leur devise d'origine (pas de conversion).
+// Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun sinon — le choix reste libre, ex. MSCI World pour un PEA).
+// Cours via le proxy Yahoo, séries gardées dans l'historique local sous la clé 'IDX:<clé>'.
+// MSCI World / ACWI sont suivis via les ETF iShares URTH / ACWI.
+// Les indices cotés en USD sont convertis en euros avec l'historique EUR/USD (quand la devise appli est l'euro),
+// sinon la comparaison mélangerait performance de l'indice et variation du dollar.
 const BENCHMARKS = {
-  SPX:   { label:'S&P 500',    sym:'^GSPC'   },
-  WORLD: { label:'MSCI World', sym:'URTH'    },
-  ACWI:  { label:'MSCI ACWI',  sym:'ACWI'    },
-  CAC40: { label:'CAC 40',     sym:'^FCHI'   },
-  BTC:   { label:'Bitcoin',    sym:'BTC-USD' },
+  SPX:   { label:'S&P 500',    sym:'^GSPC',   ccy:'USD' },
+  WORLD: { label:'MSCI World', sym:'URTH',    ccy:'USD' },
+  ACWI:  { label:'MSCI ACWI',  sym:'ACWI',    ccy:'USD' },
+  CAC40: { label:'CAC 40',     sym:'^FCHI',   ccy:'EUR' },
+  BTC:   { label:'Bitcoin',    sym:'BTC-USD', ccy:'USD' },
 };
 function accBenchmarkKey(acc) {
   if (acc.benchmark !== undefined) return acc.benchmark;
@@ -64,12 +66,16 @@ function accBenchmarkKey(acc) {
   return '';
 }
 const _benchTried = {};   // une tentative de téléchargement par indice et par session
-function benchNeedsLoad(key, startDay) {
-  if (!BENCHMARKS[key]) return false;
-  const h = getHistorySeries('IDX:' + key);
+function _benchNeedsFx(key) { const b = BENCHMARKS[key]; return !!b && b.ccy === 'USD' && S.currency === 'EUR'; }
+function _histStale(id, startDay) {
+  const h = getHistorySeries(id);
   if (!h) return true;
   if (Date.now() - h.fetchedAt > 12 * 3600 * 1000) return true;
   return !!startDay && new Date(h.series[0].d + 'T00:00:00').getTime() > new Date(startDay + 'T00:00:00').getTime() + 7 * 86400000;
+}
+function benchNeedsLoad(key, startDay) {
+  if (!BENCHMARKS[key]) return false;
+  return _histStale('IDX:' + key, startDay) || (_benchNeedsFx(key) && _histStale('IDX:EURUSD', startDay));
 }
 async function loadBenchmark(key, startDay) {
   const b = BENCHMARKS[key]; if (!b) return;
@@ -78,11 +84,32 @@ async function loadBenchmark(key, startDay) {
   _benchTried[tag] = true;
   const years = startDay ? (Date.now() - new Date(startDay + 'T00:00:00').getTime()) / (365.25 * 86400000) : 1;
   const range = years <= 0.9 ? '1y' : years <= 1.9 ? '2y' : years <= 4.9 ? '5y' : years <= 9.9 ? '10y' : 'max';
-  try {
-    const s = await _fetchYahooHistory(b.sym, range);
-    if (s && s.length >= 2) saveHistory('IDX:' + key, s, 'USD');
-  } catch (e) { dbgLog('[ERR]', 'Indice ' + key + ' : ' + (e?.message || e)); }
+  const jobs = [['IDX:' + key, b.sym]];
+  if (_benchNeedsFx(key)) jobs.push(['IDX:EURUSD', 'EURUSD=X']);
+  await Promise.all(jobs.map(async ([id, sym]) => {
+    try {
+      const s = await _fetchYahooHistory(sym, range);
+      if (s && s.length >= 2) saveHistory(id, s, 'USD');
+    } catch (e) { dbgLog('[ERR]', 'Indice ' + id + ' : ' + (e?.message || e)); }
+  }));
   if (S.screen === 'account') renderScreen('account');
+}
+// Série de l'indice dans la devise appli : un indice en USD est divisé par EUR/USD du jour (dernier cours connu).
+// Renvoie { series, conv } ou null si la série (ou le taux de change nécessaire) est absente.
+function benchSeries(key) {
+  const h = getHistorySeries('IDX:' + key);
+  if (!h) return null;
+  if (!_benchNeedsFx(key)) return { series: h.series, conv: false };
+  const fx = getHistorySeries('IDX:EURUSD');
+  if (!fx) return null;
+  let j = 0, last = null;
+  const out = [];
+  h.series.forEach(p => {
+    while (j < fx.series.length && fx.series[j].d <= p.d) { last = fx.series[j].c; j++; }
+    const r = last != null ? last : fx.series[0].c;
+    if (r > 0) out.push({ d: p.d, c: p.c / r });
+  });
+  return out.length >= 2 ? { series: out, conv: true } : null;
 }
 // Variation (%) de l'indice entre le dernier cours ≤ fromDay (ou le 1er point connu) et aujourd'hui
 function benchRet(series, fromDay) {
@@ -134,7 +161,7 @@ function accBenchHTML(acc, perf) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
   const chip = `<span id='js-bm-btn' class='tap' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
   if (!b) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
-  const ser = getHistorySeries('IDX:' + key);
+  const ser = benchSeries(key);
   if (!ser) {
     const tried = _benchTried[key + '|' + (perf.start || '')];
     return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>${tried ? 'indice indisponible pour le moment' : 'chargement de l\'indice…'}</span></div>`;
@@ -150,11 +177,12 @@ function accBenchHTML(acc, perf) {
     const v0 = accValueOnDay(acc, pye); approx = v0.approx;
     ytd = accDietz(acc, pye, v0.v, false); bYtd = benchRet(ser.series, pye);
   }
+  const ccyNote = ser.conv ? 'indice converti en euros' : (b.ccy === 'USD' ? 'indice en dollars (non converti)' : 'indice dans sa devise');
   return `<div style='margin-top:8px'>
     <div class='t-sm' style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px'>${chip}</div>
     ${_bmRow('YTD', ytd, bYtd, b.label)}
     ${_bmRow('Depuis le début', since, bSince, b.label)}
-    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · indice dans sa devise d'origine.</div>
+    <div class='t-sm' style='font-size:10px;margin-top:4px'>Perf. du compte pondérée des apports et retraits${approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · ${ccyNote}.</div>
   </div>`;
 }
 
@@ -175,9 +203,12 @@ function renderAccount() {
   }).join('');
   // Cashflow total
   const cfs=acc.cashflows||[];
+  const adj=PU.accCashAnchor(acc);             // dernière régularisation des liquidités
+  const hasCash=cfs.length>0||!!adj;
   const totalDep=cfs.filter(c=>c.type==='DEP').reduce((s,c)=>s+c.amount,0);
   const totalWit=cfs.filter(c=>c.type==='WIT').reduce((s,c)=>s+c.amount,0);
   const netCf=totalDep-totalWit;
+  const chipStyle='padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer';
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     Retour
@@ -191,7 +222,7 @@ function renderAccount() {
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
-    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
+    ${hasCash?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">${perf?'Gain total':'P&amp;L Total'}</div>
         <div style="font-size:15px;font-weight:800" class="${gainVal>=0?'t-gain':'t-loss'} t-num">${gainVal>=0?'+':''}${masked(gainVal)}</div></div>
@@ -202,7 +233,7 @@ function renderAccount() {
     </div>
     ${perf?`<div class="t-sm" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Perf. annuelle moy. : <b class="${perf.annual!=null&&perf.annual<0?'t-loss':'t-gain'}">${perf.annual!=null?fmtPct(perf.annual)+' / an':'—'}</b></span><span>· depuis ${perf.start?fmtDate(perf.start):'—'}${perf.auto?' (auto)':''}${perf.years!=null&&perf.years<1?' · calcul après 1 an':''}</span><span id="js-start-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Date de début</span></div>`:''}
     ${perf?accBenchHTML(acc,perf):''}
-    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
+    ${hasCash?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
         <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${maskedNative(netCf,acc.currency||S.currency)}</div>
@@ -211,8 +242,9 @@ function renderAccount() {
         <div class="t-label">Liquidités</div>
         <div style="font-size:14px;font-weight:800" class="${cash>=0?'':'t-loss'} t-num">${masked(cash)}</div>
       </div>
-      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Apports / Retraits</div>
-    </div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport.</div>`:''}`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
+      <div id="js-cf-btn" class="tap" style="${chipStyle}">Apports / Retraits</div>
+    </div>
+    <div class="t-sm" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span id="js-ca-btn" class="tap" style="${chipStyle}">Régulariser les liquidités</span>${adj?`<span>régularisé le ${fmtDate(adj.date)}</span>`:''}</div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport, ou régularisez les liquidités.</div>`:''}`:`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><div id="js-cf-btn" class="tap" style="${chipStyle}">+ Apport / Retrait</div><div id="js-ca-btn" class="tap" style="${chipStyle}">Régulariser les liquidités</div></div>`}
   </div>
   <div class="search-wrap">
     <div class="search-box">
@@ -548,7 +580,7 @@ let _bmAccId=null;
   <div class='modal-drag'></div>
   <div class='modal-body'>
     <div class='modal-title' style='margin-bottom:6px'>Indice de comparaison</div>
-    <div class='t-sm' style='margin-bottom:14px'>Par défaut : Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun pour les autres. MSCI World et MSCI ACWI sont suivis via les ETF iShares URTH et ACWI.</div>
+    <div class='t-sm' style='margin-bottom:14px'>Choix libre pour chaque compte (un PEA peut se comparer au MSCI World, par exemple). Par défaut : Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun pour les autres. MSCI World et MSCI ACWI sont suivis via les ETF iShares URTH et ACWI ; les indices en dollars sont convertis en euros.</div>
     <div class='form-row'><div class='form-field'><div class='form-label'>Indice</div>
       <select class='form-input' id='bm-select' style='cursor:pointer'><option value='auto'>Par défaut (selon le type de compte)</option><option value=''>Aucun</option>${opts}</select></div></div>
     <button class='form-submit' id='bm-ok'>Enregistrer</button>
@@ -577,6 +609,124 @@ document.getElementById('bm-ok').addEventListener('click',()=>{
 });
 registerModal('bm-sheet', closeBenchSheet);
 
+// ── Régularisation des liquidités (soldes réels par devise à une date) ──
+// acc.cashAdjust = [{ id, date, balances:{EUR:…,USD:…} }] ; voir PU.accCash dans utils.js.
+// Écart avec le calcul : soit un gain/frais (reste dans la performance), soit un apport/retrait manquant
+// (crée un apport ou retrait à cette date, repéré par adjId, pour ne pas fausser la performance).
+let _caAccId=null;
+const CASH_CCYS=['EUR','USD','GBP','CHF','JPY'];
+(function(){
+  const fields=CASH_CCYS.map(c=>`<div class='form-field' style='flex:1;min-width:30%'><div class='form-label'>${c}</div><input class='form-input' type='number' step='0.01' inputmode='decimal' id='ca-${c}' placeholder='0'></div>`).join('');
+  document.body.insertAdjacentHTML('beforeend',`
+<div id='ca-bg' class='add-modal-bg'></div>
+<div id='ca-sheet' class='add-modal-sheet'>
+  <div class='modal-drag'></div>
+  <div class='modal-body' style='max-height:85vh;overflow-y:auto'>
+    <div class='modal-title' style='margin-bottom:6px'>Régulariser les liquidités</div>
+    <div class='t-sm' style='margin-bottom:12px'>Saisis les liquidités réelles du compte, par devise, à une date (solde en fin de journée). L'appli repart de ces soldes, puis ajoute les apports, retraits et ordres postérieurs.</div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Date du relevé</div><input class='form-input' type='date' id='ca-date'></div></div>
+    <div class='form-row' style='flex-wrap:wrap;gap:8px'>${fields}</div>
+    <div class='t-sm' id='ca-sum' style='margin:6px 0 10px'></div>
+    <div class='form-row'><div class='form-field'><div class='form-label'>Nature de l'écart avec le calcul</div>
+      <select class='form-input' id='ca-nature' style='cursor:pointer'>
+        <option value='gain'>Gain, intérêts ou frais (compte dans la performance)</option>
+        <option value='flow'>Apport ou retrait non saisi (hors performance)</option>
+      </select></div></div>
+    <button class='form-submit' id='ca-ok'>Enregistrer</button>
+    <div id='ca-list' style='margin-top:14px'></div>
+  </div>
+</div>`);
+})();
+function _caRest(acc,d){
+  const ids=(acc.cashAdjust||[]).filter(a=>a.date===d).map(a=>a.id);
+  return {...acc,
+    cashAdjust:(acc.cashAdjust||[]).filter(a=>a.date!==d),
+    cashflows:(acc.cashflows||[]).filter(c=>!ids.includes(c.adjId))};
+}
+function _caCompute(acc){
+  const d=document.getElementById('ca-date').value||_dayKey(Date.now());
+  const bal={}; let total=0;
+  CASH_CCYS.forEach(c=>{
+    const v=parseFloat(document.getElementById('ca-'+c).value);
+    if(!isNaN(v)&&v!==0){ bal[c]=v; total+=toRefCcy(v,c); }
+  });
+  const before=accCash(_caRest(acc,d),d);
+  return {d,bal,total,before,diff:total-before};
+}
+function _caUpdate(){
+  const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
+  const r=_caCompute(acc);
+  document.getElementById('ca-sum').innerHTML=`Total saisi : <b>${fmtCur(r.total)}</b> · calcul actuel à cette date : ${fmtCur(r.before)} · écart : <b>${r.diff>=0?'+':''}${fmtCur(r.diff)}</b>`;
+}
+function _caList(acc){
+  const el=document.getElementById('ca-list');
+  const list=(acc.cashAdjust||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  if(!list.length){ el.innerHTML=''; return; }
+  el.innerHTML=`<div class='t-label' style='margin-bottom:6px'>Régularisations enregistrées</div>`+list.map(a=>{
+    const txt=Object.entries(a.balances||{}).map(([c,v])=>fmtNative(v,c)).join(' · ')||'0';
+    return `<div style='display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:12px'><span style='flex:1'><b>${fmtDate(a.date)}</b> · ${esc(txt)}</span><span class='tap' data-ca-del='${esc(a.id)}' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-weight:700;cursor:pointer'>Supprimer</span></div>`;
+  }).join('');
+  el.querySelectorAll('[data-ca-del]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.caDel;
+    acc.cashAdjust=(acc.cashAdjust||[]).filter(a=>a.id!==id);
+    acc.cashflows=(acc.cashflows||[]).filter(c=>c.adjId!==id);
+    if(!acc.cashAdjust.length) delete acc.cashAdjust;
+    acc.value=accTotal(acc);
+    saveAccounts(); refreshMain();
+    _caList(acc); _caUpdate();
+    if(S.screen==='account') renderScreen('account');
+    toast('Régularisation supprimée');
+  }));
+}
+function openCashAdjust(acc){
+  _caAccId=acc.id;
+  document.getElementById('ca-date').value=_dayKey(Date.now());
+  CASH_CCYS.forEach(c=>{ document.getElementById('ca-'+c).value=''; });
+  const last=PU.accCashAnchor(acc);
+  if(last){
+    Object.entries(last.balances||{}).forEach(([c,v])=>{ const el=document.getElementById('ca-'+c); if(el) el.value=v; });
+  } else {
+    const ccy=CASH_CCYS.includes(acc.currency)?acc.currency:S.currency;
+    const cash=accCash(acc);
+    const el=document.getElementById('ca-'+ccy);
+    if(el&&cash) el.value=+(cash*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1)).toFixed(2);
+  }
+  document.getElementById('ca-nature').value='gain';
+  _caList(acc); _caUpdate();
+  document.getElementById('ca-bg').classList.add('show');
+  document.getElementById('ca-sheet').classList.add('show');
+}
+function closeCashAdjust(){
+  document.getElementById('ca-bg').classList.remove('show');
+  document.getElementById('ca-sheet').classList.remove('show');
+}
+document.getElementById('ca-bg').addEventListener('click',closeCashAdjust);
+['ca-date',...CASH_CCYS.map(c=>'ca-'+c)].forEach(id=>document.getElementById(id).addEventListener('input',_caUpdate));
+document.getElementById('ca-ok').addEventListener('click',()=>{
+  const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
+  const r=_caCompute(acc);
+  if(r.d>_dayKey(Date.now())){ toast('La date ne peut pas être dans le futur'); return; }
+  const nature=document.getElementById('ca-nature').value;
+  const rest=_caRest(acc,r.d);
+  acc.cashAdjust=rest.cashAdjust;
+  acc.cashflows=rest.cashflows;
+  const adjId='ca'+Date.now().toString(36);
+  acc.cashAdjust.push({id:adjId,date:r.d,balances:r.bal});
+  if(nature==='flow' && Math.abs(r.diff)>=0.005){
+    const ccy=acc.currency||S.currency;
+    const amt=Math.abs(r.diff)*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1);
+    acc.cashflows.push({id:'cf'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:r.diff>0?'DEP':'WIT',amount:+amt.toFixed(2),date:r.d,note:'Régularisation des liquidités',adjId});
+  }
+  acc.value=accTotal(acc);
+  saveAccounts();
+  refreshMain();
+  if(typeof snapshotWealth==='function') snapshotWealth();
+  closeCashAdjust();
+  if(S.screen==='account') renderScreen('account');
+  toast('Liquidités régularisées ✓');
+});
+registerModal('ca-sheet', closeCashAdjust);
+
 
 SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
@@ -591,6 +741,7 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-start-btn')?.addEventListener('click',()=>{ if(acc) openStartDate(acc); });
     el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
+    el.querySelector('#js-ca-btn')?.addEventListener('click',()=>{ if(acc) openCashAdjust(acc); });
 
     // Indice de comparaison : téléchargement de la série si absente ou périmée
     if(acc && !S.isDemo){
