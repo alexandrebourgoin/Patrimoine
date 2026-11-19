@@ -1,6 +1,5 @@
 // Modales d ordres : modification d une transaction et ajout d un ordre (achat / vente / dividende).
-// + ordres limites suivis à la main (écran « Ordres », modifiables, raccourci optionnel de la barre du bas)
-// + alertes de prix (écran « Alertes », compteur dans la barre du bas).
+// + écran « Ordres » en deux parties sur une seule page : ordres limites en cours (haut) puis alertes de prix (bas), séparés par un trait.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
 // ═══════════════════════════════════════════════
@@ -196,6 +195,7 @@ function _ordRow(k,v){
   return `<div style='display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px'><span style='color:var(--text2)'>${k}</span><span style='font-weight:600;text-align:right'>${v}</span></div>`;
 }
 
+// Écran « Ordres » : en haut les ordres limites en cours, un séparateur, puis en bas les alertes de prix — tout sur la même page.
 function renderOrders(){
   const rows=loadOrders().map(o=>({o,r:_ordLookup(o)})).filter(x=>x.r);
   const cards=rows.map(({o,r})=>{
@@ -217,19 +217,41 @@ function renderOrders(){
       </div>
     </div>`;
   }).join('');
+  const alerts=loadAlerts().map(a=>({a,q:_altQuote(a.ticker),hit:alertHit(a)})).sort((x,y)=>(y.hit-x.hit)||(x.a.createdAt-y.a.createdAt));
+  const nHit=alerts.filter(x=>x.hit).length;
+  const altCards=alerts.map(({a,q,hit})=>{
+    const ccy=q?q.ccy:'EUR', above=a.dir==='above';
+    return `<div style='background:var(--card2);border:1px solid ${hit?'#F59E0B':'var(--border)'};border-radius:var(--r);padding:14px;margin-bottom:10px'>
+      <div style='display:flex;justify-content:space-between;align-items:center;gap:8px'>
+        <div style='font-weight:800;font-size:15px'>${esc(a.ticker)} <span style='font-size:12px;font-weight:600;color:var(--text2)'>${esc(a.name||'')}</span></div>
+        <span style='font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;${hit?'background:rgba(245,158,11,.15);color:#F59E0B':'background:var(--card);color:var(--text2)'}'>${hit?'Déclenchée':'En attente'}</span>
+      </div>
+      <div style='margin-top:8px;font-size:14px'>Cours ${above?'≥':'≤'} <b>${maskedNative(a.price,ccy)}</b></div>
+      <div class='t-sm' style='margin-top:2px'>${q?'Cours actuel : '+maskedNative(q.p,q.ccy):'Cours actuel inconnu (titre absent des comptes et du suivi)'}</div>
+      <div style='margin-top:10px'><button class='confirm-cancel' data-adel='${esc(a.id)}' style='height:38px;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer'>Supprimer</button></div>
+    </div>`;
+  }).join('');
   return `${renderTopBar()}
   <div style='padding:4px 16px 110px'>
-    <div style='font-size:20px;font-weight:800;margin:6px 0 4px'>Ordres en cours</div>
-    <div class='t-sm' style='margin-bottom:14px'>Ordres limites passés chez ton courtier. Confirme l'exécution ici pour ajouter le mouvement au compte.</div>
-    <button class='form-submit' data-onew='1' style='margin:0 0 10px'>+ Nouvel ordre limite</button>
-    <div data-ogo-alerts='1' class='tap' style='display:inline-block;margin:0 0 14px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>Alertes de prix →</div>
-    ${cards||`<div class='t-sm' style='text-align:center;padding:30px 0'>Aucun ordre en cours.</div>`}
+    <div style='font-size:20px;font-weight:800;margin:6px 0 16px'>Ordres et alertes</div>
+
+    <div style='font-size:15px;font-weight:800;margin-bottom:2px'>Ordres en cours <span class='t-sm' style='font-weight:600'>(${rows.length})</span></div>
+    <div class='t-sm' style='margin-bottom:10px'>Ordres limites passés chez ton courtier. Confirme l'exécution ici pour ajouter le mouvement au compte.</div>
+    <button class='form-submit' data-onew='1' style='margin:0 0 12px'>+ Nouvel ordre limite</button>
+    ${cards||`<div class='t-sm' style='text-align:center;padding:16px 0'>Aucun ordre en cours.</div>`}
+
+    <div style='height:1px;background:var(--border);margin:24px 0 18px'></div>
+
+    <div style='font-size:15px;font-weight:800;margin-bottom:2px'>Alertes de prix <span class='t-sm' style='font-weight:600'>(${alerts.length}${nHit?` · ${nHit} déclenchée${nHit>1?'s':''}`:''})</span></div>
+    <div class='t-sm' style='margin-bottom:10px'>Vérifiées à l'ouverture et à chaque actualisation des cours (pas quand l'appli est fermée). Le compteur de la barre du bas additionne les ordres en cours et les alertes déclenchées.</div>
+    <button class='form-submit' data-anew='1' style='margin:0 0 12px'>+ Nouvelle alerte</button>
+    ${altCards||`<div class='t-sm' style='text-align:center;padding:16px 0'>Aucune alerte.</div>`}
   </div>`;
 }
 function bindOrders(el){
   el.onclick=e=>{
     if(e.target.closest('[data-onew]')){ openOrdNew(); return; }
-    if(e.target.closest('[data-ogo-alerts]')){ go('alerts'); return; }
+    if(e.target.closest('[data-anew]')){ openAltNew(); return; }
     const ex=e.target.closest('[data-oexec]');
     if(ex){ openOrdExec(ex.dataset.oexec); return; }
     const ed=e.target.closest('[data-oedit]');
@@ -239,9 +261,19 @@ function bindOrders(el){
       saveOrders(loadOrders().filter(o=>o.id!==ca.dataset.ocancel));
       renderScreen('orders');
       toast('Ordre annulé');
+      return;
+    }
+    const ad=e.target.closest('[data-adel]');
+    if(ad){
+      saveAlerts(loadAlerts().filter(a=>a.id!==ad.dataset.adel));
+      renderScreen('orders');
+      toast('Alerte supprimée');
     }
   };
 }
+// Compatibilité : l'ancien écran « Alertes » est fusionné dans « Ordres »
+function renderAlerts(){ return renderOrders(); }
+function bindAlerts(el){ bindOrders(el); }
 
 // Écran + feuilles créés ici (le HTML n'a pas à les déclarer)
 (function(){
@@ -443,7 +475,7 @@ document.getElementById('oexec-body').addEventListener('click',e=>{
 });
 document.getElementById('oexec-body').addEventListener('input',_ordExecUpdate);
 
-// Raccourci « Ordres » : proposé dans Personnaliser la barre du bas (menu burger)
+// Raccourci « Ordres » : proposé dans Personnaliser la barre du bas (menu burger). Il porte aussi les alertes de prix.
 _NAV_PATH.orders='M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z';
 NAV_CATALOG.orders={ label:'Ordres', kind:'screen' };
 
@@ -459,7 +491,7 @@ setTimeout(()=>{
 // ALERTES DE PRIX — stockées à part (clé patrimoine-alerts) : [{id, ticker, name, dir:'above'|'below', price, createdAt}]
 // Une alerte est « déclenchée » tant que le dernier cours connu (position d'un compte, sinon liste de suivi) est au-dessus / en dessous du prix.
 // Vérification à l'ouverture de l'appli et à chaque actualisation des cours seulement : rien n'est surveillé application fermée.
-// Le compteur de la barre du bas (raccourci « Alertes ») indique le nombre d'alertes déclenchées.
+// Affichées dans la moitié basse de l'écran « Ordres » ; le compteur de la barre du bas (raccourci « Ordres ») additionne ordres en cours et alertes déclenchées.
 // ═══════════════════════════════════════════════
 const STORE_ALERTS='patrimoine-alerts';
 function loadAlerts(){
@@ -478,42 +510,6 @@ function alertHit(a){
   return a.dir==='above'?q.p>=a.price:q.p<=a.price;
 }
 function alertsTriggeredCount(){ return loadAlerts().filter(alertHit).length; }
-
-function renderAlerts(){
-  const list=loadAlerts().map(a=>({a,q:_altQuote(a.ticker),hit:alertHit(a)})).sort((x,y)=>(y.hit-x.hit)||(x.a.createdAt-y.a.createdAt));
-  const cards=list.map(({a,q,hit})=>{
-    const ccy=q?q.ccy:'EUR', above=a.dir==='above';
-    return `<div style='background:var(--card2);border:1px solid ${hit?'#F59E0B':'var(--border)'};border-radius:var(--r);padding:14px;margin-bottom:10px'>
-      <div style='display:flex;justify-content:space-between;align-items:center;gap:8px'>
-        <div style='font-weight:800;font-size:15px'>${esc(a.ticker)} <span style='font-size:12px;font-weight:600;color:var(--text2)'>${esc(a.name||'')}</span></div>
-        <span style='font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;${hit?'background:rgba(245,158,11,.15);color:#F59E0B':'background:var(--card);color:var(--text2)'}'>${hit?'Déclenchée':'En attente'}</span>
-      </div>
-      <div style='margin-top:8px;font-size:14px'>Cours ${above?'≥':'≤'} <b>${maskedNative(a.price,ccy)}</b></div>
-      <div class='t-sm' style='margin-top:2px'>${q?'Cours actuel : '+maskedNative(q.p,q.ccy):'Cours actuel inconnu (titre absent des comptes et du suivi)'}</div>
-      <div style='margin-top:10px'><button class='confirm-cancel' data-adel='${esc(a.id)}' style='height:38px;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer'>Supprimer</button></div>
-    </div>`;
-  }).join('');
-  return `${renderTopBar()}
-  <div style='padding:4px 16px 110px'>
-    <div style='font-size:20px;font-weight:800;margin:6px 0 4px'>Alertes</div>
-    <div class='t-sm' style='margin-bottom:14px'>Alertes de prix, vérifiées à l'ouverture et à chaque actualisation des cours (pas quand l'appli est fermée). Le compteur de la barre du bas indique les alertes déclenchées.</div>
-    <button class='form-submit' data-anew='1' style='margin:0 0 10px'>+ Nouvelle alerte</button>
-    <div data-ago-orders='1' class='tap' style='display:inline-block;margin:0 0 14px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>Ordres en cours →</div>
-    ${cards||`<div class='t-sm' style='text-align:center;padding:30px 0'>Aucune alerte.</div>`}
-  </div>`;
-}
-function bindAlerts(el){
-  el.onclick=e=>{
-    if(e.target.closest('[data-anew]')){ openAltNew(); return; }
-    if(e.target.closest('[data-ago-orders]')){ go('orders'); return; }
-    const d=e.target.closest('[data-adel]');
-    if(d){
-      saveAlerts(loadAlerts().filter(a=>a.id!==d.dataset.adel));
-      renderScreen('alerts');
-      toast('Alerte supprimée');
-    }
-  };
-}
 
 let _altDir='above';
 function _altTickers(){
@@ -558,12 +554,9 @@ document.getElementById('alt-submit').addEventListener('click',()=>{
   all.push({id:'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),ticker,name:q?q.name:'',dir:_altDir,price,createdAt:Date.now()});
   saveAlerts(all);
   closeAltNew();
-  if(S.screen==='alerts') renderScreen('alerts'); else renderNav();
+  if(S.screen==='orders') renderScreen('orders'); else renderNav();
   toast('Alerte enregistrée ✓');
 });
-
-_NAV_PATH.alerts='M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
-NAV_CATALOG.alerts={ label:'Alertes', kind:'screen' };
 
 // Rappel à l'ouverture : alertes de prix déjà déclenchées
 setTimeout(()=>{
