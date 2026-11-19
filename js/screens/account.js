@@ -17,6 +17,25 @@ function accHeroValHTML(acc) {
   return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
 }
 
+// Relevé de référence : dernière régularisation de nature 'baseline' (solde de relevé, origine de l'écart inconnue)
+// datée au plus tard d'aujourd'hui. Elle devient le point de départ de la performance : l'écart n'est ni un gain ni un apport.
+function accPerfReleve(acc, today) {
+  return (acc.cashAdjust || []).reduce((last, a) =>
+    a?.nature === 'baseline' && a.date && a.date <= today && (!last || a.date > last.date) ? a : last, null);
+}
+// Performance depuis le relevé : valeur totale du compte sur le relevé comme valeur de départ, puis flux postérieurs pondérés.
+function accPerfFromReleve(acc, releve, today = _dayKey(Date.now())) {
+  const amount = releve.totalAtDate;
+  const opening = Number.isFinite(amount) ? toRefCcy(amount, releve.totalCcy) : null;
+  const pct = today > releve.date && opening > 0 ? accDietz(acc, releve.date, opening, false) : null;
+  return { opening, pct };
+}
+// Variation de l'indice depuis une date, seulement si la série couvre réellement la période (sinon null, pas d'approximation)
+function accReleveBenchmarkRet(series, fromDay) {
+  if (!series?.length || series[0].d > fromDay || series.at(-1).d <= fromDay) return null;
+  return benchRet(series, fromDay);
+}
+
 // Performance d'un compte = valorisation actuelle − apports nets (apports − retraits saisis).
 // Perf. annuelle moyenne = taux annuel équivalent sur les apports nets depuis la date de début du compte
 // (acc.startDate, sinon date la plus ancienne parmi apports et mouvements) ; calculée seulement à partir d'un an.
@@ -144,7 +163,7 @@ function accDietz(acc, t0Day, v0, inclusive) {
   if (!(T > t0)) return null;
   let F = 0, W = 0;
   (acc.cashflows || []).forEach(c => {
-    if (!c.date || (inclusive ? c.date < t0Day : c.date <= t0Day)) return;
+    if (!c.date || c.date > _dayKey(T) || !['DEP', 'WIT'].includes(c.type) || (inclusive ? c.date < t0Day : c.date <= t0Day)) return;
     const a = (c.type === 'WIT' ? -1 : 1) * toRefCcy(c.amount, ccy);
     const t = new Date(c.date + 'T00:00:00').getTime();
     F += a; W += a * Math.max(0, (T - t) / (T - t0));
@@ -161,7 +180,28 @@ function accBenchHTML(acc, perf) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
   const chip = `<span id='js-bm-btn' class='tap' style='padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer'>${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
   if (!b) return `<div class='t-sm' style='margin-top:8px'>${chip}</div>`;
+  const today = _dayKey(Date.now());
+  const releve = accPerfReleve(acc, today);
   const ser = benchSeries(key);
+  if (releve) {
+    const { opening, pct } = accPerfFromReleve(acc, releve, today);
+    const pye = (Number(today.slice(0, 4)) - 1) + '-12-31';
+    let ytd = null;
+    if (releve.date === pye) ytd = pct;
+    else if (releve.date < pye && opening > 0) {
+      const v0 = accValueOnDay(acc, pye);
+      if (!v0.approx && v0.v > 0) ytd = accDietz(acc, pye, v0.v, false);
+    }
+    const comparable = b.ccy === S.currency || ser?.conv;
+    const ref = day => comparable ? accReleveBenchmarkRet(ser?.series, day) : null;
+    return `<div style='margin-top:8px'>${chip}
+      ${ytd == null ? '<div class="t-sm">YTD : historique insuffisant</div>' : _bmRow('YTD', ytd, ref(pye), b.label)}
+      <div class='t-sm'>Depuis le début : historique insuffisant avant le relevé</div>
+      ${pct == null ? `<div class='t-sm'>Depuis le relevé du ${fmtDate(releve.date)} : en attente d’une valorisation ultérieure et d’une base positive</div>` : _bmRow('Depuis le relevé du ' + fmtDate(releve.date), pct, ref(releve.date), b.label)}
+      ${!comparable || !ser ? '<div class="t-sm">Indice indisponible dans la devise du compte affiché.</div>' : ''}
+    </div>`;
+  }
+  if (!perf) return `<div class='t-sm' style='margin-top:8px'>${chip} · Historique insuffisant pour la performance du compte</div>`;
   if (!ser) {
     const tried = _benchTried[key + '|' + (perf.start || '')];
     return `<div class='t-sm' style='margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>${chip}<span>${tried ? 'indice indisponible pour le moment' : 'chargement de l\'indice…'}</span></div>`;
@@ -194,8 +234,10 @@ function renderAccount() {
   const cash=accCash(acc);                    // liquidités non investies
   const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
   const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
-  const perf=accPerfInfo(acc);                // gain vs apports/retraits (si des apports sont saisis)
-  const gainVal=perf?perf.gain:totPnl, gainPct=perf?perf.pct:totPnlPct;
+  const releve=accPerfReleve(acc,_dayKey(Date.now()));   // solde de relevé = nouveau point de départ
+  const perf=releve?null:accPerfInfo(acc);    // gain vs apports/retraits (si des apports sont saisis)
+  const gainVal=perf?perf.gain:totPnl;
+  const gainPct=releve?accPerfFromReleve(acc,releve).pct:(perf?perf.pct:totPnlPct);
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
@@ -224,15 +266,15 @@ function renderAccount() {
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
     ${hasCash?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
     <div class="stat-row">
-      <div class="stat-box"><div class="t-label">${perf?'Gain total':'P&amp;L Total'}</div>
+      <div class="stat-box"><div class="t-label">${releve?'P&amp;L des titres':perf?'Gain total':'P&amp;L Total'}</div>
         <div style="font-size:15px;font-weight:800" class="${gainVal>=0?'t-gain':'t-loss'} t-num">${gainVal>=0?'+':''}${masked(gainVal)}</div></div>
-      <div class="stat-box"><div class="t-label">Performance</div>
-        <div style="font-size:15px;font-weight:800" class="${gainPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(gainPct)}</div></div>
+      <div class="stat-box"><div class="t-label">${releve?'Perf. depuis le relevé du '+fmtDate(releve.date):'Performance'}</div>
+        <div style="font-size:15px;font-weight:800" class="${gainPct==null?'':gainPct>=0?'t-gain':'t-loss'} t-num">${gainPct==null?'—':fmtPct(gainPct)}</div></div>
       <div class="stat-box"><div class="t-label">Variation J</div>
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
     ${perf?`<div class="t-sm" style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Perf. annuelle moy. : <b class="${perf.annual!=null&&perf.annual<0?'t-loss':'t-gain'}">${perf.annual!=null?fmtPct(perf.annual)+' / an':'—'}</b></span><span>· depuis ${perf.start?fmtDate(perf.start):'—'}${perf.auto?' (auto)':''}${perf.years!=null&&perf.years<1?' · calcul après 1 an':''}</span><span id="js-start-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Date de début</span></div>`:''}
-    ${perf?accBenchHTML(acc,perf):''}
+    ${accBenchHTML(acc,perf)}
     ${hasCash?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
@@ -610,9 +652,10 @@ document.getElementById('bm-ok').addEventListener('click',()=>{
 registerModal('bm-sheet', closeBenchSheet);
 
 // ── Régularisation des liquidités (soldes réels par devise à une date) ──
-// acc.cashAdjust = [{ id, date, balances:{EUR:…,USD:…} }] ; voir PU.accCash dans utils.js.
-// Écart avec le calcul : soit un gain/frais (reste dans la performance), soit un apport/retrait manquant
-// (crée un apport ou retrait à cette date, repéré par adjId, pour ne pas fausser la performance).
+// acc.cashAdjust = [{ id, date, balances:{EUR:…,USD:…}, nature, totalAtDate?, totalCcy? }] ; voir PU.accCash dans utils.js.
+// nature 'baseline' : solde de relevé, origine de l'écart inconnue → nouveau point de départ de la performance (valeur totale du compte saisie).
+// nature 'gain' : écart = gain, intérêts ou frais (reste dans la performance).
+// nature 'flow' : écart = apport/retrait manquant (crée un apport ou retrait à cette date, repéré par adjId, hors performance).
 let _caAccId=null;
 const CASH_CCYS=['EUR','USD','GBP','CHF','JPY'];
 (function(){
@@ -629,9 +672,12 @@ const CASH_CCYS=['EUR','USD','GBP','CHF','JPY'];
     <div class='t-sm' id='ca-sum' style='margin:6px 0 10px'></div>
     <div class='form-row'><div class='form-field'><div class='form-label'>Nature de l'écart avec le calcul</div>
       <select class='form-input' id='ca-nature' style='cursor:pointer'>
+        <option value='baseline'>Solde du relevé, origine de l’écart inconnue (nouveau point de départ)</option>
         <option value='gain'>Gain, intérêts ou frais (compte dans la performance)</option>
         <option value='flow'>Apport ou retrait non saisi (hors performance)</option>
       </select></div></div>
+    <div class='form-row' id='ca-total-row'><label class='form-field'><span class='form-label' id='ca-total-label'>Valeur totale du compte sur le relevé (titres + liquidités)</span><input class='form-input' type='number' id='ca-total' step='any' inputmode='decimal'></label></div>
+    <div class='t-sm' id='ca-flow-help' hidden>N’utilise cette option que si l’écart affiché correspond au montant du mouvement réel et si le relevé est daté du jour de ce mouvement. Sinon, saisis le mouvement à sa date via « Apports / Retraits », puis régularise.</div>
     <button class='form-submit' id='ca-ok'>Enregistrer</button>
     <div id='ca-list' style='margin-top:14px'></div>
   </div>
@@ -656,6 +702,10 @@ function _caCompute(acc){
 function _caUpdate(){
   const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
   const r=_caCompute(acc);
+  const nature=document.getElementById('ca-nature').value;
+  document.getElementById('ca-total-row').hidden=nature!=='baseline';
+  document.getElementById('ca-total-row').style.display=nature==='baseline'?'':'none';
+  document.getElementById('ca-flow-help').hidden=nature!=='flow';
   document.getElementById('ca-sum').innerHTML=`Total saisi : <b>${fmtCur(r.total)}</b> · calcul actuel à cette date : ${fmtCur(r.before)} · écart : <b>${r.diff>=0?'+':''}${fmtCur(r.diff)}</b>`;
 }
 function _caList(acc){
@@ -691,7 +741,9 @@ function openCashAdjust(acc){
     const el=document.getElementById('ca-'+ccy);
     if(el&&cash) el.value=+(cash*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1)).toFixed(2);
   }
-  document.getElementById('ca-nature').value='gain';
+  document.getElementById('ca-nature').value='baseline';
+  document.getElementById('ca-total-label').textContent=`Valeur totale du compte sur le relevé (titres + liquidités, en ${S.currency})`;
+  document.getElementById('ca-total').value='';
   _caList(acc); _caUpdate();
   document.getElementById('ca-bg').classList.add('show');
   document.getElementById('ca-sheet').classList.add('show');
@@ -701,17 +753,20 @@ function closeCashAdjust(){
   document.getElementById('ca-sheet').classList.remove('show');
 }
 document.getElementById('ca-bg').addEventListener('click',closeCashAdjust);
+document.getElementById('ca-nature').addEventListener('change',_caUpdate);
 ['ca-date',...CASH_CCYS.map(c=>'ca-'+c)].forEach(id=>document.getElementById(id).addEventListener('input',_caUpdate));
 document.getElementById('ca-ok').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_caAccId); if(!acc) return;
   const r=_caCompute(acc);
   if(r.d>_dayKey(Date.now())){ toast('La date ne peut pas être dans le futur'); return; }
   const nature=document.getElementById('ca-nature').value;
+  const totalAtDate=document.getElementById('ca-total').valueAsNumber;
+  if(nature==='baseline' && !Number.isFinite(totalAtDate)){ toast('Indique la valeur totale du compte sur le relevé'); return; }
   const rest=_caRest(acc,r.d);
   acc.cashAdjust=rest.cashAdjust;
   acc.cashflows=rest.cashflows;
   const adjId='ca'+Date.now().toString(36);
-  acc.cashAdjust.push({id:adjId,date:r.d,balances:r.bal});
+  acc.cashAdjust.push({id:adjId,date:r.d,balances:r.bal,nature,...(nature==='baseline'?{totalAtDate,totalCcy:S.currency}:{})});
   if(nature==='flow' && Math.abs(r.diff)>=0.005){
     const ccy=acc.currency||S.currency;
     const amt=Math.abs(r.diff)*(FX_RATES[ccy]||1)/(FX_RATES[S.currency]||1);
@@ -746,7 +801,11 @@ SCREEN_BIND.account = function (el, id) {
     // Indice de comparaison : téléchargement de la série si absente ou périmée
     if(acc && !S.isDemo){
       const p=accPerfInfo(acc), key=accBenchmarkKey(acc);
-      if(p && key && benchNeedsLoad(key,p.start)) loadBenchmark(key,p.start);
+      const releve=accPerfReleve(acc,_dayKey(Date.now()));
+      const pye=(new Date().getFullYear()-1)+'-12-31';
+      const start=releve?.date || p?.start;
+      const historyStart=start && start>pye && releve ? pye : start;
+      if(historyStart && key && benchNeedsLoad(key,historyStart)) loadBenchmark(key,historyStart);
     }
 
     // Search
