@@ -3,21 +3,28 @@
 
 // ═══════════════════════════════════════════════
 // RÈGLES COMPTE ↔ TYPE D'ACTIF
-// Compte Crypto : crypto uniquement. PEA / PEA-PME : actions et ETF. CTO, assurance-vie, PER, Pilier 3a :
-// actions, ETF, obligations et cash (pas de crypto). Tout autre type de compte : aucune restriction.
+// Compte Crypto : crypto uniquement. PEA / PEA-PME : actions (Espace économique européen) et ETF. Compte-titres, assurance-vie, PER,
+// épargne salariale, Pilier 3a : actions, ETF, obligations et cash (pas de crypto). Tout autre type de compte : aucune restriction.
 // ═══════════════════════════════════════════════
 function allowedAssetTypes(accType){
   const t=(accType||'').toLowerCase();
   if(/crypto/.test(t)) return ['Crypto'];
   if(/\bpea\b/.test(t)) return ['Action','ETF'];
-  if(/\bcto\b|assurance|\bper\b|pilier|\b3a\b/.test(t)) return ['Action','ETF','Obligation','Cash'];
+  if(/compte-titres|titres ordinaire|\bcto\b|assurance|\bper\b|retraite|pilier|\b3a\b|épargne salariale|\bpee\b|perco/.test(t)) return ['Action','ETF','Obligation','Cash'];
   return null;
 }
-// Message d'erreur si `type` n'est pas autorisé sur ce compte, sinon chaîne vide
-function assetTypeError(acc,type){
+// Pays dont les actions sont éligibles au PEA (Espace économique européen, en minuscules ; « europe » = libellé générique des fonds)
+const PEA_COUNTRIES=['france','allemagne','germany','pays-bas','netherlands','belgique','belgium','italie','italy','espagne','spain','portugal','irlande','ireland','luxembourg','finlande','finland','autriche','austria','grèce','greece','danemark','denmark','suède','sweden','norvège','norway','islande','iceland','liechtenstein','pologne','poland','tchéquie','hongrie','hungary','europe'];
+// Message d'erreur si `type` (et, pour une action de PEA, `country`) n'est pas autorisé sur ce compte, sinon chaîne vide
+function assetTypeError(acc,type,country){
   const ok=allowedAssetTypes(acc&&acc.type);
-  if(!ok||ok.includes(type)) return '';
-  return 'Compte « '+acc.type+' » : '+type+' non autorisé (autorisés : '+ok.join(', ')+')';
+  if(ok&&!ok.includes(type)) return 'Compte « '+acc.type+' » : '+type+' non autorisé (autorisés : '+ok.join(', ')+')';
+  if(type==='Action'&&/\bpea\b/.test(((acc&&acc.type)||'').toLowerCase())){
+    const c=(country||'').trim().toLowerCase();
+    if(!c||c==='inconnu') return 'PEA : renseigne le pays de la société (France ou Espace économique européen)';
+    if(!PEA_COUNTRIES.includes(c)) return 'PEA : « '+country+' » n\'est pas éligible (actions de l\'Espace économique européen uniquement)';
+  }
+  return '';
 }
 // Désactive les types interdits dans une liste déroulante ; keepValue = ne pas toucher à la valeur courante
 function _applyAssetTypeRules(selectEl,acc,keepValue){
@@ -182,8 +189,8 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   if(!ticker||!(qty>0)||!(pru>0)){toast('Ticker, quantité et PRU requis');return;}
   const acc=S.accounts.find(a=>a.id===_posAccId);
   if(!acc) return;
-  // Type d'actif non autorisé sur ce type de compte (le titre résolu en ligne peut imposer son type)
-  const typeErr=assetTypeError(acc,type);
+  // Type d'actif (ou pays, pour une action de PEA) non autorisé sur ce type de compte (le titre résolu en ligne peut imposer son type)
+  const typeErr=assetTypeError(acc,type,country);
   if(typeErr){toast(typeErr);return;}
   if(acc.holdings.find(h=>h.ticker===ticker)){toast('Ce ticker existe déjà dans ce compte');return;}
   const hid=ticker+'_'+Date.now().toString(36);
@@ -232,10 +239,11 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
   const h=acc?.holdings.find(h=>h.id===_ehHoldId); if(!h) return;
   const newTicker=document.getElementById('eh-ticker').value.trim().toUpperCase();
   if(!newTicker){toast('Ticker requis');return;}
-  // Changement de type vers un type interdit sur ce compte : refusé (un type déjà présent n'est pas remis en cause)
+  // Changement de type ou de pays vers une combinaison interdite sur ce compte : refus (un titre déjà présent n'est pas remis en cause tant qu'on n'y touche pas)
   const newType=document.getElementById('eh-type').value;
-  if(newType!==h.type){
-    const typeErr=assetTypeError(acc,newType);
+  const newCountry=document.getElementById('eh-country').value.trim()||h.country;
+  if(newType!==h.type||newCountry!==h.country){
+    const typeErr=assetTypeError(acc,newType,newCountry);
     if(typeErr){toast(typeErr);return;}
   }
   if(newTicker!==h.ticker){
