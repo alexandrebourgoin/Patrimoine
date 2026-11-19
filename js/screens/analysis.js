@@ -85,8 +85,17 @@ function analysisData() {
       bySec[s] = (bySec[s] || 0) + hv;
     });
   });
+  // Immobilier manuel : on ajoute la valeur nette (valeur estimée − capital restant dû), une seule fois au patrimoine global.
+  const properties = typeof loadImmo === 'function' ? loadImmo().filter(p => p.buyDate && p.price > 0) : [];
+  const immoNet = properties.reduce((s, p) => s + immoCalc(p).equity, 0);
+  if (properties.length) {
+    byPocket.Immobilier = (byPocket.Immobilier || 0) + immoNet;
+    byAsset.Immobilier = (byAsset.Immobilier || 0) + immoNet;
+    byAccType.Immobilier = (byAccType.Immobilier || 0) + immoNet;
+    tot += immoNet;
+  }
   const totRaw = Object.values(byRaw).reduce((s, v) => s + v, 0);
-  return { accs, tot, totRaw, byPocket, byAsset, byAccType, byRaw, byGeo, bySec };
+  return { accs, propertyCount: properties.length, tot, totRaw, byPocket, byAsset, byAccType, byRaw, byGeo, bySec };
 }
 
 function buildSegs(obj, colors) {
@@ -134,18 +143,19 @@ function barList(obj) {
 
 function renderAnalysis() {
   const d = analysisData();
-  if (!d.accs.length || !(d.tot > 0)) return `${renderTopBar()}<div class="analysis-top"><div class="t-title">Analyse</div></div>
+  if (!(d.tot > 0)) return `${renderTopBar()}<div class="analysis-top"><div class="t-title">Analyse</div></div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
     </div>`;
   const sec = t => `<div class="t-section px" style="padding-bottom:10px">${t}</div>`;
   const fold = (t, inner) => `<details style="margin:10px 20px"><summary class="t-section" style="cursor:pointer;padding:8px 0">${t}</summary>${inner}</details>`;
+  const subtitle = `${d.accs.length} compte${d.accs.length===1?'':'s'}${d.propertyCount ? ` · ${d.propertyCount} bien${d.propertyCount===1?'':'s'} immobilier${d.propertyCount===1?'':'s'}` : ''} · comment le patrimoine est placé aujourd'hui`;
   return `<div class="analysis-top anim">${renderTopBar()}</div>
   <div style="margin:6px 20px 16px;padding:16px;border-radius:16px;background:var(--card);border:1px solid var(--border)">
     <div class="t-label">Patrimoine total</div>
     <div style="font-size:28px;font-weight:800;margin-top:4px" class="t-num">${masked(d.tot)}</div>
-    <div class="t-sm" style="margin-top:2px">${d.accs.length} compte${d.accs.length>1?'s':''} · comment il est placé aujourd'hui</div>
+    <div class="t-sm" style="margin-top:2px">${subtitle}</div>
     <div id="js-go-proj" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">DCA et projection →</div>
   </div>
   ${sec('Grandes classes')}
@@ -227,7 +237,7 @@ function _projK(v) {
 // Corps de la projection (sans en-tête) : résumé, hypothèses modifiables, tableau 1 à 20 ans
 function projectionBodyHTML() {
   const d = analysisData();
-  const st = typeof dcaStats === 'function' ? dcaStats() : null, plan = st && st.current, C = plan ? plan.budget : 0;
+  const st = typeof dcaStats === 'function' ? dcaStats() : null, plan = st && st.current, C = plan ? st.current.budget : 0;
   const set = projSettings();
   const liq = d.byPocket['Liquidités'] || 0, risk = d.tot - liq;
   const val = (n, dr) => projFV(liq, 0, set.rl, 12 * n) + projFV(risk, C, Math.max(-50, set.rr + dr), 12 * n);
@@ -254,7 +264,7 @@ function projectionBodyHTML() {
   </div>
   <div class="t-sm px" style="padding:12px 20px 10px">Central = ${set.rr} %/an sur les actifs risqués, prudent ${Math.max(-50, set.rr - 3)} %, optimiste ${set.rr + 3} %. Le DCA est supposé investi en actifs risqués ; les liquidités progressent à ${set.rl} %/an. Ni frais, ni impôts, ni inflation : ce sont des hypothèses, pas des prévisions.</div>`;
 }
-// Hypothèses de rendement : enregistrées puis `after()` redéssine l'écran qui affiche la projection
+// Hypothèses de rendement : enregistrées puis `after()` redessine l'écran qui affiche la projection
 function bindProjectionInputs(el, after) {
   ['rl', 'rr'].forEach(k => el.querySelector('#proj-' + k)?.addEventListener('change', e => {
     const s = projSettings();
