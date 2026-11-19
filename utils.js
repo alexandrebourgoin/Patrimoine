@@ -59,20 +59,24 @@
   }
 
   // ── Trésorerie d'un compte ──────────────────────────────────────────────────────
+  // Les liquidités sont tenues PAR DEVISE (poches) : un compte-titres peut avoir des euros, des dollars, etc.
   // `upTo` (clé jour 'YYYY-MM-DD', optionnel) borne le calcul à une date : utilisé pour reconstruire
   // la valeur du patrimoine à une date passée. `after` (optionnel, exclusif) ignore tout ce qui est daté
   // de cette date ou avant : sert à repartir d'une régularisation (acc.cashAdjust).
 
-  // Apports − retraits, saisis dans la devise du compte, convertis en devise appli.
+  // Devise d'un apport/retrait : celle saisie (c.ccy), sinon celle du compte.
+  function cfCcy(acc, c) { return c.ccy || acc.currency || 'EUR'; }
+
+  // Apports − retraits, chacun dans sa devise, convertis en devise appli.
   function accCashflowNet(acc, fxRates, appCcy = 'EUR', upTo, after) {
     let net = 0;
     (acc.cashflows || []).forEach(c => {
       if (upTo && c.date > upTo) return;
       if (after && c.date <= after) return;
       const a = +c.amount || 0;
-      net += (c.type === 'WIT' ? -a : a);
+      net += toRefCcy(c.type === 'WIT' ? -a : a, cfCcy(acc, c), fxRates, appCcy);
     });
-    return toRefCcy(net, acc.currency, fxRates, appCcy);
+    return net;
   }
 
   // Montant net sorti de la trésorerie pour investir : achats − ventes − dividendes
@@ -105,31 +109,90 @@
     return best;
   }
 
-  // Liquidités disponibles sur le compte (devise appli).
-  // Sans régularisation : apports nets − investi net, et 0 tant qu'aucun apport/retrait n'est saisi
-  // (le compte n'est alors pas suivi en trésorerie : ses titres seuls font le solde, comportement historique).
-  // Avec régularisation : soldes saisis (par devise, convertis) à la date de la dernière régularisation,
-  // puis apports/retraits et mouvements postérieurs (fin de journée : les mouvements du jour sont inclus dans le solde saisi).
+  // Poches de liquidités par devise (montants dans la devise de chaque poche).
+  // Sans régularisation : apports/retraits (par devise) − achats + ventes + dividendes (devise du titre) ; vide tant qu'aucun
+  // apport/retrait n'est saisi (le compte n'est alors pas suivi en trésorerie : ses titres seuls font le solde).
+  // Avec régularisation : soldes saisis à la date de la dernière régularisation, puis mouvements postérieurs.
+  function accCashByCcy(acc, upTo) {
+    if (!acc) return {};
+    const anchor = accCashAnchor(acc, upTo), after = anchor ? anchor.date : null;
+    if (!anchor && !(acc.cashflows && acc.cashflows.length)) return {};
+    const pk = {};
+    const add = (ccy, v) => { pk[ccy] = (pk[ccy] || 0) + v; };
+    if (anchor) Object.entries(anchor.balances || {}).forEach(([c, v]) => add(c, +v || 0));
+    (acc.cashflows || []).forEach(c => {
+      if (upTo && c.date > upTo) return;
+      if (after && c.date <= after) return;
+      const a = +c.amount || 0;
+      add(cfCcy(acc, c), c.type === 'WIT' ? -a : a);
+    });
+    (acc.holdings || []).forEach(h => (h.transactions || []).forEach(tx => {
+      if (upTo && tx.date > upTo) return;
+      if (after && tx.date <= after) return;
+      const amt = (+tx.qty || 0) * (+tx.price || 0);
+      if (tx.type === 'BUY') add(h.currency || 'EUR', -amt);
+      else if (tx.type === 'SELL' || tx.type === 'DIV') add(h.currency || 'EUR', amt);
+    }));
+    return pk;
+  }
+
+  // Liquidités disponibles sur le compte (devise appli) = somme des poches converties.
   function accCash(acc, fxRates, appCcy = 'EUR', upTo) {
     if (!acc) return 0;
-    const anchor = accCashAnchor(acc, upTo);
-    if (anchor) {
-      let base = 0;
-      Object.entries(anchor.balances || {}).forEach(([ccy, v]) => {
-        base += toRefCcy(+v || 0, ccy, fxRates, appCcy);
-      });
-      return +(base
-             + accCashflowNet(acc, fxRates, appCcy, upTo, anchor.date)
-             - accInvestedNet(acc, fxRates, appCcy, upTo, anchor.date)).toFixed(2);
-    }
-    if (!acc.cashflows || !acc.cashflows.length) return 0;
-    return +(accCashflowNet(acc, fxRates, appCcy, upTo)
-           - accInvestedNet(acc, fxRates, appCcy, upTo)).toFixed(2);
+    const pk = accCashByCcy(acc, upTo);
+    return +Object.entries(pk).reduce((s, [c, v]) => s + toRefCcy(v, c, fxRates, appCcy), 0).toFixed(2);
   }
 
   // Solde du compte (devise appli) = valeur des titres + liquidités non investies.
   function accTotal(acc, fxRates, appCcy = 'EUR') {
     return +(accSum(acc.holdings || []) + accCash(acc, fxRates, appCcy)).toFixed(2);
+  }
+
+  // Flux EXTERNES d'un compte (apports/retraits réels) pour calculer sa performance.
+  // On rejoue le compte dans l'ordre chronologique avec des poches par devise :
+  //  - 'cf'      : apport / retrait saisi ;
+  //  - 'funding' : achat (ou retrait) qui dépasse les liquidités connues → apport implicite à la date de l'achat,
+  //                sans quoi des titres achetés « sans apport saisi » compteraient comme un gain ;
+  //  - 'adj'     : écart d'une régularisation (solde saisi − solde calculé), traité comme un apport/retrait, jamais comme un gain.
+  // Renvoie { flows:[{date, amt (devise appli), kind}], cashNow, cashAt(day) } : cashAt = liquidités en fin de journée `day`.
+  function accFlowSim(acc, fxRates, appCcy = 'EUR') {
+    const conv = (v, c) => toRefCcy(v, c, fxRates, appCcy);
+    const evs = [];
+    (acc.cashflows || []).forEach(c => {
+      if (c.date) evs.push({ d: c.date, o: 0, k: 'cf', ccy: cfCcy(acc, c), a: (c.type === 'WIT' ? -1 : 1) * (+c.amount || 0) });
+    });
+    (acc.holdings || []).forEach(h => (h.transactions || []).forEach(t => {
+      if (!t.date) return;
+      const amt = (+t.qty || 0) * (+t.price || 0);
+      evs.push({ d: t.date, o: 1, k: 'tx', ccy: h.currency || 'EUR', a: t.type === 'BUY' ? -amt : (t.type === 'SELL' || t.type === 'DIV') ? amt : 0 });
+    }));
+    (acc.cashAdjust || []).forEach(a => { if (a && a.date) evs.push({ d: a.date, o: 2, k: 'adj', bal: a.balances || {} }); });
+    evs.sort((x, y) => x.d < y.d ? -1 : x.d > y.d ? 1 : x.o - y.o);
+    let pk = {};
+    const total = () => Object.entries(pk).reduce((s, [c, v]) => s + conv(v, c), 0);
+    const flows = [], snaps = [];
+    evs.forEach(e => {
+      if (e.k === 'adj') {
+        const base = Object.entries(e.bal).reduce((s, [c, v]) => s + conv(+v || 0, c), 0);
+        const jump = base - total();
+        if (Math.abs(jump) > 0.005) flows.push({ date: e.d, amt: jump, kind: 'adj' });
+        pk = {};
+        Object.entries(e.bal).forEach(([c, v]) => { pk[c] = +v || 0; });
+      } else {
+        pk[e.ccy] = (pk[e.ccy] || 0) + e.a;
+        if (e.k === 'cf') flows.push({ date: e.d, amt: conv(e.a, e.ccy), kind: 'cf' });
+        if (e.a < 0) {
+          const t = total();
+          if (t < -0.005) {
+            flows.push({ date: e.d, amt: -t, kind: 'funding' });
+            pk[e.ccy] += toRefCcy(-t, appCcy, fxRates, e.ccy);
+          }
+        }
+      }
+      snaps.push({ d: e.d, t: total() });
+    });
+    const cashAt = day => { let t = 0; for (const s of snaps) { if (s.d <= day) t = s.t; else break; } return t; };
+    return { flows, cashNow: total(), cashAt };
   }
 
   function computeRealizedPnL(h) {
@@ -196,7 +259,7 @@
 
   root.PU = {
     mkTx, fmtPct, fmtDate, initials, fmtNative, fmtCur, esc, dayKey,
-    toRefCcy, accSum, accCashflowNet, accInvestedNet, accCashAnchor, accCash, accTotal,
+    toRefCcy, accSum, accCashflowNet, accInvestedNet, accCashAnchor, accCashByCcy, accCash, accTotal, accFlowSim,
     computeRealizedPnL, recalcHolding, timeSince, fxSubText,
   };
 })(globalThis);
