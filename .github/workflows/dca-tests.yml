@@ -1,0 +1,82 @@
+name: DCA integration tests
+
+on:
+  push:
+    paths:
+      - '.github/workflows/dca-tests.yml'
+      - 'js/features/dca.js'
+      - 'tests/features/dca*.test.js'
+      - 'tests/helpers/**'
+      - 'utils.js'
+      - 'utils.test.js'
+      - 'package*.json'
+      - 'vitest.config.js'
+  pull_request:
+    paths:
+      - '.github/workflows/dca-tests.yml'
+      - 'js/features/dca.js'
+      - 'tests/features/dca*.test.js'
+      - 'tests/helpers/**'
+      - 'utils.js'
+      - 'utils.test.js'
+      - 'package*.json'
+      - 'vitest.config.js'
+
+permissions:
+  contents: read
+
+jobs:
+  dca-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run DCA regression tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- tests/features/dca --reporter=verbose 2>&1 | tee dca-test-results.log
+      - name: Retain test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dca-test-results
+          path: dca-test-results.log
+          if-no-files-found: warn
+          retention-days: 7
+  full-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run full test suite
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --reporter=verbose 2>&1 | tee full-test-results.log
+      - name: Retain full test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-test-results
+          path: full-test-results.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -159,7 +159,9 @@
       { ccy: 'USD', sym: '$' }, { ccy: 'EUR', sym: '€' },
       { ccy: 'GBP', sym: '£' }, { ccy: 'CHF', sym: 'Fr' }, { ccy: 'JPY', sym: '¥' },
     ];
-    const top2 = ALL.filter(p => p.ccy !== appCcy).slice(0, 2);
+    const top2 = ALL
+      .filter(p => p.ccy !== appCcy && Number.isFinite(fxRates[p.ccy]) && fxRates[p.ccy] > 0)
+      .slice(0, 2);
     return top2.map(p => {
       const r = (fxRates[p.ccy] || 1) / appFx;
       return `1 ${appCcy} = ${r >= 10 ? r.toFixed(2) : r.toFixed(4)} ${p.sym}`;
