@@ -106,6 +106,65 @@ function dcaBuildLines(draft, weights) {
   return lines;
 }
 
+// Une tentative automatique par ISIN et par mode durant la session.
+// Une nouvelle synchronisation manuelle peut retenter les recherches infructueuses.
+let _dcaResolving = false;
+const _dcaIsinTried = new Set();
+async function dcaResolveIsins(force = false) {
+  const result = { resolved: 0, conflicts: 0, failed: 0, cancelled: false };
+  if (_dcaResolving) return { ...result, pending: true };
+  const data = S.dca, demo = S.isDemo;
+  const current = () => S.dca === data && S.isDemo === demo;
+  if (typeof resolveIsinOnline !== 'function') {
+    if (force) toast('Résolution en ligne indisponible');
+    return { ...result, unavailable: true };
+  }
+  const key = isin => `${demo ? 'demo' : 'real'}:${isin}`;
+  const todo = [...new Set(data.plans.flatMap(plan => (plan.lines || [])
+    .filter(line => line && _isIsin(line.isin) && !line.resolved).map(line => line.isin)))]
+    .filter(isin => force || !_dcaIsinTried.has(key(isin)));
+  if (!todo.length) {
+    if (force) toast('Aucun ISIN à résoudre');
+    return result;
+  }
+  _dcaResolving = true;
+  try {
+    for (const isin of todo) {
+      if (!current()) { result.cancelled = true; return result; }
+      _dcaIsinTried.add(key(isin));
+      let info;
+      try { info = await resolveIsinOnline(isin); }
+      catch (error) {
+        if (!current()) { result.cancelled = true; return result; }
+        result.failed++;
+        continue;
+      }
+      if (!current()) { result.cancelled = true; return result; }
+      if (!info || typeof info.ticker !== 'string' || !info.ticker.trim()) { result.failed++; continue; }
+      let changed = false;
+      for (const plan of data.plans) {
+        const index = (plan.lines || []).findIndex(line => line && line.isin === isin && !line.resolved);
+        if (index < 0) continue;
+        try {
+          plan.lines = DCAAllocation.resolveLine(plan.lines, index, info);
+          result.resolved++;
+          changed = true;
+        } catch (error) {
+          if (error instanceof RangeError) result.conflicts++;
+          else result.failed++;
+        }
+      }
+      // Sauvegarde avant le prochain await, uniquement dans le mode encore actif.
+      if (changed) saveDca();
+    }
+    if (result.resolved && S.screen === 'dca') renderScreen('dca');
+    if (force || result.resolved || result.conflicts) {
+      toast(`${result.resolved} titre(s) reconnu(s) · ${result.conflicts} doublon(s) refusé(s) · ${result.failed} recherche(s) infructueuse(s)`);
+    }
+    return result;
+  } finally { _dcaResolving = false; }
+}
+
 function dcaPlanAt(ymd) {
   let p = null;
   for (const x of S.dca.plans) if (x.from <= ymd) p = x;
@@ -188,8 +247,10 @@ function renderDca() {
         <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(l.ticker) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
       <div class="dr-btn" data-plandel="${p.from}">✕</div>
     </div>`).join('');
+  const unresolved = S.dca.plans.some(p => (p.lines || []).some(l => l && l.isin && !l.resolved));
   return header + `
-  <div class="px" style="margin-top:14px"><button class="form-submit" id="js-dca-cfg" style="margin-top:0">Modifier le plan / changer de stratégie</button></div>
+  <div class="px" style="margin-top:14px"><button class="form-submit" id="js-dca-cfg" style="margin-top:0">Modifier le plan / changer de stratégie</button>
+  ${unresolved ? '<button type="button" class="form-submit" id="js-dca-sync">Résoudre les ISIN non reconnus</button>' : ''}</div>
   ${sec('Mon rythme')}
   <div class="s-group">
     <div class="s-item" style="cursor:default"><div class="flex1 s-name">Budget mensuel</div><div style="font-weight:800">${masked(plan.budget)}</div></div>
@@ -319,6 +380,7 @@ function saveDcaPlan() {
   const plan = { from: p.from, budget: p.budget, day: p.day, lines };
   S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
   saveDca(); closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
+  if (!S.isDemo) void dcaResolveIsins();
 }
 
 function openDcaGoalModal(id) {
@@ -397,6 +459,7 @@ document.getElementById('dca-modal-body').addEventListener('input', e => {
 function bindDca(el) {
   el.querySelector('#js-back')?.addEventListener('click', back);
   el.querySelector('#js-dca-cfg')?.addEventListener('click', openDcaPlanModal);
+  el.querySelector('#js-dca-sync')?.addEventListener('click', () => { void dcaResolveIsins(true); });
   el.querySelector('#js-goal-add')?.addEventListener('click', () => openDcaGoalModal());
   el.querySelectorAll('[data-goal]').forEach(i => i.addEventListener('click', () => openDcaGoalModal(i.dataset.goal)));
   el.querySelectorAll('[data-plandel]').forEach(b => b.addEventListener('click', () => {
@@ -410,5 +473,6 @@ function bindDca(el) {
     el.querySelectorAll('.dca-bar').forEach(x => x.style.opacity = x === b ? 1 : .55);
     el.querySelector('#dca-bar-info').innerHTML = `${_fmtDate(b.dataset.date)} · ${masked(+b.dataset.cumul)} cumulés`;
   }));
+  if (!S.isDemo) void dcaResolveIsins();
 }
 registerModal('dca-modal-sheet', closeDcaModal);
