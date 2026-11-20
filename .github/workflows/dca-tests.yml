@@ -5,8 +5,7 @@ on:
     paths:
       - '.github/workflows/dca-tests.yml'
       - 'js/features/dca.js'
-      - 'tests/features/dca-form.test.js'
-      - 'tests/features/dca-allocation.test.js'
+      - 'tests/features/dca*.test.js'
       - 'tests/helpers/**'
       - 'package*.json'
       - 'vitest.config.js'
@@ -14,8 +13,7 @@ on:
     paths:
       - '.github/workflows/dca-tests.yml'
       - 'js/features/dca.js'
-      - 'tests/features/dca-form.test.js'
-      - 'tests/features/dca-allocation.test.js'
+      - 'tests/features/dca*.test.js'
       - 'tests/helpers/**'
       - 'package*.json'
       - 'vitest.config.js'
@@ -38,11 +36,11 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Run DCA allocation and form tests
+      - name: Run DCA regression tests
         shell: bash
         run: |
           set -o pipefail
-          npm test -- tests/features/dca-form.test.js tests/features/dca-allocation.test.js --reporter=verbose 2>&1 | tee dca-test-results.log
+          npm test -- tests/features/dca.test.js tests/features/dca-form.test.js tests/features/dca-allocation.test.js --reporter=verbose 2>&1 | tee dca-test-results.log
       - name: Retain test log
         if: always()
         uses: actions/upload-artifact@v4
