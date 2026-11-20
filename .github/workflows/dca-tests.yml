@@ -7,6 +7,8 @@ on:
       - 'js/features/dca.js'
       - 'tests/features/dca*.test.js'
       - 'tests/helpers/**'
+      - 'utils.js'
+      - 'utils.test.js'
       - 'package*.json'
       - 'vitest.config.js'
   pull_request:
@@ -15,6 +17,8 @@ on:
       - 'js/features/dca.js'
       - 'tests/features/dca*.test.js'
       - 'tests/helpers/**'
+      - 'utils.js'
+      - 'utils.test.js'
       - 'package*.json'
       - 'vitest.config.js'
 
