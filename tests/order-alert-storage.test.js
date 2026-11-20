@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { createContext, runInContext } from 'node:vm';
+import { loadClassic } from './helpers/load-classic.js';
 
-const context = createContext({});
-runInContext(readFileSync(new URL('../js/features/order-alert-storage.js', import.meta.url), 'utf8'), context);
-const createStore = context.createOrderAlertStore;
+const { createOrderAlertStore: createStore } = loadClassic('js/features/order-alert-storage.js', {
+  exports: ['createOrderAlertStore'],
+});
 const order = { id: 'o1', accId: 'a', holdId: 'h', type: 'BUY', qty: 2, limit: 10 };
 const alert = { id: 'a1', ticker: 'TEST', dir: 'above', price: 20 };
 let data, storage, demo, real;
