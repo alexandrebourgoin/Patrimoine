@@ -1,18 +1,10 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { createContext, runInContext } from 'node:vm';
+import { describe, it, expect, vi } from 'vitest';
+import { loadClassic } from './helpers/load-classic.js';
 
-// Charge le vrai module classique sans lancer de navigateur.
-// Le DOM factice permet son initialisation, pas une validation de l’interface.
-const context = createContext({
-  document: {
-    getElementById: () => ({ addEventListener() {} }),
-    querySelectorAll: () => [],
-  },
-  registerModal() {},
+const { transactionHistoryIsValid: validate } = loadClassic('js/modals/order.js', {
+  globals: { registerModal() {} },
+  exports: ['transactionHistoryIsValid'],
 });
-runInContext(readFileSync(new URL('../js/modals/order.js', import.meta.url), 'utf8'), context);
-const validate = context.transactionHistoryIsValid;
 const tx = (date, type, qty) => ({ date, type, qty, price: 10 });
 
 describe('Contrôle chronologique des ventes', () => {
@@ -33,5 +25,79 @@ describe('Contrôle chronologique des ventes', () => {
     const before = transactions.map(item => ({ ...item }));
     expect(validate(transactions)).toBe(expected);
     expect(transactions).toEqual(before);
+  });
+});
+
+// Test du binding réel avec événements simulés, pas un test de navigateur.
+function stockFixture(confirm = true) {
+  const h = { id: 'h', transactions: [tx('2026-01-01', 'BUY', 10), tx('2026-01-02', 'SELL', 5)] };
+  const account = { id: 'a', holdings: [h] };
+  const handlers = {};
+  const elements = Object.fromEntries(['#js-add-movement', '#js-tx-list'].map(selector => [selector, {
+    addEventListener: (event, callback) => { handlers[selector] = callback; },
+  }]));
+  const globals = {
+    SCREEN_BIND: {},
+    S: { accountId: 'a', holdingId: 'h', accounts: [account] },
+    back() {},
+    openAddOrder: vi.fn(),
+    openEditTx: vi.fn(),
+    openConfirm: vi.fn((_message, callback) => { if (confirm) callback(); }),
+    transactionHistoryIsValid: validate,
+    fmtDate: value => value,
+    toast: vi.fn(),
+    recalcHolding: vi.fn(),
+    accTotal: vi.fn(() => 100),
+    renderScreen: vi.fn(),
+    refreshMain: vi.fn(),
+  };
+  loadClassic('js/screens/stock.js', { globals });
+  globals.SCREEN_BIND.stock({
+    querySelector: selector => elements[selector] || null,
+    querySelectorAll: () => [],
+  }, 'stock');
+  const remove = index => handlers['#js-tx-list']({
+    target: { closest: selector => selector === '.tx-del-btn' ? { dataset: { txidx: String(index) } } : null },
+  });
+  return { h, handlers, remove, globals };
+}
+
+describe('Actions de la fiche titre', () => {
+  it('ouvre la modale existante pour le compte et le titre courants', () => {
+    const f = stockFixture();
+    f.handlers['#js-add-movement']();
+    expect(f.globals.openAddOrder).toHaveBeenCalledWith('a', 'h');
+  });
+
+  it('refuse de supprimer un achat nécessaire à une vente ultérieure', () => {
+    const f = stockFixture();
+    const before = [...f.h.transactions];
+    f.remove(0);
+    expect(f.h.transactions).toEqual(before);
+    expect(f.globals.recalcHolding).not.toHaveBeenCalled();
+    expect(f.globals.toast).toHaveBeenCalledWith(expect.stringContaining('Suppression impossible'));
+  });
+
+  it('autorise la suppression d’une vente et actualise les données', () => {
+    const f = stockFixture();
+    f.remove(1);
+    expect(f.h.transactions).toHaveLength(1);
+    expect(f.h.transactions[0].type).toBe('BUY');
+    expect(f.globals.recalcHolding).toHaveBeenCalledWith(f.h);
+    expect(f.globals.refreshMain).toHaveBeenCalledOnce();
+  });
+
+  it('ne modifie rien avant la confirmation de suppression', () => {
+    const f = stockFixture(false);
+    f.remove(1);
+    expect(f.h.transactions).toHaveLength(2);
+    expect(f.globals.recalcHolding).not.toHaveBeenCalled();
+  });
+
+  it('ignore un index de suppression invalide', () => {
+    const f = stockFixture();
+    f.remove(-1);
+    expect(f.globals.openConfirm).not.toHaveBeenCalled();
+    expect(f.h.transactions).toHaveLength(2);
   });
 });
