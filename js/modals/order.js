@@ -4,16 +4,23 @@
 // Une même journée conserve l’ordre de saisie. Les dividendes ne changent pas la quantité.
 // Fonction pure : ne trie et ne modifie jamais le tableau reçu.
 function transactionHistoryIsValid(transactions) {
+  if (!Array.isArray(transactions)) return false;
+  for (const tx of transactions) {
+    if (!tx || typeof tx.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) return false;
+    const timestamp = Date.parse(tx.date + 'T00:00:00.000Z');
+    if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== tx.date) return false;
+    if (!['BUY', 'SELL', 'DIV'].includes(tx.type) || !Number.isFinite(tx.qty) || tx.qty <= 0) return false;
+  }
   const ordered = transactions.map((tx, index) => ({ tx, index }));
   ordered.sort((a, b) => a.tx.date.localeCompare(b.tx.date) || a.index - b.index);
   let quantity = 0;
   for (const { tx } of ordered) {
-    if (!['BUY', 'SELL', 'DIV'].includes(tx.type) || !Number.isFinite(tx.qty) || tx.qty <= 0) return false;
     if (tx.type === 'BUY') quantity += tx.qty;
     if (tx.type === 'SELL') {
       quantity -= tx.qty;
       if (quantity < -1e-8) return false;
     }
+    if (!Number.isFinite(quantity)) return false;
   }
   return true;
 }
@@ -67,7 +74,7 @@ document.getElementById('edit-tx-submit').addEventListener('click', () => {
   }
   const candidate = h.transactions.map((tx, i) => i === _editTxIdx ? { date, type: _editTxType, qty, price } : tx);
   if (!transactionHistoryIsValid(candidate)) {
-    toast('Modification impossible : une vente dépasserait la quantité détenue à sa date');
+    toast('Modification impossible : historique invalide ou quantité détenue insuffisante');
     return;
   }
   h.transactions = candidate;
@@ -131,7 +138,7 @@ document.getElementById('modal-submit').addEventListener('click', () => {
   if (!h) { toast('Position introuvable'); return; }
   const candidate = [...h.transactions, { date, type: _mType, qty, price }];
   if (!transactionHistoryIsValid(candidate)) {
-    toast('Mouvement impossible : une vente dépasserait la quantité détenue à sa date');
+    toast('Mouvement impossible : historique invalide ou quantité détenue insuffisante');
     return;
   }
   h.transactions = candidate;
