@@ -263,10 +263,11 @@ describe('fxSubText', () => {
     expect(text).toContain('€');
   });
 
-  it('JPY rate >= 10 → displayed with 2 decimal places', () => {
-    const jpyFX = { EUR: 1, JPY: 163 };
-    const text = fxSubText(jpyFX, 'EUR', 1_700_000_000);
-    expect(text).toContain('163.00');
+  it('displayed rate >= 10 → displayed with 2 decimal places', () => {
+    // Taux USD fictif : en EUR, les paires affichées sont USD et GBP, pas JPY.
+    const largeFX = { ...FX, USD: 163 };
+    const text = fxSubText(largeFX, 'EUR', 1_700_000_000);
+    expect(text).toBe('1 EUR = 163.00 $ · 1 EUR = 1.1600 £');
   });
 });
 
