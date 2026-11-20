@@ -12,7 +12,7 @@ const DCAAllocation = (() => {
     if (!Array.isArray(values) || !values.length || values.some(v => !Number.isFinite(v) || v < 0)) throw new TypeError('Répartition invalide');
   }
   function budgetCents(budget) {
-    if (!Number.isFinite(budget) || budget <= 0) throw new RangeError('Budget mensuel requis');
+    if (!Number.isFinite(budget) || budget <= 0) throw new RangeError('Budget hors limites');
     const cents = Math.round(budget * 100);
     if (!Number.isSafeInteger(cents) || cents <= 0) throw new RangeError('Budget hors limites');
     return cents;
@@ -70,6 +70,7 @@ function loadDca() {
     const d = JSON.parse(localStorage.getItem(dcaKey()) || 'null');
     if (d && Array.isArray(d.plans)) S.dca.plans = d.plans.sort((a,b) => a.from < b.from ? -1 : 1);
     if (d && Array.isArray(d.goals)) S.dca.goals = d.goals;
+    if (d && d.projection) S.dca.projection = dcaProjectionSettings(d.projection);
   } catch(e) {}
 }
 function saveDca() { try { localStorage.setItem(dcaKey(), JSON.stringify(S.dca)); } catch(e) {} }
@@ -201,16 +202,93 @@ function dcaPriceRef(ticker) {
   const w = S.watchlist.find(w => w.ticker === ticker);
   return w && w.price ? toRefCcy(w.price, w.currency || 'EUR') : null;
 }
+
+// Versements en fin de mois. Deux conventions explicites pour préserver les objectifs existants.
+function dcaCapitalProjection(capital, monthly, rate, months, convention = 'effective') {
+  if (![capital, monthly, rate, months].every(Number.isFinite) || !Number.isInteger(months) || months < 0) throw new TypeError('Paramètres de projection invalides');
+  if (!['effective', 'nominal'].includes(convention)) throw new TypeError('Convention de taux invalide');
+  if ((convention === 'effective' && rate <= -100) || (convention === 'nominal' && rate <= -1200)) throw new RangeError('Rendement hors limites');
+  const logMonthly = convention === 'nominal' ? Math.log1p(rate / 1200) : Math.log1p(rate / 100) / 12;
+  const i = Math.expm1(logMonthly), logGrowth = months * logMonthly;
+  const growth = Math.exp(logGrowth), annuity = i === 0 ? months : Math.expm1(logGrowth) / i;
+  const value = capital * growth + monthly * annuity;
+  if (![value, growth, annuity].every(Number.isFinite)) throw new RangeError('Projection hors limites');
+  return { value, growth, annuity };
+}
 function dcaGoalCalc(g, budget) {
   const now = new Date(), end = _parseYmd(g.date);
   let n = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
   if (end.getDate() < now.getDate()) n--;
   n = Math.max(0, n);
-  const i = (g.rate || 0) / 1200, grow = Math.pow(1 + i, n);
-  const proj = (g.start || 0) * grow + (i ? budget * (grow - 1) / i : budget * n);
-  let need = null;
-  if (n > 0) need = Math.max(0, i ? (g.target - (g.start || 0) * grow) * i / (grow - 1) : (g.target - (g.start || 0)) / n);
-  return { n, proj, need, pct: Math.min(100, (g.start || 0) / g.target * 100), ok: proj >= g.target };
+  const start = g.start || 0;
+  const { value: proj, growth, annuity } = dcaCapitalProjection(start, budget, g.rate || 0, n, 'nominal');
+  const need = n > 0 ? Math.max(0, (g.target - start * growth) / annuity) : null;
+  return { n, proj, need, pct: Math.min(100, start / g.target * 100), ok: proj >= g.target };
+}
+function dcaProjectionSettings(settings = S.dca.projection) {
+  const valid = v => Number.isFinite(v) && v >= -50 && v <= 50;
+  return { rl: valid(settings?.rl) ? settings.rl : 2, rr: valid(settings?.rr) ? settings.rr : 7 };
+}
+function dcaProjectionBase() {
+  let total = 0, liquid = 0;
+  for (const account of S.accounts.filter(a => !a.observer)) {
+    total += accTotal(account);
+    liquid += accCash(account);
+    for (const holding of account.holdings || []) {
+      if (holding.type === 'Cash') liquid += holding.valueRef ?? holding.value;
+    }
+  }
+  const risk = total - liquid;
+  if (![total, liquid, risk].every(Number.isFinite)) throw new TypeError('Valorisation financière invalide');
+  return { total, liquid, risk };
+}
+function dcaProjectionRows(base, monthly, settings) {
+  if (!Number.isFinite(monthly) || monthly < 0) throw new TypeError('Budget projeté invalide');
+  return [1, 3, 5, 10, 15, 20].map(years => {
+    const months = years * 12;
+    const cash = dcaCapitalProjection(base.liquid, 0, settings.rl, months).value;
+    const scenario = delta => cash + dcaCapitalProjection(base.risk, monthly, Math.max(-50, settings.rr + delta), months).value;
+    return { years, contributions: monthly * months, prudent: scenario(-3), central: scenario(0), optimistic: scenario(3) };
+  });
+}
+function renderDcaProjection(plan) {
+  const title = '<div class="t-section px" style="padding:20px 20px 8px">Projection financière</div>';
+  const settings = dcaProjectionSettings();
+  let base, rows;
+  const monthly = plan ? plan.budget : 0;
+  try { base = dcaProjectionBase(); rows = dcaProjectionRows(base, monthly, settings); }
+  catch (error) { return title + `<div class="t-sm px">Projection indisponible : ${esc(error.message)}</div>`; }
+  const input = (key, label) => `<label style="flex:1;min-width:140px"><span class="form-label">${label}</span><input class="form-input" id="dca-proj-${key}" data-dca-return="${key}" type="number" min="-50" max="50" step="0.1" inputmode="decimal" value="${settings[key]}"></label>`;
+  return title + `<div class="s-group" style="padding:14px 16px">
+    <div>Patrimoine financier actuel : ${masked(base.total)}</div>
+    <div class="t-sm" style="margin-top:6px">Liquidités : ${masked(base.liquid)} · autres actifs : ${masked(base.risk)}</div>
+    <div style="margin-top:8px">Versement mensuel projeté : ${masked(monthly)}</div>
+    ${plan ? '' : '<div class="t-sm">Aucun plan en vigueur : projection sans versements.</div>'}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:10px;margin:12px 20px">${input('rl', 'Liquidités (%/an)')}${input('rr', 'Autres actifs (%/an)')}</div>
+  <div style="overflow-x:auto;margin:0 20px"><table style="width:100%;min-width:580px;border-collapse:collapse;font-size:12px;text-align:right">
+    <caption style="text-align:left;padding:8px 0">Scénarios de capital futur</caption>
+    <thead><tr>${['Horizon', 'Versements', 'Prudent', 'Central', 'Optimiste'].map(label => `<th scope="col" style="padding:8px">${label}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(row => `<tr><th scope="row" style="padding:9px;border-top:1px solid var(--border)">${row.years} an${row.years > 1 ? 's' : ''}</th>${['contributions', 'prudent', 'central', 'optimistic'].map(key => `<td style="padding:9px;border-top:1px solid var(--border)">${masked(row[key])}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>
+  <div class="t-sm px" style="padding:12px 20px">Rendements annuels effectifs. Liquidités : ${settings.rl} %. Autres actifs : prudent ${Math.max(-50, settings.rr - 3)} %, central ${settings.rr} %, optimiste ${settings.rr + 3} %.
+  Les liquidités comprennent le cash non investi et les positions de type Cash. Les comptes observateurs et l’immobilier manuel sont exclus.
+  Le budget en vigueur aujourd’hui est maintenu constant et investi dans les autres actifs en fin de mois ; les changements de stratégie futurs ne sont pas pris en compte.
+  Ni frais, ni fiscalité, ni inflation : simulation, pas prévision. Hypothèses enregistrées sur cet appareil, séparément en démo et en réel.</div>`;
+}
+function bindDcaProjection(el) {
+  el.querySelectorAll('[data-dca-return]').forEach(input => input.addEventListener('change', () => {
+    const key = input.dataset.dcaReturn;
+    if (!['rl', 'rr'].includes(key)) return;
+    const text = input.value.trim(), value = Number(text.replace(',', '.'));
+    const settings = dcaProjectionSettings();
+    if (!text || !Number.isFinite(value) || value < -50 || value > 50) {
+      input.value = settings[key];
+      return toast('Rendement entre -50 et 50 %');
+    }
+    S.dca.projection = { ...settings, [key]: value };
+    saveDca(); renderScreen('dca');
+  }));
 }
 
 function renderDca() {
@@ -229,7 +307,7 @@ function renderDca() {
     <div style="font-size:15px;font-weight:600">Aucun plan DCA</div>
     <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres.</div>
     <button class="form-submit" id="js-dca-cfg" style="max-width:260px">Configurer le plan</button>
-  </div>` + renderDcaGoals(null);
+  </div>` + renderDcaGoals(null) + renderDcaProjection(null);
   const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
   const lines = plan.lines.map(l => {
     const amt = plan.budget * l.weight / 100, px = dcaPriceRef(l.ticker);
@@ -265,6 +343,7 @@ function renderDca() {
     <div id="dca-bar-info" class="t-sm" style="margin-top:10px;text-align:center">${st.proj.length ? `${_fmtDate(st.proj[0].date)} → ${_fmtDate(st.proj[st.proj.length - 1].date)} · ${masked(maxC)} cumulés (sans rendement)` : '—'}</div>
   </div>
   ${renderDcaGoals(plan)}
+  ${renderDcaProjection(dcaPlanAt(st.today))}
   ${sec('Historique des stratégies')}
   <div class="s-group">${hist}</div>
   <div class="t-sm px" style="padding:14px 20px 30px">Cumul = somme des apports prévus par le plan, pas une valeur de portefeuille. Les données sont stockées sur cet appareil.</div>`;
@@ -398,7 +477,7 @@ function openDcaGoalModal(id) {
       <div class="form-field"><div class="form-label">Capital actuel</div><input class="form-input" id="dg-start" type="number" min="0" step="any" inputmode="decimal" value="${d.start}"></div>
       <div class="form-field"><div class="form-label">Rendement annuel (%)</div><input class="form-input" id="dg-rate" type="number" step="any" inputmode="decimal" value="${d.rate}"></div>
     </div>
-    <div class="t-sm" style="margin-bottom:12px">Projection : capital actuel + versements mensuels du plan, capitalisés au rendement hypothétique. Rendement 0 = sans intérêts.</div>
+    <div class="t-sm" style="margin-bottom:12px">Projection : capital actuel + versements mensuels du plan, capitalisés au rendement hypothétique nominal réparti sur douze mois. Rendement 0 = sans intérêts.</div>
     <button class="form-submit" id="dg-save">Enregistrer</button>
     ${g ? '<button class="form-submit" id="dg-del" style="background:var(--loss);margin-top:10px">Supprimer</button>' : ''}`);
 }
@@ -457,6 +536,7 @@ document.getElementById('dca-modal-body').addEventListener('input', e => {
 });
 
 function bindDca(el) {
+  bindDcaProjection(el);
   el.querySelector('#js-back')?.addEventListener('click', back);
   el.querySelector('#js-dca-cfg')?.addEventListener('click', openDcaPlanModal);
   el.querySelector('#js-dca-sync')?.addEventListener('click', () => { void dcaResolveIsins(true); });
