@@ -114,12 +114,18 @@ function renderStock() {
     <div class="t-section">Mouvements</div>
     <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
   </div>
+  <div style="padding:0 20px 12px">
+    <button type="button" id="js-add-movement" class="tap" style="padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font:inherit">Ajouter un mouvement</button>
+  </div>
   <div id="js-tx-list">${txs}</div>`;
 }
 
 
 SCREEN_BIND.stock = function (el, id) {
     el.querySelector('#js-back')?.addEventListener('click',back);
+    el.querySelector('#js-add-movement')?.addEventListener('click', () => {
+      openAddOrder(S.accountId, S.holdingId);
+    });
     el.querySelector('#js-ticker-refresh')?.addEventListener('click', () => {
       const acc = S.accounts.find(a => a.id === S.accountId);
       const h   = acc?.holdings.find(h => h.id === S.holdingId);
@@ -184,11 +190,20 @@ SCREEN_BIND.stock = function (el, id) {
         openEditTx(S.accountId,S.holdingId,idx);
       }
       if(delBtn&&h&&acc){
-        const idx=parseInt(delBtn.dataset.txidx);
+        const idx=Number(delBtn.dataset.txidx);
+        if (!Number.isInteger(idx) || idx < 0 || idx >= h.transactions.length) return;
         const tx=h.transactions[idx];
         const lbl={BUY:'achat',SELL:'vente',DIV:'dividende'}[tx.type]||'mouvement';
         openConfirm(`Supprimer ce ${lbl} du ${fmtDate(tx.date)} ?`,()=>{
-          h.transactions.splice(idx,1);
+          // Retrouver l’objet après confirmation évite de supprimer un autre mouvement.
+          const currentIdx = h.transactions.indexOf(tx);
+          if (currentIdx < 0) return;
+          const candidate = h.transactions.filter((_, i) => i !== currentIdx);
+          if (!transactionHistoryIsValid(candidate)) {
+            toast('Suppression impossible : une vente dépasserait la quantité détenue à sa date');
+            return;
+          }
+          h.transactions = candidate;
           recalcHolding(h);
           acc.value=accTotal(acc);
           renderScreen('stock');
