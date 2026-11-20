@@ -1,0 +1,51 @@
+name: Order and alert storage tests
+
+on:
+  push:
+    paths:
+      - '.github/workflows/order-alert-tests.yml'
+      - 'js/features/order-alert-storage.js'
+      - 'tests/order-alert-storage.test.js'
+      - 'tests/helpers/**'
+      - 'package*.json'
+      - 'vitest.config.js'
+  pull_request:
+    paths:
+      - '.github/workflows/order-alert-tests.yml'
+      - 'js/features/order-alert-storage.js'
+      - 'tests/order-alert-storage.test.js'
+      - 'tests/helpers/**'
+      - 'package*.json'
+      - 'vitest.config.js'
+
+permissions:
+  contents: read
+
+jobs:
+  storage-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run order and alert storage tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- tests/order-alert-storage.test.js --reporter=verbose 2>&1 | tee order-alert-test-results.log
+      - name: Retain test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: order-alert-test-results
+          path: order-alert-test-results.log
+          if-no-files-found: warn
+          retention-days: 7

@@ -74,4 +74,40 @@ describe('Stockage des ordres et alertes', () => {
     const store = createStore({ getItem: () => null, setItem() { throw new Error('quota'); } }, 'real');
     expect(() => store.saveOrders([order])).toThrow('quota');
   });
+
+  it('exige une confirmation explicite avant reprise des anciennes données', () => {
+    storage.setItem('patrimoine-orders', JSON.stringify([order]));
+    const before = [...data];
+    expect(() => real.importLegacy()).toThrow('Confirme le mode');
+    expect(() => real.importLegacy({ confirmMode: false })).toThrow('Confirme le mode');
+    expect([...data]).toEqual(before);
+  });
+
+  it('copie les anciennes données dans le seul mode confirmé sans effacer les sources', () => {
+    storage.setItem('patrimoine-orders', JSON.stringify([order]));
+    storage.setItem('patrimoine-alerts', JSON.stringify([alert]));
+    const sourceOrders = storage.getItem('patrimoine-orders');
+    const sourceAlerts = storage.getItem('patrimoine-alerts');
+    real.importLegacy({ confirmMode: true });
+    expect(real.read()).toEqual({ version: 1, mode: 'real', orders: [order], alerts: [alert] });
+    expect(demo.read()).toEqual({ version: 1, mode: 'demo', orders: [], alerts: [] });
+    expect(storage.getItem('patrimoine-orders')).toBe(sourceOrders);
+    expect(storage.getItem('patrimoine-alerts')).toBe(sourceAlerts);
+  });
+
+  it('refuse la reprise dans une destination déjà remplie', () => {
+    storage.setItem('patrimoine-orders', JSON.stringify([order]));
+    real.saveAlerts([alert]);
+    const before = [...data];
+    expect(() => real.importLegacy({ confirmMode: true })).toThrow('contient déjà des données');
+    expect([...data]).toEqual(before);
+  });
+
+  it('valide toutes les anciennes listes avant la moindre écriture de reprise', () => {
+    storage.setItem('patrimoine-orders', JSON.stringify([order]));
+    storage.setItem('patrimoine-alerts', JSON.stringify([{ ...alert, price: 0 }]));
+    const before = [...data];
+    expect(() => real.importLegacy({ confirmMode: true })).toThrow('Alerte invalide');
+    expect([...data]).toEqual(before);
+  });
 });

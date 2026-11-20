@@ -74,5 +74,14 @@ function createOrderAlertStore(storage, mode) {
     return { orders, alerts };
   }
 
-  return { read, saveOrders, saveAlerts, exportData, importData, readLegacy };
+  function importLegacy({ confirmMode = false } = {}) {
+    if (confirmMode !== true) throw new TypeError('Confirme le mode de destination des anciennes données');
+    const current = read();
+    if (current.orders.length || current.alerts.length) throw new Error('Le stockage de destination contient déjà des données');
+    const legacy = readLegacy();
+    // Copie uniquement après validation complète ; anciennes clés et autre mode inchangés.
+    write({ version: 1, mode, orders: legacy.orders, alerts: legacy.alerts });
+  }
+
+  return { read, saveOrders, saveAlerts, exportData, importData, readLegacy, importLegacy };
 }
