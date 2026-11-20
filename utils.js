@@ -10,8 +10,8 @@
 
   function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
-  //   = espace fine insécable (typographie française), identique à l'implémentation historique
-  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %'; }
+  //   = espace fine insécable (typographie française), identique à l'implémentation historique
+  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %'; }
 
   function fmtDate(s) {
     return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
