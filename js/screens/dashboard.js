@@ -1,188 +1,71 @@
-// Écran Accueil (dashboard) : rendu + cartes Évolution / Titres suivis + binding.
-// Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
-
-// ── DASHBOARD ──
-function renderDash() {
-  const w=totalWealth();
-  const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+(a.change1d??0)*(a.value/w),0):0;
-  const allH=S.accounts.filter(a=>!a.observer).flatMap(a=>a.holdings); // cohérent avec totalWealth()
-  const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
-  const totInv=allH.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
-  const totPnlPct=totInv>0?(totPnl/totInv)*100:0;
-  const spark=sparkData(w*.86,28,.022); spark[spark.length-1]=w;
-
-  const wealthDisplay = S.privacy
-    ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
-    : `<div class="wealth-amount t-num">${fmtCur(w)}</div>`;
-  return `<div class="dash-top">
-    ${renderTopBar(`
-      <div id="js-privacy-btn" class="top-btn tap" title="Masquer les montants" style="color:${S.privacy?'var(--accent)':'var(--text2)'}">
-        ${S.privacy
-          ? `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`
-          : `<svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`
-        }
-      </div>
-    `)}
-  </div>
-    <div class="wealth-card anim">
-    <div class="wealth-label">Fortune totale</div>
-    ${wealthDisplay}
-    <div class="row gap8" style="margin:8px 0 0">
-      <div class="badge ${wChg>=0?'up':'dn'}">${wChg>=0?'▲':'▼'} ${Math.abs(wChg).toFixed(2)}%</div>
-      <span style="font-size:12px;color:rgba(255,255,255,.38)">Aujourd'hui · ${S.accounts.length} compte${S.accounts.length>1?'s':''}</span>
-    </div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">
-      P&amp;L total&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
-    </div>
-    ${S.lastPriceUpdate?`<div style="font-size:10px;color:rgba(255,255,255,.28);margin-top:5px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}
-  </div>
-  ${renderHistCard()}
-  ${renderWatchlistCard()}`;
+// Accueil : patrimoine net, brut, dette immobilière et suivi financier.
+function wealthBreakdown() {
+  const financial = S.accounts.filter(a => !a.observer).reduce((s,a) => s + (+a.value || 0), 0);
+  let property = 0, debt = 0, count = 0;
+  const today = _dayKey(Date.now());
+  if (typeof loadImmo === 'function') loadImmo().forEach(p => {
+    if (!p.buyDate || p.buyDate > today || !(p.price > 0)) return;
+    const c = immoCalc(p);
+    if (!Number.isFinite(c.value) || !Number.isFinite(c.debt)) return;
+    property += c.value; debt += c.debt; count++;
+  });
+  return {financial, property, debt, count, gross:financial + property, net:financial + property - debt};
 }
-
-// ── WATCHLIST CARD ──
+function wealthSummaryHTML(d, dark=false) {
+  const row = (label,v) => `<div style="display:flex;justify-content:space-between;gap:12px;margin-top:7px"><span>${label}</span><span class="t-num">${masked(v)}</span></div>`;
+  return `<div style="font-size:13px;${dark?'color:rgba(255,255,255,.8)':''}">${row('Patrimoine brut',d.gross)}${row('Crédits immobiliers restants',d.debt)}${row('Dont immobilier brut',d.property)}</div>`;
+}
+let _wealthIntegrationReady = false;
+function installWealthPresentation() {
+  if (_wealthIntegrationReady) return;
+  _wealthIntegrationReady = true;
+  // Ne change pas totalWealth : les snapshots existants et les performances des comptes restent financiers.
+  const baseAnalysis = renderAnalysis;
+  renderAnalysis = function() {
+    const d = wealthBreakdown();
+    const html = baseAnalysis();
+    const summary = `<section style="margin:12px 20px;padding:16px;border-radius:14px;background:var(--card);border:1px solid var(--border)"><div class="t-label">Patrimoine net</div><div class="t-num" style="font-size:28px;font-weight:800;margin:6px 0">${masked(d.net)}</div>${wealthSummaryHTML(d)}</section>`;
+    return summary + html.replace('Patrimoine total','Comptes financiers').replace("comment il est placé aujourd'hui","répartition des comptes financiers");
+  };
+  // Chaque sauvegarde immobilière invalide les écrans financiers affichés en arrière-plan.
+  const baseSave = saveImmo;
+  saveImmo = function(properties) { baseSave(properties); refreshMain(); };
+}
+function renderDash() {
+  installWealthPresentation();
+  const d = wealthBreakdown();
+  const hs = S.accounts.filter(a=>!a.observer).flatMap(a=>a.holdings);
+  const pnl = hs.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
+  return `<div class="dash-top">${renderTopBar(`<div id="js-privacy-btn" class="top-btn tap" role="button" aria-label="Afficher ou masquer les montants">${S.privacy?'Afficher':'Masquer'}</div>`)}</div>
+  <div class="wealth-card anim"><div class="wealth-label">Patrimoine net</div><div class="wealth-amount t-num">${S.privacy?'● ● ●':fmtCur(d.net)}</div>${wealthSummaryHTML(d,true)}<div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:12px">${S.accounts.filter(a=>!a.observer).length} comptes · ${d.count} biens immobiliers</div><div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:8px">P&amp;L des positions financières : ${masked(pnl)}</div>${S.lastPriceUpdate?`<div class="t-sm" style="margin-top:6px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}</div>
+  ${renderHistCard()}${renderWatchlistCard()}`;
+}
 function renderWatchlistCard() {
   if (!S.watchlist.length) return '';
-
-  // Tri
-  const sortMode = S.watchSort || 'default';
-  const sorted = [...S.watchlist].sort((a, b) => {
-    if (sortMode === 'perf_desc') return b.change1d - a.change1d;
-    if (sortMode === 'perf_asc')  return a.change1d - b.change1d;
-    return 0;
-  });
-  const sortLabel = {default:'—', perf_desc:'▲ Perf', perf_asc:'▼ Perf'}[sortMode];
-
-  const rows = sorted.map(w => {
-    const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
-    const delta = w.price * w.change1d / 100;
-    const up    = w.change1d >= 0;
-    return `<div class="watch-item tap" data-watch="${w.ticker}">
-      <div class="watch-tick">${w.ticker.slice(0,4)}</div>
-      <div class="flex1 col gap4" style="min-width:0">
-        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
-        <div class="t-sm">${fmtNative(w.price, cur)}</div>
-      </div>
-      <div class="col right gap4" style="align-items:flex-end">
-        <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
-        <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
-      </div>
-      <div class="hold-del-btn tap" data-wdel="${w.ticker}" style="width:28px;height:28px;border-radius:8px;margin-left:6px;flex-shrink:0">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-      </div>
-    </div>`;
-  }).join('');
-
-  return `<div class="watch-card anim">
-    <div class="watch-head">
-      <div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Titres suivis</div>
-      <div class="row gap8" style="align-items:center">
-        <div id="js-watch-sort" class="tap" style="font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-dim);border:1px solid var(--accent);padding:1px 8px;border-radius:6px;cursor:pointer" title="Trier">${sortLabel}</div>
-        <div style="font-size:12px;font-weight:600;color:var(--text2);background:var(--card2);border:1px solid var(--border);padding:1px 9px;border-radius:20px">${S.watchlist.length}</div>
-        <div class="hold-add-btn" id="js-watch-add" style="width:28px;height:28px;border-radius:8px">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        </div>
-      </div>
-    </div>
-    ${rows}
-  </div>`;
+  const mode=S.watchSort||'default';
+  const sorted=[...S.watchlist].sort((a,b)=>mode==='perf_desc'?b.change1d-a.change1d:mode==='perf_asc'?a.change1d-b.change1d:0);
+  return `<div class="watch-card anim"><div class="watch-head"><div class="t-section">Titres suivis</div><div class="row gap8"><div id="js-watch-sort" class="tap">Trier</div><span>${sorted.length}</span><div id="js-watch-add" class="hold-add-btn tap">+</div></div></div>${sorted.map(w=>{
+    const cur=w.currency||SECURITIES_DB[w.ticker]?.currency||'EUR';
+    return `<div class="watch-item tap" data-watch="${esc(w.ticker)}"><div class="watch-tick">${esc(w.ticker.slice(0,4))}</div><div class="flex1 col gap4" style="min-width:0"><div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.name)}</div><div class="t-sm">${fmtNative(w.price,cur)}</div></div><div class="badge ${w.change1d>=0?'up':'dn'}">${fmtPct(w.change1d||0)}</div><div class="hold-del-btn tap" data-wdel="${esc(w.ticker)}" style="padding:6px">×</div></div>`;
+  }).join('')}</div>`;
 }
-
-// ── HISTORY CARD ──
 function renderHistCard() {
   if (!S.accounts.length) return '';
-  const periods = ['1S','1M','3M','1A'];
-  const pills = periods.map(p => `<div class="hperiod${p===S.histPeriod?' on':''}" data-period="${p}">${p}</div>`).join('');
-  const pts = genHistData(S.histPeriod);
-  const chartW = Math.min(window.innerWidth, 480) - 72;
-  const pct = ((pts[pts.length-1] - pts[0]) / pts[0] * 100);
-  const color = pct >= 0 ? 'var(--gain)' : 'var(--loss)';
-  const _real = !!pts.real;
-  const _chip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_real?'var(--gain)':'var(--text3)'}" title="${_real?'Historique réel — reconstitué à partir de vos cours et transactions, affiné chaque jour':'Courbe estimée — récupérez l’historique de vos titres pour la fiabiliser'}">${_real?'● réel':'○ estimé'}</span>`;
-  return `<div class="hist-card anim">
-    <div class="hist-head">
-      <div class="row gap8" style="align-items:center"><div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Évolution du patrimoine</div>${_chip}</div>
-      <div class="hist-periods">${pills}</div>
-    </div>
-    <div class="hist-wrap" id="js-hist-wrap">
-      ${histSvg(pts, chartW, 80)}
-      <div class="hist-tip" id="js-hist-tip"></div>
-    </div>
-    <div class="hist-range">
-      <span>${masked(pts[0])}</span>
-      <span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span>
-      <span>${masked(pts[pts.length-1])}</span>
-    </div>
-  </div>`;
+  const pts=genHistData(S.histPeriod);
+  const pct=pts[0]?(pts[pts.length-1]/pts[0]-1)*100:null;
+  return `<div class="hist-card anim"><div class="hist-head"><div class="t-section">Évolution des comptes financiers</div><div class="hist-periods">${['1S','1M','3M','1A'].map(p=>`<div class="hperiod${p===S.histPeriod?' on':''}" data-period="${p}">${p}</div>`).join('')}</div></div><div class="t-sm" style="padding:0 12px 8px">Hors immobilier · ${pts.real?'historique financier reconstitué':'courbe financière estimée'}</div><div class="hist-wrap" id="js-hist-wrap">${histSvg(pts,Math.min(window.innerWidth,480)-72,80)}<div class="hist-tip"></div></div><div class="hist-range"><span>${masked(pts[0])}</span><span>${pct===null?'—':fmtPct(pct)}</span><span>${masked(pts[pts.length-1])}</span></div></div>`;
 }
-
-
-SCREEN_BIND.dashboard = function (el, id) {
-    // History period selector
-    el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
-      S.histPeriod=p.dataset.period;
-      const wrap=el.querySelector('#js-hist-wrap');
-      if(!wrap) return;
-      const pts=genHistData(S.histPeriod);
-      const chartW=Math.min(window.innerWidth,480)-72;
-      wrap.innerHTML=histSvg(pts,chartW,80)+'<div class="hist-tip" id="js-hist-tip"></div>';
-      el.querySelectorAll('.hperiod').forEach(x=>x.classList.toggle('on',x.dataset.period===S.histPeriod));
-      const pct=((pts[pts.length-1]-pts[0])/pts[0]*100);
-      const color=pct>=0?'var(--gain)':'var(--loss)';
-      const rangeEl=el.querySelector('.hist-range');
-      if(rangeEl) rangeEl.innerHTML=`<span>${masked(pts[0])}</span><span style="font-weight:700;color:${color}">${pct>=0?'+':''}${pct.toFixed(2)}%</span><span>${masked(pts[pts.length-1])}</span>`;
-      initHistChart(el.querySelector('.hist-card'), pts);
-      attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
-    }));
-    const histCard=el.querySelector('.hist-card');
-    if(histCard) initHistChart(histCard, genHistData(S.histPeriod));
-    attachChartFs(el.querySelector('#js-hist-wrap'), 'hist');
-    el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
-    el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
-    el.querySelector('#js-watch-add')?.addEventListener('click', openWatchModal);
-    el.querySelector('#js-watch-sort')?.addEventListener('click', () => {
-      const modes = ['default','perf_desc','perf_asc'];
-      S.watchSort = modes[(modes.indexOf(S.watchSort||'default') + 1) % modes.length];
-      renderScreen('dashboard');
-    });
-
-    // ── Fraîcheur des cours ──
-    function updateFreshDot() {
-      const dot = document.getElementById('js-fresh-dot');
-      if (!dot) return;
-      const age = S.lastPriceUpdate ? Date.now() - S.lastPriceUpdate : Infinity;
-      dot.style.background = age < 5*60*1000 ? 'var(--gain)'
-                           : age < 60*60*1000 ? '#F59E0B'
-                           : 'var(--text3)';
-    }
-    updateFreshDot();
-    // Un seul intervalle, remplacé à chaque re-render (l'ancien visibilitychange tuait le timer
-    // au premier changement d'onglet et chaque render en empilait un nouveau)
-    clearInterval(el._freshTimer);
-    el._freshTimer = setInterval(updateFreshDot, 60*1000);
-
-    // ── Supprimer un titre suivi ──
-    el.querySelectorAll('[data-wdel]').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        const ticker = btn.dataset.wdel;
-        haptic(10);
-        openConfirm(`Retirer ${ticker} de la liste de suivi ?`, () => {
-          const name = S.watchlist.find(w => w.ticker === ticker)?.name || ticker;
-          S.watchlist = S.watchlist.filter(w => w.ticker !== ticker);
-          saveAccounts();
-          refreshMain();
-          toast(`${name} retiré des favoris`);
-        });
-      });
-    });
-    el.querySelectorAll('[data-watch]').forEach(item => {
-      item.addEventListener('click', () => {
-        S.watchTicker = item.dataset.watch;
-        go('watchstock');
-      });
-    });
-    // Privacy toggle
-
-    el.querySelector('#js-privacy-btn')?.addEventListener('click', togglePrivacy);
+SCREEN_BIND.dashboard = function(el) {
+  el.querySelector('#js-privacy-btn')?.addEventListener('click',togglePrivacy);
+  el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{S.histPeriod=p.dataset.period;renderScreen('dashboard');}));
+  const card=el.querySelector('.hist-card');
+  if(card) initHistChart(card,genHistData(S.histPeriod));
+  attachChartFs(el.querySelector('#js-hist-wrap'),'hist');
+  el.querySelector('#js-settings-btn')?.addEventListener('click',()=>go('settings'));
+  el.querySelector('#js-assistant-btn')?.addEventListener('click',()=>go('assistant'));
+  el.querySelector('#js-watch-add')?.addEventListener('click',openWatchModal);
+  el.querySelector('#js-watch-sort')?.addEventListener('click',()=>{const modes=['default','perf_desc','perf_asc'];S.watchSort=modes[(modes.indexOf(S.watchSort||'default')+1)%3];renderScreen('dashboard');});
+  el.querySelectorAll('[data-wdel]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const ticker=b.dataset.wdel;openConfirm(`Retirer ${ticker} de la liste de suivi ?`,()=>{S.watchlist=S.watchlist.filter(w=>w.ticker!==ticker);saveAccounts();refreshMain();});}));
+  el.querySelectorAll('[data-watch]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-wdel]'))return;S.watchTicker=b.dataset.watch;go('watchstock');}));
+  clearInterval(el._freshTimer);
 };

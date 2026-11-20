@@ -10,7 +10,10 @@ function renderComptes() {
     const pct=w>0?(a.value/w*100).toFixed(1):'0';
     const totPnl=a.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
     const totInv=a.holdings.reduce((s,h)=>s+toRefCcy((h.avgBuyPrice||0)*(h.quantity||0),h.currency||'EUR'),0);
-    const allTimePct=totInv>0?(totPnl/totInv)*100:0;
+    let allTimePct=totInv>0?(totPnl/totInv)*100:0;
+    // Même performance que sur l'écran du compte (flux d'apports et de retraits) quand elle est calculable ; sinon P&L des positions
+    const flowPct=typeof accPerfPct==='function'?accPerfPct(a):null;
+    if(flowPct!=null) allTimePct=flowPct;
     const up=allTimePct>=0;
     const accCcy=a.currency||S.currency;
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);

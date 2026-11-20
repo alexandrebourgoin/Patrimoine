@@ -1,7 +1,7 @@
 // Modales de compte : types de compte, ajout, menu d actions, modification, suppression.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
-// ── Types de compte ────────────────────────────────────────────────────
+// ── Types de compte ─────────────────────────────────────────────────────────────────
 // Liste proposée à la création ET à la modification. Un type absent de la liste
 // (données anciennes, saisie « Autre ») reste conservé : il est ajouté à la volée
 // comme option supplémentaire par setSelectValue.
@@ -26,9 +26,60 @@ const ACCOUNT_TYPES = [
 ];
 const ACC_TYPE_OTHER = '__other__';
 
+// Devise de référence par type de compte : [devise, verrouillée].
+// Verrouillée = la devise est imposée par le produit (un PEA ou un Livret A sont en euros, un Pilier 3a en francs suisses).
+// Non verrouillée = simple valeur par défaut, modifiable. Types absents : aucune présélection (crypto, métaux, « Autre… »).
+const ACC_TYPE_CCY = {
+  "Plan d'Épargne en Actions (PEA)": ['EUR', true],
+  "PEA-PME": ['EUR', true],
+  "Plan d'Épargne Retraite (PER)": ['EUR', true],
+  "Épargne salariale (PEE / PERCO)": ['EUR', true],
+  "Livret A": ['EUR', true],
+  "LDDS": ['EUR', true],
+  "LEP": ['EUR', true],
+  "Livret Jeune": ['EUR', true],
+  "PEL / CEL": ['EUR', true],
+  "Pilier 3a": ['CHF', true],
+  "Assurance-Vie": ['EUR', false],
+  "Compte-Titres Ordinaire": ['EUR', false],
+  "Compte à terme": ['EUR', false],
+  "Compte courant": ['EUR', false],
+  "SCPI / Immobilier": ['EUR', false],
+};
+
+// Aligne le sélecteur de devise sur le type choisi.
+// apply = true (création, changement de type) : impose la devise du type, puis verrouille ou non le sélecteur.
+// apply = false (ouverture d'un compte existant) : ne change pas la devise ; le sélecteur n'est verrouillé que si elle est déjà celle du type.
+function syncAccCurrency(typeSelId, curSelId, apply){
+  const typeSel=document.getElementById(typeSelId);
+  const cur=document.getElementById(curSelId);
+  if(!typeSel||!cur) return;
+  const rule=ACC_TYPE_CCY[typeSel.value];
+  if(apply && rule && [...cur.options].some(o=>o.value===rule[0])) cur.value=rule[0];
+  cur.disabled=!!(rule && rule[1] && cur.value===rule[0]);
+  cur.title=cur.disabled?'Devise imposée par le type de compte':'';
+}
+
+// Date d'ouverture du compte : champ ajouté sous la banque, à la création et à la modification (jamais depuis la consultation du compte).
+// Elle fixe le début de la performance historique ; vide = premier apport ou mouvement du compte.
+function _accEnsureStartField(inputId, afterId){
+  let inp=document.getElementById(inputId);
+  if(!inp){
+    const ref=document.getElementById(afterId); if(!ref) return null;
+    const row=ref.closest('.form-row')||ref.parentElement;
+    const wrap=document.createElement('div');
+    wrap.className='form-row';
+    wrap.innerHTML='<div class="form-field"><div class="form-label">Date d\'ouverture</div><input class="form-input" type="date" id="'+inputId+'"></div>';
+    row.insertAdjacentElement('afterend',wrap);
+    inp=document.getElementById(inputId);
+  }
+  return inp;
+}
+
 // Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
 // « Préciser le type », affichée quand l'option « Autre… » est choisie.
-function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
+// `curSelId` (optionnel) : sélecteur de devise à aligner quand le type change.
+function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId){
   const sel=document.getElementById(selId); if(!sel) return;
   // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
   const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
@@ -43,6 +94,7 @@ function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
     const isOther=sel.value===ACC_TYPE_OTHER;
     if(otherRow) otherRow.classList.toggle('hidden',!isOther);
     if(isOther && otherInp) otherInp.focus();
+    if(curSelId) syncAccCurrency(selId,curSelId,true);
   };
 }
 
@@ -63,7 +115,11 @@ function openAccModal(){
   setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
-  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
+  const st=_accEnsureStartField('acc-start','acc-bank'); if(st) st.value='';
+  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency');
+  const curSel=document.getElementById('acc-currency');
+  if(curSel) curSel.value='EUR';
+  syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
@@ -85,12 +141,13 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const name=document.getElementById('acc-name').value.trim();
   const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
+  const startDate=document.getElementById('acc-start')?.value||'';
   if(!name){toast('Nom du compte requis');return;}
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver});
+  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver,...(startDate?{startDate}:{})});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -159,7 +216,7 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 
 
 // ═══════════════════════════════════════════════
-// EDIT ACCOUNT (nom, icône, type, devise)
+// EDIT ACCOUNT (nom, icône, type, devise, date d'ouverture)
 // ═══════════════════════════════════════════════
 let _renameAccId=null;
 function openRenameAcc(accId, currentName){
@@ -171,8 +228,10 @@ function openRenameAcc(accId, currentName){
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
+  const st=_accEnsureStartField('rename-acc-start','rename-acc-bank'); if(st) st.value=acc?.startDate||'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
-  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'');
+  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency');
+  syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : on ne change pas sa devise
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
@@ -195,6 +254,8 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.type=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
+  const sd=document.getElementById('rename-acc-start')?.value||'';
+  if(sd) acc.startDate=sd; else delete acc.startDate;
   acc.value=accTotal(acc); // la devise du compte entre dans la conversion des apports/retraits
   saveAccounts();
   closeRenameAcc();

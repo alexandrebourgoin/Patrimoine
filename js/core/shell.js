@@ -55,6 +55,16 @@ function navLabel(key) {
   if (key==='privacy') return S.privacy ? 'Afficher' : 'Masquer';
   return NAV_CATALOG[key].label;
 }
+// Compteur affiché sur un raccourci : titres sans cours récent (« Non synchro ») ou ordres limites en attente (« Ordres »).
+// 0 en mode démo. Les fonctions sources sont définies plus loin (prices.js, order.js) : appelées seulement au rendu.
+function navBadgeCount(key) {
+  try {
+    if (S.isDemo) return 0;
+    if (key==='stale')  return typeof staleHoldings==='function' ? staleHoldings().length : 0;
+    if (key==='orders') return typeof loadOrders==='function' ? loadOrders().filter(o => _ordLookup(o)).length : 0;
+  } catch (e) {}
+  return 0;
+}
 // Raccourcis effectivement affichés (l'assistant disparaît s'il est désactivé dans Réglages)
 function activeNavItems() {
   return S.navItems.filter(k => NAV_CATALOG[k] && !(k==='assistant' && !S.assistantEnabled));
@@ -70,9 +80,11 @@ function renderNav() {
   // Écrans « sans nav » devenus raccourcis : on leur réserve la place de la barre en bas
   document.querySelectorAll('.screen.no-nav').forEach(s => s.classList.toggle('has-nav', items.includes(s.id.slice(2))));
   nav.classList.toggle('hidden', !navVisibleFor(S.screen));
-  nav.innerHTML = items.map(k =>
-    `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}">${navIconSvg(k)}<span>${navLabel(k)}</span><div class="nav-pip"></div></div>`
-  ).join('');
+  nav.innerHTML = items.map(k => {
+    const n = navBadgeCount(k);
+    const badge = n ? `<span style="position:absolute;top:2px;left:calc(50% + 4px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--loss);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1">${n>9?'9+':n}</span>` : '';
+    return `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}" style="position:relative">${navIconSvg(k)}<span>${navLabel(k)}</span>${badge}<div class="nav-pip"></div></div>`;
+  }).join('');
 }
 function togglePrivacy() {
   S.privacy = !S.privacy;
@@ -102,11 +114,11 @@ function sanitizeNavItems(arr) {
 
 let _drawerEdit = false;
 function drawerRow(key, opts={}) {
-  const badge = key==='assistant' && S.assistantEnabled ? assistantAlertCount() : 0;
+  const badge = key==='assistant' ? (S.assistantEnabled ? assistantAlertCount() : 0) : navBadgeCount(key);
+  // Un seul nom par module : celui du catalogue (barre du bas, menu, écran). Exceptions : actions explicites.
   const lbl = key==='privacy' ? (S.privacy ? 'Afficher les montants' : 'Masquer les montants')
             : key==='refresh' ? 'Actualiser les cours'
             : key==='assistant' ? 'Assistant IA'
-            : key==='dca' ? 'DCA & objectifs'
             : NAV_CATALOG[key].label;
   const on = NAV_CATALOG[key].kind==='screen' && key===S.screen;
   return `<div class="dr-row${on?' on':''}" data-dkey="${key}"${key==='refresh'?' id="js-refresh-btn"':''}>
@@ -123,7 +135,7 @@ function renderDrawer() {
       <div class="dr-sec">Actions</div>
       ${['privacy','refresh', ...(S.assistantEnabled?['assistant']:[]), 'settings'].map(k=>drawerRow(k)).join('')}
       <div class="dr-sec">Écrans</div>
-      ${[...NAV_SCREENS, 'dca'].map(k=>drawerRow(k)).join('')}
+      ${[...NAV_SCREENS, 'dca', 'projection', 'orders', 'stale'].filter(k => NAV_CATALOG[k]).map(k=>drawerRow(k)).join('')}
       <div class="dr-sep"></div>
       <div class="dr-row" id="js-drawer-edit"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="dr-lbl">Personnaliser la barre du bas</span></div>`;
   } else {
