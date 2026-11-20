@@ -1,26 +1,69 @@
-// DCA & objectifs : plan d investissement programmé + objectifs de capital (calculs théoriques).
-// Dépend, À L APPEL seulement, de S, masked, toast… (mon-patrimoine.js). S.dca est initialisé dans le littéral de S.
-
-// ═══════════════════════════════════════════════
-// DCA & OBJECTIFS
-// Plan d'investissement programmé (budget mensuel réparti en % entre des titres) + objectifs
-// de capital. Calculs 100 % théoriques (apports prévus), aucun achat n'est écrit dans les comptes.
-// Données : S.dca = { plans:[{from,budget,day,lines:[{ticker,name,weight,color}]}], goals:[{id,name,target,date,start,rate}] }
-// `plans` trié par date d'effet : les échéances passées gardent l'ancien budget / l'ancienne répartition.
-// ═══════════════════════════════════════════════
-// Un slot par mode (comme les comptes) : le DCA démo ne se mélange pas au DCA réel.
+// DCA & objectifs : calculs théoriques, aucun ordre écrit dans les comptes.
+// Dépendances applicatives utilisées à l’appel uniquement.
 const STORE_DCA_DEMO = 'patrimoine-dca-demo';
 const STORE_DCA_REAL = 'patrimoine-dca-real';
-const STORE_DCA_LEGACY = 'patrimoine-dca'; // v1.11.97 : slot unique → migré vers le mode courant
+const STORE_DCA_LEGACY = 'patrimoine-dca';
 const dcaKey = () => S.isDemo ? STORE_DCA_DEMO : STORE_DCA_REAL;
 const DCA_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4'];
 
-// Charge le slot du mode courant (à rappeler après chaque bascule démo ↔ réel)
+// Calculs purs partagés par le formulaire et les tests.
+const DCAAllocation = (() => {
+  function numbers(values) {
+    if (!Array.isArray(values) || !values.length || values.some(v => !Number.isFinite(v) || v < 0)) throw new TypeError('Répartition invalide');
+  }
+  function budgetCents(budget) {
+    if (!Number.isFinite(budget) || budget <= 0) throw new RangeError('Budget mensuel requis');
+    const cents = Math.round(budget * 100);
+    if (!Number.isSafeInteger(cents) || cents <= 0) throw new RangeError('Budget hors limites');
+    return cents;
+  }
+  function normalized(values) {
+    const total = values.reduce((sum, value) => sum + value, 0);
+    if (!Number.isFinite(total) || total <= 0) throw new RangeError('Répartition vide ou hors limites');
+    const weights = values.map(value => value / total * 100);
+    const largest = values.indexOf(Math.max(...values));
+    weights[largest] += 100 - weights.reduce((sum, value) => sum + value, 0);
+    return weights;
+  }
+  function normalizeWeights(weights) {
+    numbers(weights);
+    const total = weights.reduce((sum, value) => sum + value, 0);
+    if (Math.abs(total - 100) > 0.01 + 1e-10) throw new RangeError('Le total doit faire 100 %');
+    return normalized(weights);
+  }
+  function toAmounts(weights, budget) {
+    const cents = budgetCents(budget);
+    numbers(weights);
+    return weights.map(weight => Math.round(cents * weight / 100) / 100);
+  }
+  function toWeights(amounts, budget) {
+    const cents = budgetCents(budget);
+    numbers(amounts);
+    const amountsInCents = amounts.map(amount => Math.round(amount * 100));
+    if (amountsInCents.some(value => !Number.isSafeInteger(value))) throw new RangeError('Montant hors limites');
+    const total = amountsInCents.reduce((sum, value) => sum + value, 0);
+    if (!Number.isSafeInteger(total) || Math.abs(total - cents) > 1) throw new RangeError('Le total des montants doit égaler le budget mensuel');
+    return normalized(amountsInCents);
+  }
+  function resolveLine(lines, index, info) {
+    if (!Array.isArray(lines) || !Number.isInteger(index) || !lines[index]) throw new TypeError('Ligne introuvable');
+    const ticker = typeof info?.ticker === 'string' ? info.ticker.trim().toUpperCase() : '';
+    if (!ticker) throw new TypeError('Ticker résolu invalide');
+    if (lines.some((line, i) => i !== index && String(line.ticker || '').trim().toUpperCase() === ticker)) throw new RangeError('Un titre apparaît deux fois après résolution');
+    return lines.map((line, i) => i !== index ? { ...line } : {
+      ...line, ticker, name: info.name || ticker, resolved: true,
+      ...(info.yahooSymbol ? { yahooSymbol: info.yahooSymbol } : {}),
+      ...(info.currency ? { currency: info.currency } : {}),
+    });
+  }
+  return { normalizeWeights, toAmounts, toWeights, resolveLine };
+})();
+
 function loadDca() {
   S.dca = { plans: [], goals: [] };
   try {
     const legacy = localStorage.getItem(STORE_DCA_LEGACY);
-    if (legacy) {                       // migration unique, vers le mode actif au moment du chargement
+    if (legacy) {
       if (!localStorage.getItem(dcaKey())) localStorage.setItem(dcaKey(), legacy);
       localStorage.removeItem(STORE_DCA_LEGACY);
     }
@@ -30,19 +73,44 @@ function loadDca() {
   } catch(e) {}
 }
 function saveDca() { try { localStorage.setItem(dcaKey(), JSON.stringify(S.dca)); } catch(e) {} }
-
 function _ymd(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function _parseYmd(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
 function _fmtDate(s) { return _parseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
 function _numIn(v) { return parseFloat(String(v).replace(',', '.')); }
+function _isIsin(s) { return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(String(s || '')); }
 
-// Plan en vigueur à une date (le dernier dont la date d'effet est passée)
+function dcaBuildLines(draft, weights) {
+  const history = S.dca.plans.flatMap(plan => plan.lines || []);
+  let lines = draft.map((line, index) => {
+    const ticker = line.ticker.trim().toUpperCase();
+    const known = history.find(item => item.ticker === ticker || item.isin === ticker);
+    const isin = _isIsin(ticker) ? ticker : known?.isin;
+    return {
+      ticker, name: SECURITIES_DB[ticker]?.name || S.watchlist.find(w => w.ticker === ticker)?.name || known?.name || ticker,
+      weight: weights[index], color: line.color,
+      ...(isin ? { isin, resolved: ticker !== isin && !!known?.resolved } : {}),
+      ...(known?.yahooSymbol && ticker !== isin ? { yahooSymbol: known.yahooSymbol } : {}),
+      ...(known?.currency ? { currency: known.currency } : {}),
+    };
+  });
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (!line.isin || line.resolved) continue;
+    const mapped = typeof ISIN_MAP !== 'undefined' ? ISIN_MAP[line.isin] : null;
+    const known = history.find(item => item.isin === line.isin && item.resolved);
+    const info = typeof mapped === 'string' ? { ticker: mapped } : mapped || known;
+    if (info?.ticker) {
+      lines = DCAAllocation.resolveLine(lines, index, { ...info, name: SECURITIES_DB[info.ticker]?.name || info.name || info.ticker });
+    }
+  }
+  return lines;
+}
+
 function dcaPlanAt(ymd) {
   let p = null;
   for (const x of S.dca.plans) if (x.from <= ymd) p = x;
   return p;
 }
-// Toutes les échéances de la 1re date d'effet jusqu'à `untilYmd` (incluse) : [{date, plan}]
 function dcaOccurrences(untilYmd) {
   const plans = S.dca.plans, out = [];
   if (!plans.length) return out;
@@ -63,7 +131,6 @@ function dcaStats() {
   const today = _ymd(new Date());
   const past = dcaOccurrences(today);
   const cumul = past.reduce((s,o) => s + o.plan.budget, 0);
-  // 12 prochaines échéances (stratégie en vigueur à chaque date)
   const horizon = new Date(); horizon.setMonth(horizon.getMonth() + 14);
   const future = dcaOccurrences(_ymd(horizon)).filter(o => o.date > today).slice(0, 12);
   let run = cumul;
@@ -104,7 +171,6 @@ function renderDca() {
     <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres.</div>
     <button class="form-submit" id="js-dca-cfg" style="max-width:260px">Configurer le plan</button>
   </div>` + renderDcaGoals(null);
-
   const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
   const lines = plan.lines.map(l => {
     const amt = plan.budget * l.weight / 100, px = dcaPriceRef(l.ticker);
@@ -115,16 +181,13 @@ function renderDca() {
       <div style="font-weight:700">${masked(amt)}</div>
     </div>`;
   }).join('');
-
   const maxC = st.proj.length ? st.proj[st.proj.length - 1].cumul : 1;
   const bars = st.proj.map((p, i) => `<div class="dca-bar" data-i="${i}" data-date="${p.date}" data-cumul="${p.cumul}" style="flex:1;background:var(--accent);opacity:${i === 0 ? 1 : .55};border-radius:4px 4px 0 0;height:${Math.max(4, p.cumul / maxC * 100)}%;cursor:pointer"></div>`).join('');
-
   const hist = [...S.dca.plans].reverse().map(p => `<div class="s-item" style="cursor:default">
       <div class="flex1 col gap4"><div class="s-name">${_fmtDate(p.from)}${p === plan ? ' · en vigueur' : ''}</div>
         <div class="s-sub">${S.privacy ? '● ● ●' : fmtCur(p.budget)}/mois · le ${p.day} · ${p.lines.map(l => esc(l.ticker) + ' ' + pct(l.weight) + '%').join(', ')}</div></div>
       <div class="dr-btn" data-plandel="${p.from}">✕</div>
     </div>`).join('');
-
   return header + `
   <div class="px" style="margin-top:14px"><button class="form-submit" id="js-dca-cfg" style="margin-top:0">Modifier le plan / changer de stratégie</button></div>
   ${sec('Mon rythme')}
@@ -162,7 +225,6 @@ function renderDcaGoals(plan) {
   }).join('') + `</div>`;
 }
 
-// ── Modales (plan / objectif) ──
 let _dcaDraft = null, _dcaGoalDraft = null;
 function openDcaModal(html) {
   document.getElementById('dca-modal-body').innerHTML = html;
@@ -179,7 +241,8 @@ const _dcaHead = t => `<div style="display:flex;align-items:center;justify-conte
   <div id="dca-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div></div>`;
 
 function dcaPlanModalHTML() {
-  const p = _dcaDraft;
+  const p = _dcaDraft, amountMode = p.mode === 'amt';
+  const unit = amountMode ? esc(S.currency || 'EUR') : '%';
   const opts = Object.entries(SECURITIES_DB).map(([t, d]) => `<option value="${esc(t)}">${esc(d.name)}</option>`).join('');
   return _dcaHead('Plan DCA') + `<datalist id="dca-tickers">${opts}</datalist>
     <div class="form-row">
@@ -187,56 +250,73 @@ function dcaPlanModalHTML() {
       <div class="form-field"><div class="form-label">Jour du mois</div><input class="form-input" id="dca-day" type="number" min="1" max="31" inputmode="numeric" value="${p.day}"></div>
     </div>
     <div class="form-row"><div class="form-field"><div class="form-label">Date d'effet</div><input class="form-input" id="dca-from" type="date" value="${p.from}"></div></div>
-    <div class="form-label" style="margin-bottom:8px">Répartition (total = 100 %)</div>
+    <div class="form-label" style="margin-bottom:8px">Répartition
+      <button type="button" class="tap" data-dmode="pct" aria-pressed="${!amountMode}">En %</button>
+      <button type="button" class="tap" data-dmode="amt" aria-pressed="${amountMode}">En montant (${esc(S.currency || 'EUR')})</button>
+    </div>
     ${p.lines.map((l, i) => `<div class="dca-line" data-i="${i}" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-      <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker" value="${esc(l.ticker)}" style="flex:1;min-width:0">
-      <input class="form-input dl-w" type="number" min="0" max="100" step="any" inputmode="decimal" placeholder="%" value="${l.weight}" style="width:76px">
+      <input class="form-input dl-t" list="dca-tickers" placeholder="Ticker ou ISIN" value="${esc(l.ticker)}" style="flex:1;min-width:0">
+      <input class="form-input dl-w" type="number" min="0" ${amountMode ? '' : 'max="100"'} step="any" inputmode="decimal" placeholder="${unit}" value="${Number.isFinite(l.weight) ? l.weight : ''}" style="width:86px">
       <input class="dl-c" type="color" value="${l.color}" style="width:34px;height:34px;border:none;background:none;padding:0">
       <div class="dr-btn${p.lines.length <= 1 ? ' off' : ''}" data-ldel="${i}">✕</div></div>`).join('')}
     <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px">
       <div class="dr-row" id="dca-ladd" style="padding:6px 0;color:var(--accent)">+ Ajouter un titre</div>
       <div id="dca-total" class="t-sm" style="font-weight:700"></div></div>
+    <div class="t-sm">En montants, un écart maximal d’un centime est normalisé à l’enregistrement.</div>
     <button class="form-submit" id="dca-save">Enregistrer le plan</button>`;
 }
+
+// Dans le brouillon seulement, weight est la valeur saisie dans le mode actif.
+// Les plans persistés conservent toujours des poids en pourcentages.
 function readDcaPlanForm() {
   const b = document.getElementById('dca-modal-body'), p = _dcaDraft;
-  p.budget = _numIn(b.querySelector('#dca-budget').value) || 0;
-  p.day = parseInt(b.querySelector('#dca-day').value, 10) || 1;
-  p.from = b.querySelector('#dca-from').value || p.from;
+  p.budget = _numIn(b.querySelector('#dca-budget').value);
+  p.day = Number(b.querySelector('#dca-day').value);
+  p.from = b.querySelector('#dca-from').value;
   p.lines = [...b.querySelectorAll('.dca-line')].map(r => ({
     ticker: r.querySelector('.dl-t').value.trim().toUpperCase(),
-    weight: _numIn(r.querySelector('.dl-w').value) || 0,
+    weight: _numIn(r.querySelector('.dl-w').value),
     color: r.querySelector('.dl-c').value,
   }));
 }
 function dcaUpdateTotal() {
-  const b = document.getElementById('dca-modal-body'); if (!b) return;
-  const t = [...b.querySelectorAll('.dl-w')].reduce((s, i) => s + (_numIn(i.value) || 0), 0);
-  const el = b.querySelector('#dca-total'); if (!el) return;
-  el.textContent = `Total : ${Math.round(t * 100) / 100} %`;
-  el.style.color = Math.abs(t - 100) < 0.01 ? 'var(--gain)' : 'var(--loss)';
+  const b = document.getElementById('dca-modal-body');
+  if (!b || !_dcaDraft) return;
+  const values = [...b.querySelectorAll('.dl-w')].map(input => _numIn(input.value));
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const el = b.querySelector('#dca-total');
+  if (!el) return;
+  const budget = _numIn(b.querySelector('#dca-budget').value);
+  const label = Number.isFinite(total) ? (Math.round(total * 100) / 100).toLocaleString('fr-FR') : '—';
+  el.textContent = _dcaDraft.mode === 'amt' ? `Total : ${label} / ${Number.isFinite(budget) ? budget : '—'}` : `Total : ${label} %`;
+  try {
+    if (_dcaDraft.mode === 'amt') DCAAllocation.toWeights(values, budget);
+    else DCAAllocation.normalizeWeights(values);
+    el.style.color = 'var(--gain)';
+  } catch (error) { el.style.color = 'var(--loss)'; }
 }
 function openDcaPlanModal() {
   const cur = dcaStats().current, today = _ymd(new Date());
   _dcaDraft = cur
-    ? { budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
-    : { budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
+    ? { mode: 'pct', budget: cur.budget, day: cur.day, from: today, lines: cur.lines.map(l => ({ ticker: l.ticker, weight: l.weight, color: l.color })) }
+    : { mode: 'pct', budget: 0, day: 5, from: today, lines: [{ ticker: '', weight: 100, color: DCA_COLORS[0] }] };
   openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
 }
 function saveDcaPlan() {
   readDcaPlanForm();
   const p = _dcaDraft;
-  if (!(p.budget > 0)) return toast('Indique un budget mensuel');
-  if (p.day < 1 || p.day > 31) return toast('Jour du mois entre 1 et 31');
-  if (!p.from) return toast("Indique une date d'effet");
-  if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker de chaque ligne');
-  if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un ticker apparaît deux fois');
-  if (Math.abs(p.lines.reduce((s, l) => s + l.weight, 0) - 100) > 0.01) return toast('Le total doit faire exactement 100 %');
-  const plan = {
-    from: p.from, budget: p.budget, day: p.day,
-    lines: p.lines.map(l => ({ ticker: l.ticker, name: SECURITIES_DB[l.ticker]?.name || S.watchlist.find(w => w.ticker === l.ticker)?.name || l.ticker, weight: l.weight, color: l.color })),
-  };
-  // Même date d'effet : on remplace ; sinon on ajoute (l'historique des stratégies est conservé)
+  if (!Number.isFinite(p.budget) || p.budget <= 0) return toast('Indique un budget mensuel');
+  if (!Number.isInteger(p.day) || p.day < 1 || p.day > 31) return toast('Jour du mois entre 1 et 31');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.from) || _ymd(_parseYmd(p.from)) !== p.from) return toast("Indique une date d'effet valide");
+  if (p.lines.some(l => !l.ticker)) return toast('Renseigne le ticker ou l’ISIN de chaque ligne');
+  if (new Set(p.lines.map(l => l.ticker)).size !== p.lines.length) return toast('Un titre apparaît deux fois');
+  let lines;
+  try {
+    const values = p.lines.map(l => l.weight);
+    const weights = p.mode === 'amt' ? DCAAllocation.toWeights(values, p.budget) : DCAAllocation.normalizeWeights(values);
+    lines = dcaBuildLines(p.lines, weights);
+  } catch (error) { return toast(error.message); }
+  const plan = { from: p.from, budget: p.budget, day: p.day, lines };
   S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
   saveDca(); closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
 }
@@ -286,6 +366,19 @@ document.getElementById('dca-modal-body').addEventListener('click', e => {
     closeDcaModal();
     return openConfirm('Supprimer cet objectif ?', () => { S.dca.goals = S.dca.goals.filter(x => x.id !== id); saveDca(); renderScreen('dca'); });
   }
+  const mode = t.closest('[data-dmode]');
+  if (mode && _dcaDraft && ['pct', 'amt'].includes(mode.dataset.dmode) && mode.dataset.dmode !== _dcaDraft.mode) {
+    const budget = _numIn(document.getElementById('dca-modal-body').querySelector('#dca-budget').value);
+    if (!Number.isFinite(budget) || budget <= 0) return toast('Indique un budget mensuel avant de convertir');
+    readDcaPlanForm();
+    try {
+      const values = _dcaDraft.lines.map(l => l.weight);
+      const converted = mode.dataset.dmode === 'amt' ? DCAAllocation.toAmounts(values, budget) : DCAAllocation.toWeights(values, budget);
+      _dcaDraft.lines = _dcaDraft.lines.map((line, index) => ({ ...line, weight: converted[index] }));
+      _dcaDraft.mode = mode.dataset.dmode;
+    } catch (error) { return toast(error.message); }
+    openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal(); return;
+  }
   if (t.closest('#dca-ladd')) {
     readDcaPlanForm();
     if (_dcaDraft.lines.length < 8) _dcaDraft.lines.push({ ticker: '', weight: 0, color: DCA_COLORS[_dcaDraft.lines.length % DCA_COLORS.length] });
@@ -297,7 +390,9 @@ document.getElementById('dca-modal-body').addEventListener('click', e => {
     openDcaModal(dcaPlanModalHTML()); dcaUpdateTotal();
   }
 });
-document.getElementById('dca-modal-body').addEventListener('input', e => { if (e.target.classList.contains('dl-w')) dcaUpdateTotal(); });
+document.getElementById('dca-modal-body').addEventListener('input', e => {
+  if (e.target.classList.contains('dl-w') || e.target.id === 'dca-budget') dcaUpdateTotal();
+});
 
 function bindDca(el) {
   el.querySelector('#js-back')?.addEventListener('click', back);
@@ -316,7 +411,4 @@ function bindDca(el) {
     el.querySelector('#dca-bar-info').innerHTML = `${_fmtDate(b.dataset.date)} · ${masked(+b.dataset.cumul)} cumulés`;
   }));
 }
-
-
-// Fermée par le bouton retour Android et la touche Échap (voir js/core/modals.js).
 registerModal('dca-modal-sheet', closeDcaModal);
