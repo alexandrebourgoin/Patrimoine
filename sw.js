@@ -36,6 +36,7 @@ const SHELL = [
   './js/services/csv-import.js',
   './js/features/lock.js',
   './js/features/dca.js',
+  './js/features/order-alert-storage.js',
   './js/features/assistant.js',
   './js/features/drag.js',
   './js/features/privacy.js',
