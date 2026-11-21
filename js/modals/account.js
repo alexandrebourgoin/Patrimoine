@@ -26,9 +26,83 @@ const ACCOUNT_TYPES = [
 ];
 const ACC_TYPE_OTHER = '__other__';
 
+// Devise de référence par type de compte : [devise, imposée].
+// Imposée : le produit n'existe que dans cette devise (PEA, Livret A, Pilier 3a…). Sinon, simple valeur par défaut modifiable.
+// Les clés sont les libellés EXACTS de ACCOUNT_TYPES (vérifié par tests/account-rules.test.js) ; un type absent ou saisi
+// librement (« Autre… ») n'a ni devise présélectionnée ni restriction.
+const ACC_TYPE_CCY = {
+  "Plan d'Épargne en Actions (PEA)": ['EUR', true],
+  "PEA-PME": ['EUR', true],
+  "Plan d'Épargne Retraite (PER)": ['EUR', true],
+  "Épargne salariale (PEE / PERCO)": ['EUR', true],
+  "Livret A": ['EUR', true],
+  "LDDS": ['EUR', true],
+  "LEP": ['EUR', true],
+  "Livret Jeune": ['EUR', true],
+  "PEL / CEL": ['EUR', true],
+  "Pilier 3a": ['CHF', true],
+  "Assurance-Vie": ['EUR', false],
+  "Compte-Titres Ordinaire": ['EUR', false],
+  "Compte à terme": ['EUR', false],
+  "Compte courant": ['EUR', false],
+  "SCPI / Immobilier": ['EUR', false],
+};
+
+// Types d'actifs acceptés par type de compte (mêmes libellés exacts). Absent = aucune restriction.
+const _ACC_MARKET_ASSETS = ['Action', 'ETF', 'Obligation', 'Cash'];
+const ACC_ASSET_TYPES = {
+  "Crypto / Exchange": ['Crypto'],
+  "Plan d'Épargne en Actions (PEA)": ['Action', 'ETF'],
+  "PEA-PME": ['Action', 'ETF'],
+  "Compte-Titres Ordinaire": _ACC_MARKET_ASSETS,
+  "Assurance-Vie": _ACC_MARKET_ASSETS,
+  "Plan d'Épargne Retraite (PER)": _ACC_MARKET_ASSETS,
+  "Épargne salariale (PEE / PERCO)": _ACC_MARKET_ASSETS,
+  "Pilier 3a": _ACC_MARKET_ASSETS,
+};
+// Comptes dont les actions doivent appartenir à l'Espace économique européen
+const ACC_PEA_TYPES = ["Plan d'Épargne en Actions (PEA)", "PEA-PME"];
+// Pays éligibles (minuscules ; « europe » = libellé générique des fonds). L'éligibilité d'un ETF au PEA n'est PAS contrôlée :
+// la donnée n'existe pas dans l'application, seul le type d'actif l'est.
+const PEA_COUNTRIES = ['france','allemagne','germany','pays-bas','netherlands','belgique','belgium','italie','italy','espagne','spain','portugal','irlande','ireland','luxembourg','finlande','finland','autriche','austria','grèce','greece','danemark','denmark','suède','sweden','norvège','norway','islande','iceland','liechtenstein','pologne','poland','tchéquie','hongrie','hungary','europe'];
+
+function allowedAssetTypes(accType){ return ACC_ASSET_TYPES[accType]||null; }
+// Message d'erreur (court : il tient dans une bulle d'une ligne) si `type` — et, pour une action de PEA, `country` — n'est pas
+// autorisé sur ce compte, sinon chaîne vide.
+function assetTypeError(acc,type,country){
+  const accType=acc&&acc.type;
+  const ok=allowedAssetTypes(accType);
+  if(ok&&!ok.includes(type)) return type==='Crypto' ? 'Crypto interdite sur ce type de compte' : type+' interdit sur ce type de compte';
+  if(type==='Action'&&ACC_PEA_TYPES.includes(accType)){
+    const c=(country||'').trim().toLowerCase();
+    if(!c||c==='inconnu') return 'PEA : indique le pays (France ou UE)';
+    if(!PEA_COUNTRIES.includes(c)) return 'PEA : actions européennes uniquement';
+  }
+  return '';
+}
+// Positions d'un compte qui deviendraient interdites si le compte passait à `newType`
+function accTypeViolations(acc,newType){
+  return (acc.holdings||[]).filter(h=>assetTypeError({type:newType},h.type,h.country));
+}
+
+// Aligne le sélecteur de devise sur le type choisi.
+// apply = true (création) : impose la devise du type, puis verrouille ou non le sélecteur.
+// apply = false (compte existant) : ne change jamais la devise, car elle sert à convertir les apports et retraits déjà saisis ;
+// le sélecteur n'est verrouillé que si elle est déjà celle que le type impose.
+function syncAccCurrency(typeSelId,curSelId,apply){
+  const typeSel=document.getElementById(typeSelId);
+  const cur=document.getElementById(curSelId);
+  if(!typeSel||!cur) return;
+  const rule=ACC_TYPE_CCY[typeSel.value];
+  if(apply&&rule&&[...cur.options].some(o=>o.value===rule[0])) cur.value=rule[0];
+  cur.disabled=!!(rule&&rule[1]&&cur.value===rule[0]);
+  cur.title=cur.disabled?'Devise imposée par le type de compte':'';
+}
+
 // Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
 // « Préciser le type », affichée quand l'option « Autre… » est choisie.
-function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
+// `curSelId` (optionnel) : sélecteur de devise à aligner sur le type ; `applyCurrency` : true à la création (la devise suit le type).
+function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId, applyCurrency){
   const sel=document.getElementById(selId); if(!sel) return;
   // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
   const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
@@ -43,6 +117,7 @@ function fillAccTypeSelect(selId, otherRowId, otherInpId, value){
     const isOther=sel.value===ACC_TYPE_OTHER;
     if(otherRow) otherRow.classList.toggle('hidden',!isOther);
     if(isOther && otherInp) otherInp.focus();
+    if(curSelId) syncAccCurrency(selId,curSelId,!!applyCurrency);
   };
 }
 
@@ -63,7 +138,10 @@ function openAccModal(){
   setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
-  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','');
+  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency',true);
+  const curSel=document.getElementById('acc-currency');
+  if(curSel) curSel.value='EUR';
+  syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
@@ -172,7 +250,8 @@ function openRenameAcc(accId, currentName){
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
-  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'');
+  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency',false);
+  syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : sa devise n'est pas modifiée
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
@@ -190,9 +269,15 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   if(!name){toast('Nom requis');return;}
   const renamedId=_renameAccId;
   const acc=S.accounts.find(a=>a.id===renamedId); if(!acc) return;
+  const newType=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
+  // Changer de type ne doit pas rendre interdites des positions déjà saisies (un compte déjà non conforme reste modifiable sans changer de type)
+  if(newType!==acc.type){
+    const bad=accTypeViolations(acc,newType);
+    if(bad.length){toast('Type incompatible avec : '+bad.map(h=>h.ticker).join(', '));return;}
+  }
   acc.name=name;
   acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
-  acc.type=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
+  acc.type=newType;
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
   acc.value=accTotal(acc); // la devise du compte entre dans la conversion des apports/retraits

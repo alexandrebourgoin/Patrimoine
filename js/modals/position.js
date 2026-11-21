@@ -1,6 +1,14 @@
 // Modales de position : ajout d un titre (autocomplete ticker/ISIN) et modification d un titre.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js. Les écouteurs du DOM sont attachés à l évaluation (le DOM existe : scripts en fin de body).
 
+// Désactive dans une liste déroulante les types d'actifs interdits sur le compte (règles : js/modals/account.js).
+// keepValue = true : ne touche pas à la valeur courante (titre déjà présent, qui peut ne plus être conforme).
+function _applyAssetTypeRules(selectEl,acc,keepValue){
+  const ok=allowedAssetTypes(acc&&acc.type);
+  [...selectEl.options].forEach(o=>{ o.disabled=!!ok&&!ok.includes(o.value); });
+  if(!keepValue&&ok&&!ok.includes(selectEl.value)) selectEl.value=ok[0];
+}
+
 // ═══════════════════════════════════════════════
 // ADD POSITION MODAL
 // ═══════════════════════════════════════════════
@@ -11,6 +19,7 @@ function openPosModal(accId){
   _posYahooSymbol=null;
   ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pos-type').value='Action';
+  _applyAssetTypeRules(document.getElementById('pos-type'),S.accounts.find(a=>a.id===accId));
   document.getElementById('pos-currency').value='EUR';
   document.getElementById('pos-sector').value='Technologie';
   document.getElementById('pos-date').value=new Date().toISOString().slice(0,10);
@@ -156,6 +165,9 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   if(!ticker||!(qty>0)||!(pru>0)){toast('Ticker, quantité et PRU requis');return;}
   const acc=S.accounts.find(a=>a.id===_posAccId);
   if(!acc) return;
+  // Un titre résolu en ligne peut imposer son type : la règle du compte est revérifiée à l'enregistrement
+  const typeErr=assetTypeError(acc,type,country);
+  if(typeErr){toast(typeErr);return;}
   if(acc.holdings.find(h=>h.ticker===ticker)){toast('Ce ticker existe déjà dans ce compte');return;}
   const hid=ticker+'_'+Date.now().toString(36);
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
@@ -183,6 +195,7 @@ function openEditHolding(accId,holdId){
   document.getElementById('eh-ticker').value=h.ticker;
   document.getElementById('eh-name').value=h.name||'';
   document.getElementById('eh-type').value=h.type||'Action';
+  _applyAssetTypeRules(document.getElementById('eh-type'),acc,true);   // types interdits grisés, valeur actuelle conservée
   document.getElementById('eh-currency').value=h.currency||'EUR';
   document.getElementById('eh-country').value=h.country||'';
   document.getElementById('eh-sector').value=h.sector||'Autre';
@@ -202,6 +215,13 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
   const h=acc?.holdings.find(h=>h.id===_ehHoldId); if(!h) return;
   const newTicker=document.getElementById('eh-ticker').value.trim().toUpperCase();
   if(!newTicker){toast('Ticker requis');return;}
+  // Une modification de type ou de pays n'est refusée que si elle crée une combinaison interdite ; un titre déjà non conforme reste modifiable
+  const newType=document.getElementById('eh-type').value;
+  const newCountry=document.getElementById('eh-country').value.trim()||h.country;
+  if(newType!==h.type||newCountry!==h.country){
+    const typeErr=assetTypeError(acc,newType,newCountry);
+    if(typeErr){toast(typeErr);return;}
+  }
   if(newTicker!==h.ticker){
     if(acc.holdings.find(o=>o.id!==h.id&&o.ticker===newTicker)){toast('Ce ticker existe déjà dans ce compte');return;}
     h.ticker=newTicker;
@@ -209,9 +229,9 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
   }
   const newName=document.getElementById('eh-name').value.trim();
   if(newName) h.name=newName;
-  h.type=document.getElementById('eh-type').value;
+  h.type=newType;
   h.currency=document.getElementById('eh-currency').value;
-  h.country=document.getElementById('eh-country').value.trim()||h.country;
+  h.country=newCountry;
   h.sector=document.getElementById('eh-sector').value;
   const newPrice=parseFloat(document.getElementById('eh-price').value);
   if(newPrice>0){
