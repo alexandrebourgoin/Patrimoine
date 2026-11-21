@@ -402,6 +402,7 @@ SCREEN_BIND.settings = function (el, id) {
       openConfirm('Réinitialiser les données démo ?',()=>{
         S.accounts=genDemo();
         localStorage.removeItem(STORE_DCA_DEMO); loadDca();
+        localStorage.removeItem('patrimoine-orders-alerts-demo');
         saveAccounts();
         refreshMain();
         renderScreen('settings');
@@ -431,6 +432,12 @@ SCREEN_BIND.settings = function (el, id) {
       toast('Cache des prix effacé');
     });
     el.querySelector('#js-export-btn')?.addEventListener('click', () => {
+      // Ordres et alertes du mode réel ; une lecture impossible interrompt l'export au lieu de l'omettre en silence
+      let ordersAlerts = null;
+      if (!S.isDemo) {
+        try { ordersAlerts = createOrderAlertStore(localStorage, 'real').exportData(); }
+        catch (e) { toast('Export impossible : ordres et alertes illisibles'); return; }
+      }
       const data = {
         exportedAt: new Date().toISOString(),
         version: '1.0.2',
@@ -439,6 +446,7 @@ SCREEN_BIND.settings = function (el, id) {
         targets:   S.targets,
         user:      S.user,
         dca:       S.isDemo ? null : S.dca,
+        ordersAlerts,
       };
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
@@ -459,6 +467,8 @@ SCREEN_BIND.settings = function (el, id) {
         localStorage.removeItem(STORE_ACCOUNTS_REAL);
         localStorage.removeItem(STORE_DCA_DEMO);
         localStorage.removeItem(STORE_DCA_REAL);
+        localStorage.removeItem('patrimoine-orders-alerts-demo');
+        localStorage.removeItem('patrimoine-orders-alerts-real');
         localStorage.removeItem(STORE_PRICES);
         localStorage.removeItem(STORE_WEALTH);
         location.reload();
