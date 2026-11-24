@@ -13,7 +13,7 @@
 // ⚠️ Ce numéro EST le 3e chiffre de la version applicative : patrimoine-vNN ↔ 1.11.NN.
 // Le bumper ici oblige à mettre APP_VERSION à jour dans mon-patrimoine.js (et inversement).
 // L'écran Réglages → À propos affiche le cache réellement actif et signale un écart.
-const CACHE = 'patrimoine-v112';
+const CACHE = 'patrimoine-v113';
 const SHELL = [
   './index.html',
   './mon-patrimoine.html',
@@ -35,7 +35,19 @@ const SHELL = [
   './js/services/prices.js',
   './js/services/csv-import.js',
   './js/features/lock.js',
+  './js/features/dca-calc.js',
+  './js/features/dca-isin.js',
   './js/features/dca.js',
+  './js/features/order-alert-storage.js',
+  './js/features/order-alert-rules.js',
+  './js/features/transaction-check.js',
+  './js/features/realestate-calc.js',
+  './js/features/realestate-storage.js',
+  './js/features/wealth.js',
+  './js/features/account-perf.js',
+  './js/features/benchmark.js',
+  './js/features/cash-pockets.js',
+  './js/features/account-rules.js',
   './js/features/assistant.js',
   './js/features/drag.js',
   './js/features/privacy.js',
@@ -50,6 +62,7 @@ const SHELL = [
   './js/modals/position.js',
   './js/modals/order.js',
   './js/modals/cashflow.js',
+  './js/modals/cash-adjust.js',
   './js/screens/dashboard.js',
   './js/screens/accounts.js',
   './js/screens/search.js',
@@ -59,6 +72,8 @@ const SHELL = [
   './js/screens/assistant.js',
   './js/screens/settings.js',
   './js/screens/watch.js',
+  './js/screens/orders.js',
+  './js/screens/immo.js',
   './manifest.json',
   './icon.svg'
 ];

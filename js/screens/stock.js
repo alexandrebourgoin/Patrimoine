@@ -112,7 +112,10 @@ function renderStock() {
   </div>
   <div class="row" style="padding:4px 20px 10px;justify-content:space-between;align-items:center">
     <div class="t-section">Mouvements</div>
-    <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
+    <div class="row gap8" style="align-items:center">
+      <div style="font-size:12px;font-weight:600;color:var(--text2)">${h.transactions.length}</div>
+      <div id="js-add-tx" class="tap" style="height:30px;padding:0 12px;border-radius:15px;background:var(--accent-dim);color:var(--accent);font-size:12px;font-weight:700;display:flex;align-items:center">+ Ajouter un mouvement</div>
+    </div>
   </div>
   <div id="js-tx-list">${txs}</div>`;
 }
@@ -175,6 +178,7 @@ SCREEN_BIND.stock = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     const h=acc?.holdings.find(h=>h.id===S.holdingId);
     if(chartWrap&&h) { initStockChart(chartWrap,h); attachChartFs(chartWrap,'stock'); }
+    el.querySelector('#js-add-tx')?.addEventListener('click',()=>{ if(h) openAddOrder(S.accountId,S.holdingId); });
     // Transaction edit and delete buttons
     el.querySelector('#js-tx-list')?.addEventListener('click',e=>{
       const editBtn=e.target.closest('.tx-edit-btn');
@@ -187,6 +191,8 @@ SCREEN_BIND.stock = function (el, id) {
         const idx=parseInt(delBtn.dataset.txidx);
         const tx=h.transactions[idx];
         const lbl={BUY:'achat',SELL:'vente',DIV:'dividende'}[tx.type]||'mouvement';
+        const delErr=txCheckDelete(h.transactions,idx);
+        if(delErr){toast(delErr);return;}
         openConfirm(`Supprimer ce ${lbl} du ${fmtDate(tx.date)} ?`,()=>{
           h.transactions.splice(idx,1);
           recalcHolding(h);

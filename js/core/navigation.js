@@ -63,7 +63,7 @@ function back() {
     // où on doit revenir selon l'écran courant
     const fallbacks = {
       account: 'comptes', stock: 'account',
-      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard',
+      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard', orders: 'dashboard', immo: 'dashboard', immodetail: 'immo',
     };
     const fb = fallbacks[S.screen];
     if (fb) go(fb);
@@ -75,8 +75,8 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca};
-  if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); if(id==='dca') bindDca(el); }
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca,orders:renderOrders,immo:renderImmo,immodetail:renderImmoDetail};
+  if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
 // Refresh all top-level screens (dashboard, comptes, analysis)
@@ -86,5 +86,7 @@ function refreshMain() {
   renderScreen('comptes');
   renderScreen('analysis');
   if(S.screen==='recherche') renderScreen('recherche');
+  if(S.screen==='orders') renderScreen('orders');   // alertes recalculées après chaque actualisation des cours
+  renderNav();                                      // pastilles de la barre du bas
   saveData();
 }

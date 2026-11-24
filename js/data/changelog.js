@@ -2,6 +2,14 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.113': [
+    { type:'new', text:"Ordres et alertes (menu ☰ ou barre du bas) : ordres limites en cours avec confirmation d'exécution (ajoute le mouvement au compte) et alertes de prix, séparés entre mode démo et réel, avec pastille de compteur." },
+    { type:'new', text:"Immobilier : biens (résidence principale, secondaire, locatif), valeur estimée, crédit, tableau d'amortissement. Le patrimoine net de l'Accueil et de l'Analyse intègre l'immobilier ; la carte « Comptes financiers » ne montre plus le patrimoine net." },
+    { type:'new', text:"Comptes : liquidités par devise, apports et retraits dans leur devise, régularisation des liquidités, performance YTD / historique pondérée des flux et comparaison à un indice. Date d'ouverture du compte." },
+    { type:'new', text:"DCA : saisie de la répartition en % ou en montants, résolution des ISIN et projection du patrimoine à 1 à 20 ans." },
+    { type:'new', text:"Règles par type de compte : devise imposée (PEA, Livret A, Pilier 3a…) et types d'actifs autorisés (PEA : actions européennes et ETF, pas de crypto…)." },
+    { type:'fix', text:"Fiche titre : bouton « Ajouter un mouvement » et contrôle des ventes (aucune vente ne peut dépasser la quantité détenue à sa date, à l'ajout, la modification et la suppression)." },
+  ],
   '1.11.105': [
     { type:'fix', text:"Barre du bas qui disparaissait ou ne répondait plus après une mise à jour : l'appli supporte maintenant un mélange ancien/nouveau fichiers servi par le cache (barre par défaut dans la page, éléments du menu recréés si absents, reconstruction de la barre au retour dans l'appli)." },
   ],

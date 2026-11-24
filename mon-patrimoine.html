@@ -75,6 +75,9 @@
   <div id="s-watchstock" class="screen no-nav"></div>
   <div id="s-assistant"  class="screen no-nav"></div>
   <div id="s-dca"        class="screen no-nav"></div>
+  <div id="s-orders"     class="screen no-nav"></div>
+  <div id="s-immo"       class="screen no-nav"></div>
+  <div id="s-immodetail" class="screen no-nav"></div>
 
   <!-- Barre par défaut : remplacée par renderNav() (raccourcis personnalisés) dès que le JS tourne.
        Elle reste en filet de sécurité si un ancien JS en cache est servi avec ce HTML. -->
@@ -121,7 +124,7 @@
       <div class="modal-title" style="margin-bottom:0"><span class="modal-ticker" id="modal-ticker">—</span><span id="modal-name">Ajouter un ordre</span></div>
       <div id="modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
-    <div class="type-btns">
+    <div class="type-btns" id="modal-type-btns">
       <div class="type-btn buy on" data-type="BUY">Achat</div>
       <div class="type-btn sell" data-type="SELL">Vente</div>
       <div class="type-btn div" data-type="DIV">Dividende</div>
@@ -144,6 +147,117 @@
     </div>
     <button class="form-submit" id="modal-submit">Enregistrer l'ordre</button>
   </div>
+</div>
+
+<!-- ORDRES LIMITES ET ALERTES (écran : js/screens/orders.js) -->
+<div id="oa-order-bg" class="add-modal-bg"></div>
+<div id="oa-order-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:16px">
+      <div class="modal-title" id="oa-order-title" style="margin-bottom:0">Nouvel ordre limite</div>
+      <div id="oa-order-close" class="oa-x">✕</div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Compte</div><select class="form-input" id="oa-order-acc" style="cursor:pointer"></select></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Titre</div><select class="form-input" id="oa-order-hold" style="cursor:pointer"></select></div></div>
+    <div class="type-btns" id="oa-order-type-btns">
+      <div class="type-btn buy on" data-otype="BUY">Achat</div>
+      <div class="type-btn sell" data-otype="SELL">Vente</div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Quantité</div><input class="form-input" type="number" id="oa-order-qty" min="0.0000001" step="any" placeholder="0" inputmode="decimal"></div>
+      <div class="form-field"><div class="form-label">Prix limite</div><input class="form-input" type="number" id="oa-order-limit" min="0" step="any" placeholder="0.00" inputmode="decimal"></div>
+    </div>
+    <button class="form-submit" id="oa-order-submit">Enregistrer l'ordre</button>
+  </div>
+</div>
+<div id="oa-exec-bg" class="add-modal-bg"></div>
+<div id="oa-exec-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body" id="oa-exec-body"></div>
+</div>
+<div id="oa-alert-bg" class="add-modal-bg"></div>
+<div id="oa-alert-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Nouvelle alerte de prix</div>
+      <div id="oa-alert-close" class="oa-x">✕</div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Titre</div><select class="form-input" id="oa-alert-tick" style="cursor:pointer"></select></div></div>
+    <div class="type-btns" id="oa-alert-dir-btns">
+      <div class="type-btn buy on" data-adir="above">Au-dessus de</div>
+      <div class="type-btn sell" data-adir="below">En dessous de</div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Prix (devise du titre)</div><input class="form-input" type="number" id="oa-alert-price" min="0" step="any" placeholder="0.00" inputmode="decimal"></div></div>
+    <button class="form-submit" id="oa-alert-submit">Enregistrer l'alerte</button>
+  </div>
+</div>
+
+<!-- LIQUIDITÉS PAR DEVISE ET INDICE DE COMPARAISON (js/modals/cash-adjust.js, js/screens/account.js) -->
+<div id="ca-bg" class="add-modal-bg"></div>
+<div id="ca-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body" id="ca-body"></div>
+</div>
+<div id="bm-bg" class="add-modal-bg"></div>
+<div id="bm-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="modal-title" style="margin-bottom:6px">Indice de comparaison</div>
+    <div class="t-sm" style="margin-bottom:14px">Choix libre pour chaque compte (un PEA peut se comparer au MSCI World, par exemple). Par défaut : Bitcoin pour un compte Crypto, CAC 40 pour un PEA, aucun pour les autres. MSCI World et MSCI ACWI sont suivis via les ETF iShares URTH et ACWI ; les indices en dollars sont convertis en euros.</div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Indice</div>
+      <select class="form-input" id="bm-select" style="cursor:pointer"></select></div></div>
+    <button class="form-submit" id="bm-ok">Enregistrer</button>
+  </div>
+</div>
+
+<!-- IMMOBILIER (écrans : js/screens/immo.js) -->
+<div id="im-bg" class="add-modal-bg"></div>
+<div id="im-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:14px">
+      <div class="modal-title" id="im-title" style="margin-bottom:0">Nouveau bien</div>
+      <div id="im-close" class="oa-x">✕</div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Nom du bien</div><input class="form-input" id="im-name" type="text" placeholder="Appartement, maison…"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Type</div>
+      <select class="form-input" id="im-kind" style="cursor:pointer">
+        <option value="main" id="im-kind-main">Résidence principale</option>
+        <option value="secondary">Résidence secondaire</option>
+        <option value="rental">Bien locatif</option>
+      </select></div></div>
+    <div class="t-label" style="margin:6px 0">Achat</div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Date d'achat</div><input class="form-input" id="im-date" type="date"></div>
+      <div class="form-field"><div class="form-label">Prix d'achat</div><input class="form-input" id="im-price" type="number" min="0" step="any" inputmode="decimal" placeholder="100000"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Frais de notaire</div><input class="form-input" id="im-notary" type="number" min="0" step="any" inputmode="decimal" placeholder="10000"></div>
+      <div class="form-field"><div class="form-label">Travaux</div><input class="form-input" id="im-works" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="t-sm" style="margin:-4px 0 10px">Frais de notaire : environ 7,5 à 8 % dans l'ancien, 2 à 3 % dans le neuf. <span id="im-notary-est" class="tap" style="color:var(--accent);font-weight:700;cursor:pointer">Estimer à 8 %</span></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Autres frais</div><input class="form-input" id="im-other" type="number" min="0" step="any" inputmode="decimal" placeholder="0"><div class="t-sm">Frais bancaires, de dossier ou de garantie. Hors intérêts et assurance.</div></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Prise de valeur annuelle estimée (%/an)</div><input class="form-input" id="im-growth" type="number" step="0.1" inputmode="decimal" placeholder="2"></div></div>
+    <div class="t-label" style="margin:10px 0 6px">Crédit immobilier <span class="t-sm">(facultatif)</span></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Montant emprunté</div><input class="form-input" id="im-l-amt" type="number" min="0" step="any" inputmode="decimal" placeholder="90000"></div>
+      <div class="form-field"><div class="form-label">Taux annuel (%)</div><input class="form-input" id="im-l-rate" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3.5"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Durée (années)</div><input class="form-input" id="im-l-years" type="number" min="0" step="any" inputmode="decimal" placeholder="20"></div>
+      <div class="form-field"><div class="form-label">Mensualité totale (assurance comprise)</div><input class="form-input" id="im-l-pay" type="number" min="0" step="any" inputmode="decimal" placeholder="facultatif"></div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Première échéance (si différente)</div><input class="form-input" id="im-l-first" type="date"></div></div>
+    <div id="im-prev" class="t-sm" style="margin:2px 0 12px"></div>
+    <button class="form-submit" id="im-save">Enregistrer</button>
+  </div>
+</div>
+<div id="ima-bg" class="add-modal-bg"></div>
+<div id="ima-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body" id="ima-body"></div>
 </div>
 
 <!-- CONFIRM DIALOG -->
@@ -289,6 +403,12 @@
         <input class="form-input" type="text" id="acc-bank" placeholder="ex : BNP Paribas, Boursorama…" autocomplete="off">
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Date d'ouverture <span style="font-weight:400;color:var(--text3)">(optionnel)</span></div>
+        <input class="form-input" type="date" id="acc-start">
+      </div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
         <div style="font-size:14px;font-weight:600">Compte observateur</div>
@@ -391,6 +511,12 @@
       <div class="form-field">
         <div class="form-label">Établissement bancaire <span style="font-weight:400;color:var(--text3)">(optionnel)</span></div>
         <input class="form-input" type="text" id="rename-acc-bank" placeholder="ex : BNP Paribas, Boursorama…" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <div class="form-label">Date d'ouverture <span style="font-weight:400;color:var(--text3)">(optionnel)</span></div>
+        <input class="form-input" type="date" id="rename-acc-start">
       </div>
     </div>
     <button class="form-submit" id="rename-acc-submit">Enregistrer</button>
@@ -564,6 +690,12 @@
         <input class="form-input" type="number" id="cf-amount" min="0" step="any" placeholder="0.00" inputmode="decimal">
       </div>
       <div class="form-field">
+        <div class="form-label">Devise</div>
+        <select class="form-input" id="cf-ccy" style="cursor:pointer"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
         <div class="form-label">Date</div>
         <input class="form-input" type="date" id="cf-date">
       </div>
@@ -731,7 +863,19 @@
 <script src="js/services/prices.js"></script>
 <script src="js/services/csv-import.js"></script>
 <script src="js/features/lock.js"></script>
+<script src="js/features/dca-calc.js"></script>
+<script src="js/features/dca-isin.js"></script>
 <script src="js/features/dca.js"></script>
+<script src="js/features/order-alert-storage.js"></script>
+<script src="js/features/order-alert-rules.js"></script>
+<script src="js/features/transaction-check.js"></script>
+<script src="js/features/realestate-calc.js"></script>
+<script src="js/features/realestate-storage.js"></script>
+<script src="js/features/wealth.js"></script>
+<script src="js/features/account-perf.js"></script>
+<script src="js/features/benchmark.js"></script>
+<script src="js/features/cash-pockets.js"></script>
+<script src="js/features/account-rules.js"></script>
 <script src="js/features/assistant.js"></script>
 <script src="js/features/drag.js"></script>
 <script src="js/features/privacy.js"></script>
@@ -746,6 +890,7 @@
 <script src="js/modals/position.js"></script>
 <script src="js/modals/order.js"></script>
 <script src="js/modals/cashflow.js"></script>
+<script src="js/modals/cash-adjust.js"></script>
 <script src="js/screens/dashboard.js"></script>
 <script src="js/screens/accounts.js"></script>
 <script src="js/screens/search.js"></script>
@@ -755,6 +900,8 @@
 <script src="js/screens/assistant.js"></script>
 <script src="js/screens/settings.js"></script>
 <script src="js/screens/watch.js"></script>
+<script src="js/screens/orders.js"></script>
+<script src="js/screens/immo.js"></script>
 <script src="mon-patrimoine.js"></script>
 </body>
 </html>

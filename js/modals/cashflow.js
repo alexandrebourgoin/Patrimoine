@@ -13,7 +13,7 @@ function renderCfList(){
   const acc=S.accounts.find(a=>a.id===_cfAccId);
   const cfs=[...(acc?.cashflows||[])].sort((a,b)=>b.date.localeCompare(a.date));
   if(!cfs.length){ el.innerHTML=''; return; }
-  const accCcy=acc.currency||S.currency;
+  const accCcy=PU.cfCcy(acc,{});   // devise d'un apport ancien (sans ccy) : celle du compte
   el.innerHTML=`<div class="t-label" style="margin:14px 0 4px">Mouvements enregistrés</div>`+
     cfs.map(c=>{
       const dep=c.type!=='WIT';
@@ -23,7 +23,7 @@ function renderCfList(){
           <div style="font-size:13px;font-weight:700">${dep?'Apport':'Retrait'} · ${fmtDate(c.date)}</div>
           ${c.note?`<div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.note)}</div>`:''}
         </div>
-        <div style="font-size:13px;font-weight:800" class="${dep?'t-gain':'t-loss'} t-num">${dep?'+':'−'}${maskedNative(+c.amount||0,accCcy)}</div>
+        <div style="font-size:13px;font-weight:800" class="${dep?'t-gain':'t-loss'} t-num">${dep?'+':'−'}${maskedNative(+c.amount||0,PU.cfCcy(acc,c))}</div>
         <div class="tx-del-btn" data-cfdel="${esc(c.id)}" title="Supprimer">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
         </div>
@@ -45,9 +45,12 @@ function openCfModal(accId){
   document.getElementById('cf-amount').value='';
   document.getElementById('cf-note').value='';
   document.getElementById('cf-date').value=_dayKey(Date.now());
-  // Les montants sont saisis dans la devise du compte (convertis ensuite pour le patrimoine)
-  const lbl=document.getElementById('cf-amount-label');
-  if(lbl) lbl.textContent='Montant ('+(S.accounts.find(a=>a.id===accId)?.currency||S.currency)+')';
+  // Chaque apport / retrait a sa devise (par défaut celle du compte) : il alimente la poche de liquidités de cette devise
+  const acc=S.accounts.find(a=>a.id===accId);
+  const base=acc?.currency||S.currency;
+  const sel=document.getElementById('cf-ccy');
+  sel.innerHTML=[...new Set([base,...Object.keys(FX_RATES)])].map(c=>`<option value="${c}">${c}</option>`).join('');
+  sel.value=base;
   document.querySelectorAll('[data-cftype]').forEach(b=>b.classList.toggle('on',b.dataset.cftype==='DEP'));
   renderCfList();
   document.getElementById('cf-modal-bg').classList.add('show');
@@ -73,7 +76,8 @@ document.getElementById('cf-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_cfAccId);
   if(!acc) return;
   if(!acc.cashflows) acc.cashflows=[];
-  acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,note});
+  const ccy=document.getElementById('cf-ccy').value||acc.currency||S.currency;
+  acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,ccy,note});
   acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
   acc.value=accTotal(acc); // le solde intègre désormais les apports/retraits non investis
   closeCfModal();

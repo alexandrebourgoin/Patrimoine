@@ -402,6 +402,8 @@ SCREEN_BIND.settings = function (el, id) {
       openConfirm('Réinitialiser les données démo ?',()=>{
         S.accounts=genDemo();
         localStorage.removeItem(STORE_DCA_DEMO); loadDca();
+        createOrderAlertStore(localStorage, 'demo').clear();   // les ordres démo visent des comptes régénérés
+        createImmoStore(localStorage, 'demo').clear();
         saveAccounts();
         refreshMain();
         renderScreen('settings');
@@ -431,6 +433,16 @@ SCREEN_BIND.settings = function (el, id) {
       toast('Cache des prix effacé');
     });
     el.querySelector('#js-export-btn')?.addEventListener('click', () => {
+      let ordersAlerts = null;
+      if (!S.isDemo) {
+        try { ordersAlerts = createOrderAlertStore(localStorage, 'real').read(); }
+        catch (e) { toast('Ordres et alertes illisibles : non inclus dans l\'export'); }
+      }
+      let immo = null;
+      if (!S.isDemo) {
+        try { immo = createImmoStore(localStorage, 'real').read(); }
+        catch (e) { toast('Biens immobiliers illisibles : non inclus dans l\'export'); }
+      }
       const data = {
         exportedAt: new Date().toISOString(),
         version: '1.0.2',
@@ -439,6 +451,8 @@ SCREEN_BIND.settings = function (el, id) {
         targets:   S.targets,
         user:      S.user,
         dca:       S.isDemo ? null : S.dca,
+        ordersAlerts,
+        immo,
       };
       const json = JSON.stringify(data, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
@@ -459,6 +473,11 @@ SCREEN_BIND.settings = function (el, id) {
         localStorage.removeItem(STORE_ACCOUNTS_REAL);
         localStorage.removeItem(STORE_DCA_DEMO);
         localStorage.removeItem(STORE_DCA_REAL);
+        ['demo', 'real'].forEach(m => createOrderAlertStore(localStorage, m).clear());
+        localStorage.removeItem(STORE_ORDERS_LEGACY);
+        localStorage.removeItem(STORE_ALERTS_LEGACY);
+        ['demo', 'real'].forEach(m => createImmoStore(localStorage, m).clear());
+        localStorage.removeItem(STORE_IMMO_LEGACY);
         localStorage.removeItem(STORE_PRICES);
         localStorage.removeItem(STORE_WEALTH);
         location.reload();

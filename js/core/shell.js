@@ -28,6 +28,8 @@ const _NAV_PATH = {
   assistant: 'M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12zM6 14l.75 2.05L8.8 16.8l-2.05.75L6 19.6l-.75-2.05L3.2 16.8l2.05-.75L6 14z',
   settings:  'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
   dca:       'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm0-14a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+  orders:    'M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z',
+  immo:      'M17 11V3H7v4H3v14h8v-4h2v4h8V11h-4zM7 19H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm4 4H9v-2h2v2zm0-4H9V9h2v2zm0-4H9V5h2v2zm4 8h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm4 12h-2v-2h2v2zm0-4h-2v-2h2v2z',
   refresh:   'M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z',
   eye:       'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
   eyeoff:    'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
@@ -39,6 +41,8 @@ const NAV_CATALOG = {
   recherche: { label:'Recherche',  kind:'screen' },
   analysis:  { label:'Analyse',    kind:'screen' },
   dca:       { label:'DCA',        kind:'screen' },
+  orders:    { label:'Ordres',     kind:'screen' },   // titre de l'écran et du menu : « Ordres et alertes »
+  immo:      { label:'Immobilier', kind:'screen' },
   assistant: { label:'Assistant',  kind:'screen' },
   settings:  { label:'Réglages',   kind:'screen' },
   refresh:   { label:'Actualiser', kind:'action' },
@@ -46,6 +50,14 @@ const NAV_CATALOG = {
 };
 const NAV_DEFAULT = ['dashboard','comptes','recherche','analysis'];
 const NAV_MIN = 3, NAV_MAX = 5;
+
+// Pastilles de compteur : chaque module enregistre sa fonction (NAV_BADGES.<clé> = () => nombre) ; l'assistant est géré ici.
+// Une seule source par raccourci, utilisée par la barre du bas ET le tiroir.
+const NAV_BADGES = {};
+function navBadgeCount(key) {
+  if (key==='assistant') return S.assistantEnabled ? assistantAlertCount() : 0;
+  return NAV_BADGES[key] ? NAV_BADGES[key]() : 0;
+}
 
 function navIconSvg(key, size=22) {
   const p = key==='privacy' ? (S.privacy ? _NAV_PATH.eyeoff : _NAV_PATH.eye) : _NAV_PATH[key];
@@ -70,9 +82,10 @@ function renderNav() {
   // Écrans « sans nav » devenus raccourcis : on leur réserve la place de la barre en bas
   document.querySelectorAll('.screen.no-nav').forEach(s => s.classList.toggle('has-nav', items.includes(s.id.slice(2))));
   nav.classList.toggle('hidden', !navVisibleFor(S.screen));
-  nav.innerHTML = items.map(k =>
-    `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}">${navIconSvg(k)}<span>${navLabel(k)}</span><div class="nav-pip"></div></div>`
-  ).join('');
+  nav.innerHTML = items.map(k => {
+    const n = navBadgeCount(k);
+    return `<div class="nav-btn${k===S.screen?' on':''}" data-nav="${k}">${navIconSvg(k)}<span>${navLabel(k)}</span>${n?`<span class="nav-badge">${n>9?'9+':n}</span>`:''}<div class="nav-pip"></div></div>`;
+  }).join('');
 }
 function togglePrivacy() {
   S.privacy = !S.privacy;
@@ -102,11 +115,12 @@ function sanitizeNavItems(arr) {
 
 let _drawerEdit = false;
 function drawerRow(key, opts={}) {
-  const badge = key==='assistant' && S.assistantEnabled ? assistantAlertCount() : 0;
+  const badge = navBadgeCount(key);
   const lbl = key==='privacy' ? (S.privacy ? 'Afficher les montants' : 'Masquer les montants')
             : key==='refresh' ? 'Actualiser les cours'
             : key==='assistant' ? 'Assistant IA'
             : key==='dca' ? 'DCA & objectifs'
+            : key==='orders' ? 'Ordres et alertes'
             : NAV_CATALOG[key].label;
   const on = NAV_CATALOG[key].kind==='screen' && key===S.screen;
   return `<div class="dr-row${on?' on':''}" data-dkey="${key}"${key==='refresh'?' id="js-refresh-btn"':''}>
@@ -123,7 +137,7 @@ function renderDrawer() {
       <div class="dr-sec">Actions</div>
       ${['privacy','refresh', ...(S.assistantEnabled?['assistant']:[]), 'settings'].map(k=>drawerRow(k)).join('')}
       <div class="dr-sec">Écrans</div>
-      ${[...NAV_SCREENS, 'dca'].map(k=>drawerRow(k)).join('')}
+      ${[...NAV_SCREENS, 'dca', 'orders', 'immo'].map(k=>drawerRow(k)).join('')}
       <div class="dr-sep"></div>
       <div class="dr-row" id="js-drawer-edit"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="dr-lbl">Personnaliser la barre du bas</span></div>`;
   } else {

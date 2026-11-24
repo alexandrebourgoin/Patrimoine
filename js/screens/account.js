@@ -17,6 +17,95 @@ function accHeroValHTML(acc) {
   return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
 }
 
+// ── Performance : le calcul est pur (js/features/account-perf.js) ; ici seulement le contexte de l'appli ──
+// Mode d'affichage mémorisé : 'ytd' (depuis le 1er janvier) ou 'all' (historique)
+function _perfModeGet() { try { return localStorage.getItem('accPerfMode') === 'all' ? 'all' : 'ytd'; } catch (e) { return 'ytd'; } }
+function _perfModeSet(m) { try { localStorage.setItem('accPerfMode', m); } catch (e) {} }
+// Dernière clôture connue ≤ jour (série réelle de l'historique), ou null
+function _closeOn(ticker, day) {
+  const h = getHistorySeries(ticker);
+  if (!h) return null;
+  let c = null;
+  for (const p of h.series) { if (p.d <= day) c = p.c; else break; }
+  return c;
+}
+const _accValueEnv = { qtyOnDay: _qtyOnDay, closeOn: _closeOn, conv: (v, c) => toRefCcy(v, c), cashOn: (a, day) => accCash(a, day) };
+function accPerfNow(acc) {
+  const ctx = { today: _dayKey(Date.now()), conv: (v, c) => toRefCcy(v, c), value: acc.value };
+  const perf = accPerfInfo(acc, ctx);
+  return { ctx, perf, sum: accPerfSummary(acc, perf, ctx, day => accValueOnDay(acc, day, _accValueEnv)) };
+}
+// Performance affichée dans la liste des comptes : la même que sur l'écran du compte (mode YTD ou historique mémorisé)
+function accPerfPctNow(acc) {
+  const { ctx } = accPerfNow(acc);
+  return accPerfPct(acc, _perfModeGet(), ctx, day => accValueOnDay(acc, day, _accValueEnv));
+}
+
+const _CHIP = 'padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer';
+function accPerfCardHTML(acc, perf, sum) {
+  if (!perf || !sum) return '';
+  const mode = _perfModeGet(), cur = mode === 'all' ? sum.all : sum.ytd;
+  // Sans base de calcul pour la période (ex. valeur au 31 décembre inconnue) : on garde la carte et sa bascule, avec « — »
+  const modeBtn = (k, l) => `<span data-pm="${k}" class="tap" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;${mode === k ? 'background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)' : 'color:var(--text2)'}">${l}</span>`;
+  const sub = mode === 'all'
+    ? `Depuis le ${fmtDate(sum.t0)}${sum.annual != null ? ' · ' + fmtPct(sum.annual) + ' / an' : ''}`
+    : (cur ? `Depuis le 1er janvier${sum.approx ? ' · approximatif (historique de cours incomplet)' : ''}` : 'Valeur au 31 décembre inconnue : consulte la performance historique');
+  return `<div style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div class="t-label">Performance ${mode === 'all' ? 'historique' : 'YTD'}</div>
+      <div style="display:flex;gap:2px;padding:2px;border-radius:20px;background:rgba(127,127,127,.15)">${modeBtn('ytd', 'YTD')}${modeBtn('all', 'Historique')}</div>
+    </div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap">
+      ${cur ? `<div style="font-size:26px;font-weight:800" class="${cur.pct >= 0 ? 't-gain' : 't-loss'} t-num">${fmtPct(cur.pct)}</div>
+      <div style="font-size:14px;font-weight:700" class="${cur.gain >= 0 ? 't-gain' : 't-loss'} t-num">${cur.gain >= 0 ? '+' : ''}${accNative(acc, cur.gain)}</div>`
+        : '<div style="font-size:26px;font-weight:800" class="t-num">—</div>'}
+    </div>
+    <div class="t-sm" style="margin-top:4px">${sub}</div>
+  </div>`;
+}
+// Poches de liquidités (si plusieurs devises) et cumul des apports / retraits
+function accCashDetailHTML(acc, perf) {
+  const ccy = acc.currency || S.currency;
+  const pk = Object.entries(PU.accCashByCcy(acc)).filter(([, v]) => Math.abs(v) > 0.005);
+  let h = '';
+  if (pk.length > 1 || (pk.length === 1 && pk[0][0] !== ccy))
+    h += `<div class="t-sm" style="margin-top:6px">Poches de liquidités : ${pk.map(([c, v]) => `<b class="t-num">${maskedNative(v, c)}</b>`).join(' · ')}</div>`;
+  if (perf)
+    h += `<div class="t-sm" style="margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap"><span>Apports cumulés <b class="t-num">${accNative(acc, perf.dep)}</b></span><span>Retraits cumulés <b class="t-num">${accNative(acc, perf.wit)}</b></span></div>`;
+  return h;
+}
+// Comparaison à l'indice : tableau Période / Compte / Indice / Écart, depuis la même date de début que le compte
+function accBenchHTML(acc, perf, sum) {
+  const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
+  const chip = `<span id="js-bm-btn" class="tap" style="padding:3px 10px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">${b ? 'Indice : ' + esc(b.label) : 'Comparer à un indice'}</span>`;
+  if (!b) return `<div class="t-sm" style="margin-top:8px">${chip}</div>`;
+  if (!perf || !sum) return `<div class="t-sm" style="margin-top:8px">${chip} · Ajoute un apport pour comparer</div>`;
+  const needsFx = benchNeedsFx(key, S.currency), t0 = sum.t0;
+  const ser = benchSeries(getHistorySeries('IDX:' + key), getHistorySeries('IDX:EURUSD'), needsFx);
+  const covers = !!ser && benchCovers(ser.series, t0);
+  const wait = txt => `<div class="t-sm" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${chip}<span>${txt}</span></div>`;
+  if (!covers && !_benchTried[key + '|' + t0]) return wait("chargement de l'indice…");   // le chargement est lancé par le binding de l'écran
+  if (!ser) return wait('indice indisponible pour le moment');
+  const g = 'display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:6px;align-items:baseline;font-size:12px';
+  const cell = v => v == null ? '<span class="t-sm">—</span>' : `<b class="${v < 0 ? 't-loss' : 't-gain'} t-num">${fmtPct(v)}</b>`;
+  const bAll = benchRet(ser.series, t0), sameYtd = t0 > sum.pye, bYtd = sameYtd ? bAll : benchRet(ser.series, sum.pye);
+  const row = (lbl, a, r) => {
+    const x = (a == null || r == null) ? null : a - r;
+    return `<div style="${g};padding:7px 0;border-top:1px solid var(--border)"><span style="font-weight:700">${lbl}</span>${cell(a)}${cell(r)}${x == null ? '<span class="t-sm">—</span>' : `<b class="${x < 0 ? 't-loss' : 't-gain'} t-num">${x >= 0 ? '+' : ''}${x.toFixed(1)} pts</b>`}</div>`;
+  };
+  const ccyNote = ser.conv ? 'indice converti en euros' : (b.ccy === 'USD' ? 'indice en dollars (non converti)' : 'indice dans sa devise');
+  const partial = covers ? '' : ` · historique de l'indice disponible depuis le ${fmtDate(ser.series[0].d)} seulement`;
+  return `<div style="margin-top:8px">
+    <div style="margin-bottom:8px">${chip}</div>
+    <div style="padding:4px 12px 6px;border-radius:12px;background:var(--card2)">
+      <div style="${g};padding:6px 0;color:var(--text2);font-size:11px;font-weight:700"><span>Période</span><span>Compte</span><span>${esc(b.label)}</span><span>Écart</span></div>
+      ${sameYtd ? '' : row('Depuis le 1er janv.', sum.ytd ? sum.ytd.pct : null, bYtd)}
+      ${row('Depuis le ' + fmtDate(t0), sum.all ? sum.all.pct : null, bAll)}
+    </div>
+    <div class="t-sm" style="font-size:10px;margin-top:4px">Perf. du compte pondérée des apports et retraits${sum.approx ? ' · YTD approximatif (historique de cours incomplet)' : ''} · ${ccyNote}${partial}.</div>
+  </div>`;
+}
+
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
@@ -32,9 +121,10 @@ function renderAccount() {
   }).join('');
   // Cashflow total
   const cfs=acc.cashflows||[];
-  const totalDep=cfs.filter(c=>c.type==='DEP').reduce((s,c)=>s+c.amount,0);
-  const totalWit=cfs.filter(c=>c.type==='WIT').reduce((s,c)=>s+c.amount,0);
-  const netCf=totalDep-totalWit;
+  const adj=PU.accCashAnchor(acc);             // dernière régularisation des liquidités
+  const tracked=cfs.length>0||!!adj;           // liquidités suivies (apports saisis ou régularisation)
+  const {perf,sum}=accPerfNow(acc);
+  const netCf=accFlows(acc,(v,c)=>toRefCcy(v,c)).reduce((s,f)=>s+f.amt,0);   // apports − retraits, devise appli
   return `<div class="back tap" id="js-back">
     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
     Retour
@@ -48,7 +138,7 @@ function renderAccount() {
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
-    ${cfs.length>0?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}
+    ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
         <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
@@ -57,17 +147,21 @@ function renderAccount() {
       <div class="stat-box"><div class="t-label">Variation J</div>
         <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
     </div>
-    ${cfs.length>0?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
+    ${accPerfCardHTML(acc,perf,sum)}
+    ${accBenchHTML(acc,perf,sum)}
+    ${tracked?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
-        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${maskedNative(netCf,acc.currency||S.currency)}</div>
+        <div style="font-size:14px;font-weight:800" class="${netCf>=0?'t-gain':'t-loss'} t-num">${netCf>=0?'+':''}${accNative(acc,netCf)}</div>
       </div>
       <div style="flex:1">
         <div class="t-label">Liquidités</div>
         <div style="font-size:14px;font-weight:800" class="${cash>=0?'':'t-loss'} t-num">${masked(cash)}</div>
       </div>
-      <div id="js-cf-btn" class="tap" style="padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">Apports / Retraits</div>
-    </div>${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport.</div>`:''}`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
+      <div id="js-cf-btn" class="tap" style="${_CHIP}">Apports / Retraits</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><div id="js-ca-btn" class="tap" style="${_CHIP}">Régulariser les liquidités</div>${adj?`<span class="t-sm">régularisé le ${fmtDate(adj.date)}</span>`:''}</div>
+    ${cash<0?`<div class="t-sm" style="margin-top:6px;color:var(--loss)">Liquidités négatives : vos achats dépassent les apports saisis — il manque probablement un apport, ou régularise les liquidités.</div>`:''}`:'<div id="js-cf-btn" class="tap" style="display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer">+ Apport / Retrait</div>'}
   </div>
   <div class="search-wrap">
     <div class="search-box">
@@ -212,7 +306,7 @@ function getAccountMoves(acc) {
     mv.push({
       date: c.date, kind: c.type, cfId: c.id,
       label: c.type==='WIT' ? 'Retrait' : 'Apport',
-      detail: c.note || '', amount: +c.amount||0, ccy: acc.currency||S.currency,
+      detail: c.note || '', amount: +c.amount||0, ccy: PU.cfCcy(acc, c),
     });
   });
   mv.sort((a,b) => b.date.localeCompare(a.date)); // du plus récent au plus ancien
@@ -350,6 +444,33 @@ function initPTR(screenEl, onRefresh) {
 }
 
 
+// ── Choix de l'indice de comparaison du compte ──
+let _bmAccId = null;
+function openBenchSheet(acc) {
+  _bmAccId = acc.id;
+  const sel = document.getElementById('bm-select');
+  sel.innerHTML = '<option value="auto">Par défaut (selon le type de compte)</option><option value="">Aucun</option>'
+    + Object.entries(BENCHMARKS).map(([k, b]) => `<option value="${k}">${esc(b.label)}</option>`).join('');
+  sel.value = acc.benchmark === undefined ? 'auto' : acc.benchmark;
+  document.getElementById('bm-bg').classList.add('show');
+  document.getElementById('bm-sheet').classList.add('show');
+}
+function closeBenchSheet() {
+  document.getElementById('bm-bg').classList.remove('show');
+  document.getElementById('bm-sheet').classList.remove('show');
+}
+document.getElementById('bm-bg').addEventListener('click', closeBenchSheet);
+document.getElementById('bm-ok').addEventListener('click', () => {
+  const acc = S.accounts.find(a => a.id === _bmAccId); if (!acc) return;
+  const v = document.getElementById('bm-select').value;
+  if (v === 'auto') delete acc.benchmark; else acc.benchmark = v;
+  saveAccounts();
+  closeBenchSheet();
+  if (S.screen === 'account') renderScreen('account');
+  toast('Indice de comparaison enregistré ✓');
+});
+registerModal('bm-sheet', closeBenchSheet);
+
 SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     el.querySelector('#js-back')?.addEventListener('click',back);
@@ -361,6 +482,17 @@ SCREEN_BIND.account = function (el, id) {
     // Cashflows button
     el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
+    el.querySelector('#js-ca-btn')?.addEventListener('click',()=>openCashAdjust(S.accountId));
+    el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
+    el.querySelectorAll('[data-pm]').forEach(b=>b.addEventListener('click',()=>{ _perfModeSet(b.dataset.pm); renderScreen('account'); }));
+    // Indice de comparaison : téléchargement de la série si elle est absente ou ne remonte pas jusqu'à la date de début
+    if(acc && !S.isDemo){
+      const {sum}=accPerfNow(acc), key=accBenchmarkKey(acc);
+      if(sum && BENCHMARKS[key]){
+        const ser=benchSeries(getHistorySeries('IDX:'+key),getHistorySeries('IDX:EURUSD'),benchNeedsFx(key,S.currency));
+        if(!ser||!benchCovers(ser.series,sum.t0)) loadBenchmark(key,sum.t0);
+      }
+    }
 
     // Search
     el.querySelector('#js-search')?.addEventListener('input',e=>{
