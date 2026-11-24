@@ -49,9 +49,9 @@ function genDemo() {
   // Apports calibrés pour laisser une petite trésorerie positive sur chaque compte
   // (le solde démo = titres + liquidités, cf. accTotal).
   const accs = [
-    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions", bank:'Boursorama', icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
+    { id:'pea', name:'PEA', type:"Plan d'Épargne en Actions (PEA)", bank:'Boursorama', icon:'🇫🇷', iconBg:'rgba(79,142,247,.13)', currency:'EUR', value:0, change1d:1.24, holdings:pea, cashflows:[{id:'cf1',date:'2022-01-10',type:'DEP',amount:18000,note:'Ouverture PEA'},{id:'cf2',date:'2023-03-01',type:'DEP',amount:6000,note:'Versement annuel'}] },
     { id:'ct',  name:'Compte-Titres', type:'Compte-Titres Ordinaire', bank:'Degiro', icon:'🌍', iconBg:'rgba(0,194,203,.13)', currency:'EUR', value:0, change1d:2.18, holdings:ct,  cashflows:[{id:'cf3',date:'2022-05-15',type:'DEP',amount:14000,note:'Apport initial'},{id:'cf4',date:'2023-06-01',type:'DEP',amount:5000,note:'Renforcement'}] },
-    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie Multisupport', bank:'BNP Paribas', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
+    { id:'av',  name:'Assurance-Vie', type:'Assurance-Vie', bank:'BNP Paribas', icon:'🛡️', iconBg:'rgba(0,214,143,.13)', currency:'EUR', value:0, change1d:0.42, holdings:av,  cashflows:[{id:'cf5',date:'2021-12-01',type:'DEP',amount:48000,note:'Versement initial'}] },
   ];
   accs.forEach(a => { a.value = +(val(a.holdings) + PU.accCash(a, FX_RATES, 'EUR')).toFixed(2); });
   return accs;

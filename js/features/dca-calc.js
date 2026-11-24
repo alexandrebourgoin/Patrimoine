@@ -165,6 +165,37 @@ function dcaGoalError(g) {
 }
 
 // ═══════════════════════════════════════════════
+// DONNÉES ENREGISTRÉES : validation
+// ═══════════════════════════════════════════════
+// Données DCA lues du stockage → message d'erreur (première anomalie) ou null. null / absent = aucune donnée (valide).
+// Une donnée mal formée ne doit JAMAIS être remplacée en silence par du vide (elle serait écrasée à la prochaine sauvegarde).
+function dcaDataError(d) {
+  if (d === null || d === undefined) return null;
+  if (typeof d !== 'object' || Array.isArray(d)) return 'format inattendu';
+  const plans = d.plans === undefined ? [] : d.plans, goals = d.goals === undefined ? [] : d.goals;
+  if (!Array.isArray(plans)) return 'liste des plans attendue';
+  if (!Array.isArray(goals)) return 'liste des objectifs attendue';
+  for (const [i, p] of plans.entries()) {
+    const at = `plan n°${i + 1}`;
+    if (!p || typeof p !== 'object') return `${at} invalide`;
+    if (!dcaValidYmd(p.from)) return `${at} : date d'effet invalide`;
+    if (!Number.isFinite(p.budget) || p.budget <= 0) return `${at} : budget invalide`;
+    if (!Number.isInteger(p.day) || p.day < 1 || p.day > 31) return `${at} : jour invalide`;
+    if (!Array.isArray(p.lines) || !p.lines.length) return `${at} : répartition absente`;
+    if (p.lines.some(l => !l || typeof l.ticker !== 'string' || !l.ticker || !Number.isFinite(l.weight) || l.weight < 0)) return `${at} : ligne de répartition invalide`;
+  }
+  for (const [i, g] of goals.entries()) {
+    const at = `objectif n°${i + 1}`;
+    if (!g || typeof g !== 'object') return `${at} invalide`;
+    if (typeof g.id !== 'string' || !g.id || typeof g.name !== 'string') return `${at} : identifiant ou nom invalide`;
+    if (!Number.isFinite(g.target) || g.target <= 0) return `${at} : montant cible invalide`;
+    if (!dcaValidYmd(g.date)) return `${at} : date cible invalide`;
+  }
+  if (d.projection !== undefined && (d.projection === null || typeof d.projection !== 'object')) return 'hypothèses de projection invalides';
+  return null;
+}
+
+// ═══════════════════════════════════════════════
 // PROJECTIONS
 // ═══════════════════════════════════════════════
 // Capital futur : capital + versements mensuels en fin de mois, sur `months` mois.

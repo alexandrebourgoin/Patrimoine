@@ -4,7 +4,7 @@ import { loadClassic } from '../helpers/load-classic.js';
 const D = loadClassic('js/features/dca-calc.js', {
   exports: ['dcaYmd', 'dcaParseYmd', 'dcaValidYmd', 'dcaPlanAt', 'dcaOccurrences', 'dcaStats', 'dcaNormalizeWeights', 'dcaWeightsToAmounts',
     'dcaAmountsToWeights', 'dcaIsIsin', 'dcaResolveLine', 'dcaBuildLines', 'dcaPlanError', 'dcaGoalError', 'dcaCapitalProjection', 'dcaGoalCalc',
-    'dcaProjectionSettings', 'dcaProjectionBase', 'dcaProjectionRows'],
+    'dcaDataError', 'dcaProjectionSettings', 'dcaProjectionBase', 'dcaProjectionRows'],
 });
 const sum = a => a.reduce((s, v) => s + v, 0);
 
@@ -185,6 +185,32 @@ describe('validation des formulaires', () => {
     expect(D.dcaGoalError({ ...goal, target: NaN })).toBe('Indique un montant cible');
     expect(D.dcaGoalError({ ...goal, date: '' })).toBe('Indique une date cible valide');
   });
+});
+
+describe('dcaDataError : données enregistrées', () => {
+  const plan = (over = {}) => ({ from: '2024-01-01', budget: 100, day: 5, lines: [{ ticker: 'MC', weight: 100, color: '#1' }], ...over });
+  const goal = (over = {}) => ({ id: 'g1', name: 'Apport', target: 1000, date: '2030-01-01', start: 0, rate: 4, ...over });
+  it('absent, null ou objet vide : valide', () => {
+    for (const ok of [undefined, null, {}, { plans: [], goals: [] }]) expect(D.dcaDataError(ok)).toBeNull();
+  });
+  it('données complètes valides', () => expect(D.dcaDataError({ plans: [plan()], goals: [goal()], projection: { rl: 2, rr: 7 } })).toBeNull());
+  it.each([
+    ['chaîne', 'x', 'format inattendu'], ['tableau', [], 'format inattendu'],
+    ['plans non liste', { plans: 'x' }, 'liste des plans attendue'], ['objectifs non liste', { goals: {} }, 'liste des objectifs attendue'],
+    ['plan nul', { plans: [null] }, 'plan n°1 invalide'],
+    ['date d\'effet impossible', { plans: [plan({ from: '2024-02-31' })] }, 'plan n°1 : date d\'effet invalide'],
+    ['budget négatif', { plans: [plan({ budget: -1 })] }, 'plan n°1 : budget invalide'],
+    ['budget texte', { plans: [plan({ budget: '100' })] }, 'plan n°1 : budget invalide'],
+    ['jour 40', { plans: [plan({ day: 40 })] }, 'plan n°1 : jour invalide'],
+    ['sans répartition', { plans: [plan({ lines: [] })] }, 'plan n°1 : répartition absente'],
+    ['poids négatif', { plans: [plan({ lines: [{ ticker: 'MC', weight: -1 }] })] }, 'plan n°1 : ligne de répartition invalide'],
+    ['ticker vide', { plans: [plan({ lines: [{ ticker: '', weight: 100 }] })] }, 'plan n°1 : ligne de répartition invalide'],
+    ['second plan invalide', { plans: [plan(), plan({ budget: 0 })] }, 'plan n°2 : budget invalide'],
+    ['objectif sans nom', { goals: [goal({ name: undefined })] }, 'objectif n°1 : identifiant ou nom invalide'],
+    ['objectif cible nulle', { goals: [goal({ target: 0 })] }, 'objectif n°1 : montant cible invalide'],
+    ['objectif date vide', { goals: [goal({ date: '' })] }, 'objectif n°1 : date cible invalide'],
+    ['projection nulle', { projection: null }, 'hypothèses de projection invalides'],
+  ])('refuse : %s', (_, data, msg) => expect(D.dcaDataError(data)).toBe(msg));
 });
 
 describe('dcaCapitalProjection', () => {

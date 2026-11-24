@@ -12,22 +12,49 @@ const STORE_DCA_LEGACY = 'patrimoine-dca'; // v1.11.97 : slot unique → migré 
 const dcaKey = () => S.isDemo ? STORE_DCA_DEMO : STORE_DCA_REAL;
 const DCA_COLORS = ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#06B6D4'];
 
+// Données illisibles ou invalides : message affiché sur l'écran, et ENREGISTREMENT BLOQUÉ (on n'écrase jamais des données qu'on
+// n'a pas pu lire par une liste vide). Une donnée absente est simplement vide. Effacer le DCA : Réglages → Réinitialiser les données.
+let _dcaLoadError = '';
+function dcaLoadError() { return _dcaLoadError; }
+
 // Charge le slot du mode courant (à rappeler après chaque bascule démo ↔ réel)
 function loadDca() {
   S.dca = { plans: [], goals: [] };
+  _dcaLoadError = '';
   try {
     const legacy = localStorage.getItem(STORE_DCA_LEGACY);
     if (legacy) {                       // migration unique, vers le mode actif au moment du chargement
       if (!localStorage.getItem(dcaKey())) localStorage.setItem(dcaKey(), legacy);
       localStorage.removeItem(STORE_DCA_LEGACY);
     }
-    const d = JSON.parse(localStorage.getItem(dcaKey()) || 'null');
+    const raw = localStorage.getItem(dcaKey());
+    let d = null;
+    if (raw !== null && raw !== undefined) {
+      try { d = JSON.parse(raw); } catch (e) { _dcaLoadError = 'JSON invalide'; return; }
+      const err = dcaDataError(d);
+      if (err) { _dcaLoadError = err; return; }
+    }
     if (d && Array.isArray(d.plans)) S.dca.plans = d.plans.sort((a,b) => a.from < b.from ? -1 : 1);
     if (d && Array.isArray(d.goals)) S.dca.goals = d.goals;
     if (d && d.projection) S.dca.projection = dcaProjectionSettings(d.projection);
-  } catch(e) {}
+  } catch(e) { _dcaLoadError = (e && e.message) || 'lecture impossible'; }
 }
-function saveDca() { try { localStorage.setItem(dcaKey(), JSON.stringify(S.dca)); } catch(e) {} }
+// Écrit le slot du mode courant. Renvoie false (et prévient) si les données lues étaient illisibles ou si l'écriture échoue (quota plein).
+function saveDca() {
+  if (_dcaLoadError) { toast('Enregistrement impossible : données DCA illisibles (' + _dcaLoadError + ')'); return false; }
+  try { localStorage.setItem(dcaKey(), JSON.stringify(S.dca)); return true; }
+  catch(e) { toast('Enregistrement impossible : ' + ((e && e.message) || 'erreur')); return false; }
+}
+// Modification transactionnelle : applique `mutate`, enregistre, et RESTAURE l'état précédent si l'enregistrement échoue
+// (jamais de plan ou d'objectif affiché mais perdu au rechargement). Renvoie true si tout est enregistré.
+function dcaCommit(mutate) {
+  if (_dcaLoadError) { saveDca(); return false; }   // prévient sans toucher à rien
+  const snap = JSON.stringify(S.dca);
+  mutate();
+  if (saveDca()) return true;
+  S.dca = JSON.parse(snap);
+  return false;
+}
 
 const _dcaToday = () => dcaYmd(new Date());
 function _fmtDate(s) { return dcaParseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
@@ -42,6 +69,10 @@ function dcaPriceRef(ticker) {
 // ═══════════════════════════════════════════════
 // ÉCRAN
 // ═══════════════════════════════════════════════
+const _dcaBanner = () => _dcaLoadError
+  ? `<div class="oa-banner err" style="margin:10px 20px">Données DCA illisibles : ${esc(_dcaLoadError)}. Rien n'est modifié ni supprimé ; l'enregistrement est bloqué tant que ces données ne sont pas corrigées (Réglages → Réinitialiser les données les efface).</div>`
+  : '';
+
 function renderDca() {
   const today = _dcaToday(), st = dcaStats(S.dca.plans, today), plan = st.current;
   const header = `<div class="back tap" id="js-back">
@@ -51,7 +82,7 @@ function renderDca() {
   <div class="settings-top" style="padding-top:4px">
     <div class="t-title">DCA & objectifs</div>
     <div class="t-sm" style="margin-top:2px">Investissement programmé, objectifs et projection — calculs théoriques, aucun ordre passé</div>
-  </div>`;
+  </div>${_dcaBanner()}`;
   const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;
   if (!plan) return header + `<div style="text-align:center;padding:50px 20px;color:var(--text2)">
     <div style="font-size:40px;margin-bottom:12px">📈</div>
@@ -241,8 +272,8 @@ function saveDcaPlan() {
   catch (error) { return toast(error.message); }
   const plan = { from: p.from, budget: p.budget, day: p.day, lines };
   // Même date d'effet : on remplace ; sinon on ajoute (l'historique des stratégies est conservé)
-  S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1);
-  saveDca(); closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
+  if (!dcaCommit(() => { S.dca.plans = S.dca.plans.filter(x => x.from !== plan.from).concat(plan).sort((a, b) => a.from < b.from ? -1 : 1); })) return;
+  closeDcaModal(); renderScreen('dca'); toast('Plan DCA enregistré ✓');
   if (!S.isDemo) void dcaResolveIsins();
 }
 // Bascule % ↔ montants : conversion à partir du budget saisi ; sans budget valide on ne convertit pas (la saisie n'est jamais effacée)
@@ -288,8 +319,8 @@ function saveDcaGoal() {
   const err = dcaGoalError(d);
   if (err) return toast(err);
   const isNew = d.isNew; delete d.isNew;
-  S.dca.goals = isNew ? [...S.dca.goals, d] : S.dca.goals.map(x => x.id === d.id ? d : x);
-  saveDca(); closeDcaModal(); renderScreen('dca'); toast('Objectif enregistré ✓');
+  if (!dcaCommit(() => { S.dca.goals = isNew ? [...S.dca.goals, d] : S.dca.goals.map(x => x.id === d.id ? d : x); })) return;
+  closeDcaModal(); renderScreen('dca'); toast('Objectif enregistré ✓');
 }
 
 document.getElementById('dca-modal-bg').addEventListener('click', closeDcaModal);
@@ -301,7 +332,7 @@ document.getElementById('dca-modal-body').addEventListener('click', e => {
   if (t.closest('#dg-del')) {
     const id = _dcaGoalDraft.id;
     closeDcaModal();
-    return openConfirm('Supprimer cet objectif ?', () => { S.dca.goals = S.dca.goals.filter(x => x.id !== id); saveDca(); renderScreen('dca'); });
+    return openConfirm('Supprimer cet objectif ?', () => { if (dcaCommit(() => { S.dca.goals = S.dca.goals.filter(x => x.id !== id); })) renderScreen('dca'); });
   }
   const mode = t.closest('[data-dmode]');
   if (mode && _dcaDraft && ['pct', 'amt'].includes(mode.dataset.dmode)) {
@@ -334,8 +365,8 @@ function bindDcaProjection(el) {
       input.value = set[key];
       return toast(`Rendement entre ${DCA_RETURN_MIN} et ${DCA_RETURN_MAX} %`);
     }
-    S.dca.projection = { ...set, [key]: value };
-    saveDca(); renderScreen('dca');
+    if (dcaCommit(() => { S.dca.projection = { ...set, [key]: value }; })) renderScreen('dca');
+    else input.value = set[key];
   }));
 }
 
@@ -350,7 +381,7 @@ SCREEN_BIND.dca = function (el) {
     const from = b.dataset.plandel;
     const last = S.dca.plans.length === 1;
     openConfirm(last ? `Supprimer le plan DCA (stratégie du ${_fmtDate(from)}) ? Le cumul et la projection seront effacés ; les objectifs sont conservés.` : `Supprimer la stratégie du ${_fmtDate(from)} ?`, () => {
-      S.dca.plans = S.dca.plans.filter(p => p.from !== from); saveDca(); renderScreen('dca');
+      if (dcaCommit(() => { S.dca.plans = S.dca.plans.filter(p => p.from !== from); })) renderScreen('dca');
     });
   }));
   el.querySelectorAll('.dca-bar').forEach(b => b.addEventListener('click', () => {

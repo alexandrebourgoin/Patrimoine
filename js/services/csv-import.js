@@ -217,61 +217,61 @@ function closeCsvModal() {
 }
 
 // ── Confirmation d import + écouteurs de la modale CSV (déplacés depuis mon-patrimoine.js) ──
+// Les règles du compte de destination (types d'actifs autorisés, PEA européen… : js/features/account-rules.js) s'appliquent aussi
+// à l'import : un NOUVEAU titre interdit est refusé (tous ses mouvements), l'utilisateur est prévenu et confirme l'import du reste.
+// Rien n'est créé tant que l'import n'est pas confirmé (pas de compte « Compte importé » vide si tout est refusé).
 function confirmImport() {
   const accIdVal = document.getElementById('csv-acc-select')?.value;
-  let targetAcc;
-
-  if (accIdVal === '__new__') {
-    targetAcc = {
-      id: 'csv_' + Date.now(),
-      name: 'Compte importé',
-      type: ACCOUNT_TYPES[0],
-      icon: '📊',
-      iconBg: 'rgba(245,158,11,.13)',
-      value: 0, change1d: 0,
-      holdings: [], cashflows: [],
-    };
-    S.accounts.push(targetAcc);
-  } else {
-    targetAcc = S.accounts.find(a => a.id === accIdVal);
-  }
-
+  const isNew = accIdVal === '__new__';
+  const targetAcc = isNew
+    ? { id: 'csv_' + Date.now(), name: 'Compte importé', type: ACCOUNT_TYPES[0], icon: '📊', iconBg: 'rgba(245,158,11,.13)', value: 0, change1d: 0, holdings: [], cashflows: [] }
+    : S.accounts.find(a => a.id === accIdVal);
   if (!targetAcc) { toast('Compte introuvable'); return; }
 
-  let added = 0;
-  _csvPendingRows.filter(r => !r._skip).forEach(r => {
-    if (!r.ticker || !r.qty || !r.price) return;
-    let h = targetAcc.holdings.find(h => h.ticker === r.ticker);
-    if (!h) {
-      const sec = SECURITIES_DB[r.ticker] || {};
-      h = {
-        id: r.ticker + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        ticker: r.ticker,
-        name: r.name || sec.name || r.ticker,
-        quantity: 0,
-        avgBuyPrice: r.price,
-        currentPrice: r.price,
-        type: sec.type || 'Action',
-        country: sec.country || 'Inconnu',
-        sector: sec.sector || 'Inconnu',
-        currency: sec.currency || 'EUR',
-        transactions: [],
-        value: 0, pnl: 0, pnlPct: 0,
-      };
-      targetAcc.holdings.push(h);
-    }
-    h.transactions.push({ date: r.date, type: r.type, qty: r.qty, price: r.price });
-    recalcHolding(h);
-    added++;
-  });
+  const usable = _csvPendingRows.filter(r => !r._skip && r.ticker && r.qty && r.price);
+  const rejected = csvRejectedTickers(targetAcc, usable, SECURITIES_DB);
+  const refused = new Set(rejected.map(x => x.ticker));
+  const rows = usable.filter(r => !refused.has(r.ticker));
+  const summary = rejected.map(x => `${x.ticker} (${x.reason})`).join(', ');
+  if (!rows.length) { toast(rejected.length ? 'Import refusé : ' + summary : 'Aucun mouvement à importer'); return; }
 
-  targetAcc.value = accTotal(targetAcc);
-  // L'import reste dans le mode courant : basculer S.isDemo=false ici transformait les
-  // comptes démo en « données réelles » et écrasait le slot réel au toggle suivant
-  saveData();
-  refreshMain();
-  closeCsvModal();
-  toast(`${added} mouvement${added>1?'s':''} importé${added>1?'s':''} ✓`);
+  const run = () => {
+    if (isNew) S.accounts.push(targetAcc);
+    let added = 0;
+    rows.forEach(r => {
+      let h = targetAcc.holdings.find(h => h.ticker === r.ticker);
+      if (!h) {
+        const sec = SECURITIES_DB[r.ticker] || {};
+        h = {
+          id: r.ticker + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          ticker: r.ticker,
+          name: r.name || sec.name || r.ticker,
+          quantity: 0,
+          avgBuyPrice: r.price,
+          currentPrice: r.price,
+          type: sec.type || 'Action',
+          country: sec.country || 'Inconnu',
+          sector: sec.sector || 'Inconnu',
+          currency: sec.currency || 'EUR',
+          transactions: [],
+          value: 0, pnl: 0, pnlPct: 0,
+        };
+        targetAcc.holdings.push(h);
+      }
+      h.transactions.push({ date: r.date, type: r.type, qty: r.qty, price: r.price });
+      recalcHolding(h);
+      added++;
+    });
+    targetAcc.value = accTotal(targetAcc);
+    // L'import reste dans le mode courant : basculer S.isDemo=false ici transformait les
+    // comptes démo en « données réelles » et écrasait le slot réel au toggle suivant
+    saveData();
+    refreshMain();
+    closeCsvModal();
+    toast(`${added} mouvement${added>1?'s':''} importé${added>1?'s':''} ✓`);
+  };
+  if (rejected.length) openConfirm(`${rejected.length} titre${rejected.length>1?'s':''} refusé${rejected.length>1?'s':''} par les règles du compte : ${summary}. Importer le reste ?`, run);
+  else run();
 }
 
 document.getElementById('csv-modal-bg').addEventListener('click', closeCsvModal);

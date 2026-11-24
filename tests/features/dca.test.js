@@ -4,7 +4,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 // Stockage, formulaires et écran DCA (js/features/dca.js), avec les VRAIS modules de calcul et de résolution.
 const CALC = ['dcaYmd', 'dcaParseYmd', 'dcaValidYmd', 'dcaPlanAt', 'dcaOccurrences', 'dcaStats', 'dcaNormalizeWeights', 'dcaWeightsToAmounts',
   'dcaAmountsToWeights', 'dcaIsIsin', 'dcaResolveLine', 'dcaBuildLines', 'dcaPlanError', 'dcaGoalError', 'dcaCapitalProjection', 'dcaGoalCalc',
-  'dcaProjectionSettings', 'dcaProjectionBase', 'dcaProjectionRows', 'DCA_RETURN_MIN', 'DCA_RETURN_MAX'];
+  'dcaDataError', 'dcaProjectionSettings', 'dcaProjectionBase', 'dcaProjectionRows', 'DCA_RETURN_MIN', 'DCA_RETURN_MAX'];
 const calc = loadClassic('js/features/dca-calc.js', { exports: CALC });
 
 // Corps de la modale : champs par sélecteur, lignes de répartition
@@ -33,15 +33,16 @@ function memoryStorage() {
 const click = target => ({ target: { closest: sel => (target[sel] ? target[sel] : null) } });
 
 describe('DCA : stockage', () => {
-  let S, storage, api;
+  let S, storage, api, toasts;
   beforeEach(() => {
-    S = { isDemo: false, dca: { plans: [], goals: [] }, accounts: [], watchlist: [] };
-    storage = memoryStorage();
+    S = { isDemo: false, currency: 'EUR', dca: { plans: [], goals: [] }, accounts: [], watchlist: [] };
+    storage = memoryStorage(); toasts = [];
     api = () => loadClassic('js/features/dca.js', {
-      globals: { ...calc, S, localStorage: storage, SCREEN_BIND: {}, toast() {}, dcaResolveIsins() {} },
-      exports: ['loadDca', 'saveDca', 'dcaKey'],
+      globals: { ...calc, S, localStorage: storage, SCREEN_BIND: {}, toast: m => toasts.push(m), dcaResolveIsins() {}, esc: s => String(s), masked: v => String(v), accCash: () => 0, toRefCcy: v => v, fmtCur: v => String(v) },
+      exports: ['loadDca', 'saveDca', 'dcaKey', 'dcaLoadError', 'dcaCommit', 'renderDca'],
     });
   });
+  const plan = (over = {}) => ({ from: '2024-01-01', budget: 100, day: 5, lines: [{ ticker: 'MC', weight: 100, color: '#1' }], ...over });
   it('un slot par mode', () => {
     const a = api();
     expect(a.dcaKey()).toBe('patrimoine-dca-real');
@@ -50,21 +51,94 @@ describe('DCA : stockage', () => {
   });
   it('charge les plans triés par date d\'effet, les objectifs et les hypothèses de projection (validées)', () => {
     storage.setItem('patrimoine-dca-real', JSON.stringify({
-      plans: [{ from: '2025-01-01', budget: 2, day: 1, lines: [] }, { from: '2024-01-01', budget: 1, day: 1, lines: [] }],
-      goals: [{ id: 'g1' }], projection: { rl: 3, rr: 999 },
+      plans: [{ from: '2025-01-01', budget: 2, day: 1, lines: [{ ticker: 'MC', weight: 100 }] }, { from: '2024-01-01', budget: 1, day: 1, lines: [{ ticker: 'MC', weight: 100 }] }],
+      goals: [{ id: 'g1', name: 'Apport', target: 100, date: '2030-01-01' }], projection: { rl: 3, rr: 999 },
     }));
     api().loadDca();
     expect(S.dca.plans.map(p => p.from)).toEqual(['2024-01-01', '2025-01-01']);
     expect(S.dca.goals).toHaveLength(1);
     expect(S.dca.projection).toEqual({ rl: 3, rr: 7 });   // 999 hors limites → défaut
   });
-  it('données corrompues : état vide, sans erreur', () => {
-    storage.setItem('patrimoine-dca-real', '{broken');
-    api().loadDca();
-    expect(S.dca).toEqual({ plans: [], goals: [] });
+  describe('données illisibles : jamais écrasées', () => {
+    const bad = [
+      ['JSON corrompu', '{broken', 'JSON invalide'],
+      ['plans qui n\'est pas une liste', JSON.stringify({ plans: {}, goals: [] }), 'liste des plans attendue'],
+      ['plan sans budget', JSON.stringify({ plans: [{ from: '2024-01-01', day: 5, lines: [{ ticker: 'MC', weight: 100 }] }], goals: [] }), 'plan n°1 : budget invalide'],
+      ['objectif sans date', JSON.stringify({ plans: [], goals: [{ id: 'g', name: 'x', target: 10 }] }), 'objectif n°1 : date cible invalide'],
+      ['tableau à la racine', '[]', 'format inattendu'],
+    ];
+    it.each(bad)('%s : état vide, erreur mémorisée, donnée conservée', (_, raw, msg) => {
+      storage.setItem('patrimoine-dca-real', raw);
+      const a = api();
+      a.loadDca();
+      expect(S.dca).toEqual({ plans: [], goals: [] });
+      expect(a.dcaLoadError()).toBe(msg);
+      expect(storage.getItem('patrimoine-dca-real')).toBe(raw);
+    });
+    it('l\'enregistrement est refusé, prévient, et laisse la donnée d\'origine intacte', () => {
+      storage.setItem('patrimoine-dca-real', '{broken');
+      const a = api(); a.loadDca();
+      S.dca.plans.push(plan());
+      expect(a.saveDca()).toBe(false);
+      expect(toasts.at(-1)).toBe('Enregistrement impossible : données DCA illisibles (JSON invalide)');
+      expect(storage.getItem('patrimoine-dca-real')).toBe('{broken');
+    });
+    it('dcaCommit : refuse sans modifier l\'état (le plan n\'apparaît pas à l\'écran puis disparaît au rechargement)', () => {
+      storage.setItem('patrimoine-dca-real', '{broken');
+      const a = api(); a.loadDca();
+      let called = false;
+      expect(a.dcaCommit(() => { called = true; S.dca.plans.push(plan()); })).toBe(false);
+      expect(called).toBe(false);
+      expect(S.dca.plans).toEqual([]);
+    });
+    it('l\'écran affiche un bandeau d\'erreur (avec ou sans plan)', () => {
+      storage.setItem('patrimoine-dca-real', '{broken');
+      const a = api(); a.loadDca();
+      expect(a.renderDca()).toContain('Données DCA illisibles : JSON invalide');
+    });
+    it('une donnée absente, nulle ou vide n\'est PAS une erreur', () => {
+      const a = api();
+      a.loadDca(); expect(a.dcaLoadError()).toBe('');
+      storage.setItem('patrimoine-dca-real', 'null'); a.loadDca(); expect(a.dcaLoadError()).toBe('');
+      storage.setItem('patrimoine-dca-real', '{}'); a.loadDca(); expect(a.dcaLoadError()).toBe('');
+    });
+    it('l\'erreur disparaît quand la donnée est effacée (Réglages → Réinitialiser) puis rechargée', () => {
+      storage.setItem('patrimoine-dca-real', '{broken');
+      const a = api(); a.loadDca();
+      storage.removeItem('patrimoine-dca-real');
+      a.loadDca();
+      expect(a.dcaLoadError()).toBe('');
+      expect(a.saveDca()).toBe(true);
+    });
+  });
+
+  describe('écriture', () => {
+    it('saveDca renvoie true et écrit', () => {
+      S.dca.plans.push(plan());
+      expect(api().saveDca()).toBe(true);
+      expect(JSON.parse(storage.getItem('patrimoine-dca-real')).plans).toHaveLength(1);
+    });
+    it('quota plein : renvoie false et prévient (plus d\'échec silencieux)', () => {
+      storage.setItem = () => { throw new Error('quota'); };
+      expect(api().saveDca()).toBe(false);
+      expect(toasts.at(-1)).toBe('Enregistrement impossible : quota');
+    });
+    it('dcaCommit : applique la modification et l\'enregistre', () => {
+      const a = api(); a.loadDca();
+      expect(a.dcaCommit(() => { S.dca.plans.push(plan()); })).toBe(true);
+      expect(JSON.parse(storage.getItem('patrimoine-dca-real')).plans).toHaveLength(1);
+    });
+    it('dcaCommit : si l\'enregistrement échoue (quota), l\'état précédent est RESTAURÉ', () => {
+      const a = api(); a.loadDca();
+      S.dca.goals = [{ id: 'g1', name: 'x', target: 5, date: '2030-01-01' }];
+      storage.setItem = () => { throw new Error('quota'); };
+      expect(a.dcaCommit(() => { S.dca.plans.push(plan()); S.dca.goals = []; })).toBe(false);
+      expect(S.dca.plans).toEqual([]);
+      expect(S.dca.goals).toHaveLength(1);
+    });
   });
   it('ancien slot unique : migré vers le mode courant puis supprimé, sans écraser un slot existant', () => {
-    storage.setItem('patrimoine-dca', JSON.stringify({ plans: [{ from: '2024-01-01', budget: 5, day: 1, lines: [] }], goals: [] }));
+    storage.setItem('patrimoine-dca', JSON.stringify({ plans: [{ from: '2024-01-01', budget: 5, day: 1, lines: [{ ticker: 'MC', weight: 100 }] }], goals: [] }));
     api().loadDca();
     expect(S.dca.plans).toHaveLength(1);
     expect(storage.getItem('patrimoine-dca')).toBeNull();

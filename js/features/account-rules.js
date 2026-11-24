@@ -95,6 +95,23 @@ function accTypeViolations(acc, newType) {
   return (acc.holdings || []).filter(h => assetTypeError({ type: newType }, h.type, h.country));
 }
 
+// Import CSV : titres que les règles du compte refusent → [{ ticker, reason }] (dans l'ordre du fichier, un par titre).
+// Seuls les NOUVEAUX titres du compte sont contrôlés (un titre déjà présent peut recevoir des mouvements, même s'il n'est plus conforme).
+// Type et pays viennent de la base de titres ; un titre inconnu est traité comme « Action », pays « Inconnu » (comme à l'import).
+function csvRejectedTickers(acc, rows, securities) {
+  const held = new Set((acc.holdings || []).map(h => h.ticker));
+  const seen = new Set(), out = [];
+  for (const r of rows) {
+    if (!r.ticker || seen.has(r.ticker)) continue;
+    seen.add(r.ticker);
+    if (held.has(r.ticker)) continue;
+    const sec = securities[r.ticker] || {};
+    const reason = assetTypeError(acc, sec.type || 'Action', sec.country || 'Inconnu');
+    if (reason) out.push({ ticker: r.ticker, reason });
+  }
+  return out;
+}
+
 // Devise à afficher dans le formulaire pour un type de compte → { value, locked, reason }.
 // apply = true (création) : la devise suit le type (si elle est proposée), puis le sélecteur est verrouillé si elle est imposée.
 // apply = false (compte existant) : ne change jamais la devise ; le sélecteur n'est verrouillé que si elle est déjà celle que le type impose.
