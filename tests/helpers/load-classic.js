@@ -23,7 +23,9 @@ export function fakeDocument() {
  */
 export function loadClassic(relPath, { globals = {}, exports = [] } = {}) {
   const src = readFileSync(new URL(`../../${relPath}`, import.meta.url), 'utf8');
-  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, ...globals };
+  // Les modules enregistrent leurs modales dès l'évaluation (registerModal) : ce défaut ne simule pas leur comportement,
+  // les tests de modales injectent leur propre registre.
+  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, ...globals };
   const names = Object.keys(base);
   return new Function(...names, `${src}\n;return { ${exports.join(', ')} };`)(...names.map(n => base[n]));
 }

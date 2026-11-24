@@ -41,7 +41,10 @@ document.getElementById('edit-tx-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_editTxAccId);
   const h=acc?.holdings.find(h=>h.id===_editTxHoldId);
   if(!h){toast('Position introuvable');return;}
-  h.transactions[_editTxIdx]={date,type:_editTxType,qty,price};
+  const edited={date,type:_editTxType,qty,price};
+  const editErr=txCheckEdit(h.transactions,_editTxIdx,edited);
+  if(editErr){toast(editErr);return;}
+  h.transactions[_editTxIdx]=edited;
   recalcHolding(h);
   acc.value=accTotal(acc);
   closeEditTx();
@@ -65,8 +68,10 @@ function openAddOrder(accId, holdId) {
   document.getElementById('modal-name').textContent=h.name;
   document.getElementById('modal-qty').value='';
   document.getElementById('modal-price').value=h.currentPrice.toFixed(2);
-  document.getElementById('modal-date').value=new Date().toISOString().slice(0,10);
-  document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('on',b.dataset.type==='BUY'));
+  document.getElementById('modal-date').value=_dayKey(Date.now());
+  document.querySelectorAll('#modal-type-btns .type-btn').forEach(b=>b.classList.toggle('on',b.dataset.type==='BUY'));
+  document.querySelector('#modal-qty').closest('.form-field').querySelector('.form-label').textContent='Quantité';
+  document.querySelector('#modal-price').closest('.form-field').querySelector('.form-label').textContent='Prix unitaire';
   document.getElementById('modal-bg').classList.add('show');
   document.getElementById('modal-sheet').classList.add('show');
   setTimeout(()=>document.getElementById('modal-qty').focus(),330);
@@ -80,8 +85,8 @@ function closeModal() {
 document.getElementById('modal-bg').addEventListener('click', closeModal);
 document.getElementById('modal-close').addEventListener('click', closeModal);
 
-document.querySelectorAll('.type-btn').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('.type-btn').forEach(x=>x.classList.remove('on'));
+document.querySelectorAll('#modal-type-btns .type-btn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#modal-type-btns .type-btn').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');
   _mType=b.dataset.type;
   const qtyLabel=document.querySelector('#modal-qty').closest('.form-field').querySelector('.form-label');
@@ -93,12 +98,15 @@ document.querySelectorAll('.type-btn').forEach(b=>b.addEventListener('click',()=
 document.getElementById('modal-submit').addEventListener('click',()=>{
   const qty=parseFloat(document.getElementById('modal-qty').value);
   const price=parseFloat(document.getElementById('modal-price').value);
-  const date=document.getElementById('modal-date').value||new Date().toISOString().slice(0,10);
+  const date=document.getElementById('modal-date').value||_dayKey(Date.now());
   if(!(qty>0)||!(price>0)){toast('Quantité et prix requis');return;}
   const acc=S.accounts.find(a=>a.id===_mAccId);
   const h=acc?.holdings.find(h=>h.id===_mHoldId);
   if(!h){toast('Position introuvable');return;}
-  h.transactions.push({date,type:_mType,qty,price});
+  const added={date,type:_mType,qty,price};
+  const addErr=txCheckAdd(h.transactions,added);
+  if(addErr){toast(addErr);return;}
+  h.transactions.push(added);
   // recalcHolding recompute tout (dont valueRef/pnlRef, que le calcul manuel oubliait :
   // accSum lit valueRef → patrimoine faux jusqu'au prochain fetch), comme edit-tx-submit
   recalcHolding(h);
@@ -107,6 +115,7 @@ document.getElementById('modal-submit').addEventListener('click',()=>{
   const accEl=document.getElementById('s-account');
   const holdsEl=accEl?.querySelector('#js-holds');
   if(holdsEl) renderHoldsHTML(acc);
+  if(S.screen==='stock') renderScreen('stock');   // la fiche titre affiche ses mouvements : à réafficher après l'ajout
   refreshMain();
   const lbl={BUY:'Achat',SELL:'Vente',DIV:'Dividende'}[_mType];
   toast(`${lbl} enregistré ✓`);

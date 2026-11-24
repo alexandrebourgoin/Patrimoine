@@ -1,4 +1,4 @@
-// Écran Analyse : répartitions (type, géographie, secteur, type de compte) et objectifs + binding.
+// Écran Analyse : patrimoine net, grandes classes, types d'actifs et de compte, géographie, secteurs, objectifs d'allocation + binding.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
 // ── TARGETS BLOCK ──
@@ -38,10 +38,11 @@ function renderTargetsBlock(byType, tot) {
 }
 
 // ── ANALYSIS ──
-const GEO_C=['#4F8EF7','#F59E0B','#00D68F','#A78BFA','#FF5A5A','#F97316'];
-const TYPE_C={'Action':'#4F8EF7','ETF':'#00C2CB','Obligation':'#00D68F','Cash':'#F59E0B'};
+// Calculs : analysisData() (js/features/wealth.js, pur). Ici : rendu uniquement.
 const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
 const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
+const POCKET_C={'Liquidités':'#F59E0B','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
+const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
 
 function buildSegs(obj, colors) {
   // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
@@ -54,70 +55,85 @@ function buildSegs(obj, colors) {
     pct: tot>0?(value/tot*100).toFixed(1):'0.0'
   }));
 }
+// Donut + légende : le nom a sa propre ligne (avec le pourcentage), le montant passe dessous. Ainsi rien n'est tronqué
+// (« Obligati… », « ETF / Fo… » en largeur de téléphone) ; un nom vraiment trop long reste coupé par une ellipse.
 function donutBlock(title, segs) {
-  const legend=segs.map(s=>`<div class="legend-row">
+  const legend=segs.map(s=>`<div class="legend-row legend-2l">
     <div class="leg-dot" style="background:${s.color}"></div>
-    <div class="leg-name">${esc(s.name)}</div>
-    <div class="leg-pct" style="color:${s.color}">${s.pct}%</div>
+    <div class="leg-txt"><div class="leg-line"><span class="leg-name">${esc(s.name)}</span><span class="leg-pct" style="color:${s.color}">${s.pct}%</span></div><div class="t-sm t-num">${masked(s.value)}</div></div>
   </div>`).join('');
   return `<div class="donut-block anim">
     ${donutSvg(segs,108,16)}
     <div class="legend">${legend}</div>
   </div>`;
 }
+// Liste en barres (géographie, secteurs) : 7 premières lignes + « Autres », pourcentage et montant alignés à droite
+function barList(obj) {
+  const entries=Object.entries(obj).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const tot=entries.reduce((s,[,v])=>s+v,0);
+  if(!(tot>0)) return `<div class="t-sm" style="padding:6px 0">Aucune donnée</div>`;
+  const top=entries.slice(0,7), rest=entries.slice(7).reduce((s,[,v])=>s+v,0);
+  if(rest>0) top.push(['Autres',rest]);
+  return top.map(([n,v],i)=>{
+    const p=v/tot*100;
+    return `<div class="bar-item">
+      <div class="bar-line"><span class="bar-name">${esc(n)}</span><span class="t-num" style="flex-shrink:0"><b>${p.toFixed(1)} %</b> <span class="t-sm">· ${masked(v)}</span></span></div>
+      <div class="bar-track"><div style="width:${p.toFixed(1)}%;background:${SEC_C[i%SEC_C.length]}"></div></div>
+    </div>`;
+  }).join('');
+}
+// Carte de synthèse : patrimoine net, puis brut / crédits / immobilier brut s'il y a des biens, puis le détail financier
+function wealthCardHTML(d) {
+  const w=d.wealth, row=(k,v)=>`<div class="wl-row"><span>${k}</span><span class="t-num">${masked(v)}</span></div>`;
+  const parts=`${d.accs.length} compte${d.accs.length===1?'':'s'}${w.count?` · ${w.count} bien${w.count===1?'':'s'} immobilier${w.count===1?'':'s'}`:''}`;
+  return `<div class="wl-card">
+    <div class="t-label">Patrimoine net</div>
+    <div class="wl-amount t-num">${masked(d.tot)}</div>
+    ${w.count?`${row('Patrimoine brut',w.gross)}${row('Crédits immobiliers restants',w.debt)}${row('Dont immobilier brut',w.property)}`:''}
+    ${row('Dont comptes financiers',w.financial)}
+    <div class="t-sm" style="margin-top:8px">${parts} · comment le patrimoine est placé aujourd'hui</div>
+    <div id="js-go-proj" class="tap wl-chip">DCA et projection →</div>
+  </div>`;
+}
 
 function renderAnalysis() {
-  const all=S.accounts.flatMap(a=>a.holdings);
-  // Les liquidités non investies des comptes comptent comme du « Cash » : sans elles,
-  // le total de l'Analyse ne collait pas au patrimoine affiché sur le dashboard.
-  const cashTot=S.accounts.reduce((s,a)=>s+accCash(a),0);
-  const tot=all.reduce((s,h)=>s+(h.valueRef??h.value),0)+cashTot; // devise appli — h.value est en devise native
-  if(!all.length&&!cashTot) return `<div class="analysis-top"><div class="t-title">Analyse</div></div>
+  const d=analysisNow();
+  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar()}</div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
     </div>`;
-  const byType={}, byGeo={}, bySec={}, byAccType={};
-  all.forEach(h=>{
-    const v=h.valueRef??h.value;
-    byType[h.type]=(byType[h.type]||0)+v;
-    byGeo[h.country]=(byGeo[h.country]||0)+v;
-    bySec[h.sector]=(bySec[h.sector]||0)+v;
-  });
-  // byGeo/bySec restent sur les titres seuls (le cash n'a ni pays ni secteur)
-  if(cashTot) byType['Cash']=(byType['Cash']||0)+cashTot;
-  // Répartition par type de compte : titres + liquidités de chaque compte (accTotal), agrégés par a.type
-  S.accounts.forEach(a=>{ byAccType[a.type||'Autre']=(byAccType[a.type||'Autre']||0)+accTotal(a); });
-  return `<div class="analysis-top anim">
-    ${renderTopBar(`<span class="t-sm" style="margin-right:4px">Tous comptes · ${masked(tot)}</span>`)}
-  </div>
-  <div style="height:10px"></div>
-  <div class="t-section px" style="padding-bottom:10px">Objectifs d'allocation</div>
-  ${renderTargetsBlock(byType, tot)}
-  <div class="t-section px" style="padding-bottom:10px">Répartition par type de compte</div>
-  ${donutBlock('',buildSegs(byAccType,ACCTYPE_C))}
-  <div class="t-section px" style="padding-bottom:10px">Par type d'actif</div>
-  ${donutBlock('',buildSegs(byType,TYPE_C))}
-  <div class="t-section px" style="padding-bottom:10px">Répartition géographique</div>
-  ${donutBlock('',buildSegs(byGeo,GEO_C))}
-  <div class="t-section px" style="padding-bottom:10px">Par secteur</div>
-  ${donutBlock('',buildSegs(bySec,SEC_C))}`;
+  const sec=t=>`<div class="t-section px" style="padding-bottom:10px">${t}</div>`;
+  return `<div class="analysis-top anim">${renderTopBar()}</div>
+  ${wealthCardHTML(d)}
+  ${sec('Grandes classes')}
+  ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}
+  ${sec("Par type d'actif")}
+  ${donutBlock('',buildSegs(d.byAsset,ASSET_C))}
+  ${sec('Par type de compte')}
+  ${donutBlock('',buildSegs(d.byAccType,ACCTYPE_C))}
+  ${sec('Répartition géographique')}
+  <div class="px" style="padding-bottom:6px">${barList(d.byGeo)}</div>
+  ${sec('Par secteur')}
+  <div class="px" style="padding-bottom:6px">${barList(d.bySec)}</div>
+  <div class="t-sm px" style="padding-bottom:10px">Titres seulement : les liquidités n'ont ni pays ni secteur, les cryptos sont regroupées.</div>
+  <details style="margin:10px 20px"><summary class="t-section" style="cursor:pointer;padding:8px 0">Objectifs d'allocation ⓘ</summary>${renderTargetsBlock(d.byRaw,d.totRaw)}</details>`;
 }
 
 
 SCREEN_BIND.analysis = function (el, id) {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
-    // Use event delegation so it survives partial DOM replacement
+    el.querySelector('#js-go-proj')?.addEventListener('click', ()=>go('dca'));
+    // Délégation : un seul écouteur par élément écran (l'élément persiste entre les rendus)
+    if (el._tgtBound) return;
+    el._tgtBound = true;
     el.addEventListener('input', e => {
       const inp = e.target.closest('.tgt-inp');
       if (!inp) return;
       S.targets[inp.dataset.type] = Math.max(0, Math.min(100, parseFloat(inp.value) || 0));
       // Refresh bars + totals in-place without losing focus
-      const all = S.accounts.flatMap(a => a.holdings);
-      const tot = all.reduce((s, h) => s + (h.valueRef ?? h.value), 0);
-      const byType = {};
-      all.forEach(h => { byType[h.type] = (byType[h.type] || 0) + (h.valueRef ?? h.value); });
+      const d = analysisNow(), byType = d.byRaw, tot = d.totRaw;
       ['Action','ETF','Obligation','Cash'].forEach(t => {
         const actual = tot > 0 ? (byType[t] || 0) / tot * 100 : 0;
         const target = S.targets[t] || 0;

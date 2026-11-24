@@ -80,6 +80,74 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .nav-btn span{font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase}
 .nav-pip{width:4px;height:4px;border-radius:50%;background:var(--accent);opacity:0;transition:opacity .2s;margin-top:-2px}
 .nav-btn.on .nav-pip{opacity:1}
+.nav-btn{position:relative}
+.nav-btn .nav-badge{position:absolute;top:2px;left:calc(50% + 4px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--loss);color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;letter-spacing:0;text-transform:none;box-sizing:border-box}
+/* Écran Ordres et alertes (js/screens/orders.js) */
+.oa-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px}
+.oa-card.hit{border-color:#F59E0B}
+.oa-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.oa-title{font-weight:800;font-size:15px}
+.oa-name{font-size:12px;font-weight:600;color:var(--text2)}
+.oa-side{font-size:12px;font-weight:700}
+.oa-side.buy{color:var(--gain)}
+.oa-side.sell{color:var(--loss)}
+.oa-pill{font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;background:var(--card);color:var(--text2)}
+.oa-pill.hit{background:rgba(245,158,11,.15);color:#F59E0B}
+.oa-warn{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);color:#F59E0B;font-size:12px;font-weight:600}
+.oa-actions{display:flex;gap:8px;margin-top:12px}
+.oa-btn{flex:1;height:42px;border-radius:12px;font-weight:700;cursor:pointer}
+.oa-h{font-size:15px;font-weight:800;margin-bottom:2px}
+.oa-banner{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:var(--card2);border:1px solid var(--border)}
+.oa-banner.err{background:var(--loss-dim);color:var(--loss);font-size:13px;font-weight:600;border:0}
+.oa-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px}
+.oa-k{color:var(--text2)}
+.oa-v{font-weight:600;text-align:right}
+/* Projection du patrimoine (écran DCA) */
+.dca-proj-row{display:grid;grid-template-columns:.8fr 1.1fr 1fr 1.1fr 1fr;gap:6px;align-items:center;font-size:12px;padding:9px 0;border-top:1px solid var(--border)}
+.dca-proj-row.head{border-top:none;padding:8px 0;color:var(--text2);font-size:11px;font-weight:700}
+.dca-proj-row .dim{color:var(--text2)}
+/* Synthèse du patrimoine (Accueil et Analyse) et légendes des répartitions */
+.wl-card{margin:6px 20px 16px;padding:16px;border-radius:16px;background:var(--card);border:1px solid var(--border)}
+.wl-amount{font-size:28px;font-weight:800;margin:4px 0 6px}
+.wl-row{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:13px}
+.wl-row.dark{color:rgba(255,255,255,.8);margin-top:7px}
+.wl-chip{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer}
+.legend-2l{align-items:flex-start}
+.legend-2l .leg-dot{margin-top:4px;flex-shrink:0}
+.leg-txt{flex:1;min-width:0}
+.leg-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.leg-line .leg-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leg-line .leg-pct{flex-shrink:0}
+.bar-item{margin-bottom:12px}
+.bar-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px}
+.bar-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.bar-track{height:6px;border-radius:3px;background:var(--card2);margin-top:5px;overflow:hidden}
+.bar-track>div{height:100%}
+/* Écrans Immobilier (js/screens/immo.js) */
+.im-tile{text-align:left;width:100%;color:var(--text);font:inherit}
+.im-name{font-weight:700;font-size:16px;min-width:0;overflow-wrap:anywhere}
+.im-card{margin:14px 20px 0;padding:14px;border-radius:14px;background:var(--card2);border:1px solid var(--border)}
+.im-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.im-kind{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--card);color:var(--text2);flex-shrink:0}
+.im-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:13px}
+.im-row.strong{font-size:14px;font-weight:800}
+.im-k{color:var(--text2)}
+.im-row.strong .im-k{color:var(--text)}
+.im-v{text-align:right}
+.im-sep{border-top:1px solid var(--border);margin:8px 0}
+.im-loan{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.im-bar{height:8px;border-radius:4px;background:var(--card);overflow:hidden;margin-bottom:6px}
+.im-bar>div{height:100%;background:var(--gain)}
+.im-actions{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.im-btn{min-height:46px;padding:12px 16px;border-radius:12px;font-weight:700;cursor:pointer;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+.ima-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.2fr;gap:6px;align-items:baseline;font-size:12px}
+.ima-head{padding:6px 0;color:var(--text2);font-size:11px;font-weight:700}
+.ima-year{border-top:1px solid var(--border)}
+.ima-year>summary{cursor:pointer;padding:9px 0;list-style:none}
+.ima-m{padding:5px 0;border-top:1px solid var(--border)}
+.ima-grid.past{opacity:.55}
+.ima-m.next{font-weight:800;color:var(--accent)}
+.oa-x{width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0}
 
 /* TYPOGRAPHY */
 .t-title{font-size:20px;font-weight:800;letter-spacing:-.5px}

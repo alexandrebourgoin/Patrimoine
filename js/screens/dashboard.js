@@ -3,7 +3,8 @@
 
 // ── DASHBOARD ──
 function renderDash() {
-  const w=totalWealth();
+  const w=totalWealth();   // comptes financiers : base de la variation du jour (l'immobilier n'a pas de variation quotidienne)
+  const wl=wealthNow();    // patrimoine net = comptes financiers + immobilier − crédits restants
   const wChg=(S.accounts.length&&w>0)?S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+(a.change1d??0)*(a.value/w),0):0;
   const allH=S.accounts.filter(a=>!a.observer).flatMap(a=>a.holdings); // cohérent avec totalWealth()
   const totPnl=allH.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
@@ -13,7 +14,10 @@ function renderDash() {
 
   const wealthDisplay = S.privacy
     ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
-    : `<div class="wealth-amount t-num">${fmtCur(w)}</div>`;
+    : `<div class="wealth-amount t-num">${fmtCur(wl.net)}</div>`;
+  const wlRow=(k,v)=>`<div class="wl-row dark"><span>${k}</span><span class="t-num">${masked(v)}</span></div>`;
+  const wlDetail=wl.count?`<div style="margin-top:10px">${wlRow('Patrimoine brut',wl.gross)}${wlRow('Crédits immobiliers restants',wl.debt)}${wlRow('Dont immobilier brut',wl.property)}</div>`:'';
+  const nAcc=S.accounts.filter(a=>!a.observer).length;
   return `<div class="dash-top">
     ${renderTopBar(`
       <div id="js-privacy-btn" class="top-btn tap" title="Masquer les montants" style="color:${S.privacy?'var(--accent)':'var(--text2)'}">
@@ -25,14 +29,15 @@ function renderDash() {
     `)}
   </div>
     <div class="wealth-card anim">
-    <div class="wealth-label">Fortune totale</div>
+    <div class="wealth-label">Patrimoine net</div>
     ${wealthDisplay}
+    ${wlDetail}
     <div class="row gap8" style="margin:8px 0 0">
       <div class="badge ${wChg>=0?'up':'dn'}">${wChg>=0?'▲':'▼'} ${Math.abs(wChg).toFixed(2)}%</div>
-      <span style="font-size:12px;color:rgba(255,255,255,.38)">Aujourd'hui · ${S.accounts.length} compte${S.accounts.length>1?'s':''}</span>
+      <span style="font-size:12px;color:rgba(255,255,255,.38)">Comptes financiers aujourd'hui · ${S.accounts.length} compte${S.accounts.length>1?'s':''}${wl.count?` · ${wl.count} bien${wl.count>1?'s':''} immobilier${wl.count>1?'s':''}`:''}</span>
     </div>
     <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">
-      P&amp;L total&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
+      P&amp;L des positions financières&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
     </div>
     ${S.lastPriceUpdate?`<div style="font-size:10px;color:rgba(255,255,255,.28);margin-top:5px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}
   </div>
@@ -101,7 +106,7 @@ function renderHistCard() {
   const _chip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_real?'var(--gain)':'var(--text3)'}" title="${_real?'Historique réel — reconstitué à partir de vos cours et transactions, affiné chaque jour':'Courbe estimée — récupérez l’historique de vos titres pour la fiabiliser'}">${_real?'● réel':'○ estimé'}</span>`;
   return `<div class="hist-card anim">
     <div class="hist-head">
-      <div class="row gap8" style="align-items:center"><div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">Évolution du patrimoine</div>${_chip}</div>
+      <div class="row gap8" style="align-items:center"><div style="font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)">${imRead().length?'Évolution des comptes financiers':'Évolution du patrimoine'}</div>${_chip}</div>
       <div class="hist-periods">${pills}</div>
     </div>
     <div class="hist-wrap" id="js-hist-wrap">
