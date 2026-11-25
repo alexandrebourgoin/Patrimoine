@@ -41,6 +41,7 @@ const SHELL = [
   './js/features/order-alert-storage.js',
   './js/features/order-alert-rules.js',
   './js/features/transaction-check.js',
+  './js/features/loan-calc.js',
   './js/features/realestate-calc.js',
   './js/features/realestate-storage.js',
   './js/features/wealth.js',

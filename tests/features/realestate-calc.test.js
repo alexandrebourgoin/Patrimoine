@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
-const R = loadClassic('js/features/realestate-calc.js', {
+const R = loadClassic('js/features/realestate-calc.js', { globals: LOAN,
   exports: ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoAddMonths', 'immoYearsBetween', 'immoLoan', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'],
 });
 const prop = (over = {}) => ({ id: 'im1', name: 'Appart', kind: 'main', buyDate: '2025-09-11', price: 100000, notary: 8000, works: 0, otherFees: 0, growth: 2, loan: null, ...over });
