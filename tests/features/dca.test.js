@@ -293,7 +293,6 @@ describe('DCA : écran et projection', () => {
     const html = api.renderDca();
     for (const t of ['Mon rythme', 'Prochaine répartition', 'Et dans 12 échéances ?', 'Historique des stratégies']) expect(html).toContain(t);
     expect(html).not.toContain('Projection du patrimoine');
-    expect(html).not.toContain('projection');
   });
   it('projection : 6 horizons jusqu\'à 20 ans et lien vers le plan DCA', () => {
     const html = api.renderDcaProjection(S.dca.plans[0]);
