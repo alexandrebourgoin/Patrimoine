@@ -14,7 +14,6 @@ function renderComptes() {
     // Même performance que sur l'écran du compte (flux d'apports et de retraits) quand elle est calculable ; sinon P&L des positions
     const flowPct=accPerfPctNow(a);
     if(flowPct!=null) allTimePct=flowPct;
-    const up=allTimePct>=0;
     const accCcy=a.currency||S.currency;
     const fxAcc=(FX_RATES[accCcy]||1)/(FX_RATES[S.currency]||1);
     const displayVal=accCcy===S.currency?masked(a.value):maskedNative(a.value*fxAcc,accCcy);
@@ -30,7 +29,7 @@ function renderComptes() {
       <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}${a.bank?' · '+esc(a.bank):''}</div>
       ${obsTag?`<div style="margin-top:6px">${obsTag}</div>`:''}
       <div style="font-size:15px;font-weight:800;margin-top:10px" class="t-num">${displayVal}</div>
-      <div style="font-size:12px;font-weight:700;margin-top:2px" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:2px" class="${pctClass(allTimePct)}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
       ${!a.observer?`<div class="acc-bar" style="margin-top:12px"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
     </div>`;
     return `<div class="acc-card${anim}" data-acc="${a.id}" style="${a.observer?'opacity:.72':''}">
@@ -44,7 +43,7 @@ function renderComptes() {
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
-          <div style="font-size:12px;font-weight:700" class="${up?'t-gain':'t-loss'}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
+          <div style="font-size:12px;font-weight:700" class="${pctClass(allTimePct)}">${a.holdings.length?fmtPct(allTimePct):'—'}</div>
         </div>
         <div class="acc-menu-btn tap" data-menu="${a.id}" title="Actions">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>

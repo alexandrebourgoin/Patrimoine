@@ -121,3 +121,16 @@ describe('sparkData / sparkSvg', () => {
     expect(sparkSvg([1, 2, 3], 80, 30, '#f00')).toContain('stroke="#f00"');
   });
 });
+
+describe('graphique d\'un titre détenu : étiquettes lisibles', () => {
+  const { stockChartSvg } = loadClassic('js/features/charts.js', {
+    globals: { S, getHistorySeries: () => null, fmtNative: v => v.toFixed(2) + ' €' },
+    exports: ['stockChartSvg'],
+  });
+  it('PRU annoté à gauche, cours actuel à droite : jamais superposés', () => {
+    const h = { ticker: 'MC', currentPrice: 734.2, avgBuyPrice: 682.5, currency: 'EUR', transactions: [{ date: '2024-01-10', type: 'BUY', qty: 1, price: 680 }] };
+    const svg = stockChartSvg(h, 360, 120, '1A');
+    expect(svg).toMatch(/<text x="4" [^>]*text-anchor="start"[^>]*>PRU 682,50<\/text>/);
+    expect(svg).toMatch(/<text x="356" [^>]*text-anchor="end"[^>]*>734\.20 €<\/text>/);
+  });
+});
