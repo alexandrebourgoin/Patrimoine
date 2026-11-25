@@ -64,7 +64,7 @@ function renderImmo() {
   }).join('');
   return `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Immobilier</div>
+    <div class="t-title">${navLabel('immo')}</div>
     <div class="t-sm" style="margin-top:2px">Sélectionne un bien pour consulter sa fiche. Ni loyers, ni fiscalité.</div>
   </div>
   <div style="padding:12px 20px">

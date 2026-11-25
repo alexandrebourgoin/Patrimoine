@@ -1,5 +1,5 @@
-// Écran « Ordres et alertes » : ordres limites en cours (en haut) et alertes de prix (en bas).
-// Nom du module : « Ordres » dans la barre du bas (place limitée), « Ordres et alertes » dans le menu et comme titre d'écran.
+// Écran « Ordres » : ordres limites en cours (en haut) et alertes de prix (en bas).
+// Nom du module : NAV_CATALOG.orders.label via navLabel(), identique dans la barre du bas, le menu et le titre.
 // Données : createOrderAlertStore (js/features/order-alert-storage.js), une clé par mode démo / réel.
 // Règles : js/features/order-alert-rules.js (fonctions pures, testées seules). Ici : rendu et événements uniquement.
 // Une alerte est « déclenchée » tant que le dernier cours connu est du bon côté du prix ; vérifiée au rendu et à chaque
@@ -107,7 +107,7 @@ function renderOrders() {
     : '';
   return `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Ordres et alertes</div>
+    <div class="t-title">${navLabel('orders')}</div>
     <div class="t-sm" style="margin-top:2px">Suivi manuel : aucun ordre n'est passé par l'application</div>
   </div>
   <div style="padding:4px 16px 110px">
