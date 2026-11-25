@@ -199,13 +199,16 @@ describe('accValueOnDay', () => {
     expect(r.v).toBeCloseTo(10 * 100 / 1.08 + 50, 8);
     expect(r.approx).toBe(false);
   });
-  it('sans clôture connue : cours actuel et résultat marqué approximatif', () => {
+  it('sans clôture connue : cours actuel et résultat marqué approximatif ; inconnu si AUCUNE clôture', () => {
     const r = P.accValueOnDay({ holdings: [h()] }, '2025-12-31', env({ closeOn: () => null }));
     expect(r.v).toBeCloseTo(10 * 200 / 1.08 + 50, 8);
     expect(r.approx).toBe(true);
+    expect(r.unknown).toBe(true);
+    const partial = P.accValueOnDay({ holdings: [h(), h({ ticker: 'OR' })] }, '2025-12-31', env({ closeOn: t => (t === 'MC' ? 100 : null) }));
+    expect(partial).toMatchObject({ approx: true, unknown: false });
   });
   it('position non détenue ce jour-là : ignorée (et n\'est pas approximative)', () => {
     const r = P.accValueOnDay({ holdings: [h()] }, '2020-01-01', env({ qtyOnDay: () => 0, closeOn: () => null }));
-    expect(r).toEqual({ v: 50, approx: false });
+    expect(r).toEqual({ v: 50, approx: false, unknown: false });
   });
 });

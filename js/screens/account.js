@@ -24,10 +24,22 @@ function _perfModeSet(m) { try { localStorage.setItem('accPerfMode', m); } catch
 // Dernière clôture connue ≤ jour (série réelle de l'historique), ou null
 function _closeOn(ticker, day) {
   const h = getHistorySeries(ticker);
-  if (!h) return null;
+  if (!h) return S.isDemo ? _demoCloseOn(ticker, day) : null;
   let c = null;
   for (const p of h.series) { if (p.d <= day) c = p.c; else break; }
   return c;
+}
+// Mode démo uniquement : pas d'historique réel. Cours de démonstration interpolé linéairement entre le premier achat
+// (prix et date de la 1re transaction) et le cours actuel : déterministe, et réaliste pour un fonds euros comme pour
+// une action (les performances de démonstration ne valent plus 0 %). Jamais utilisé en mode réel.
+function _demoCloseOn(ticker, day) {
+  const h = S.accounts.flatMap(a => a.holdings || []).find(x => x.ticker === ticker);
+  const tx = h && (h.transactions || []).filter(t => t.type === 'BUY' && t.price > 0).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+  if (!tx || !(h.currentPrice > 0)) return null;
+  const t0 = Date.parse(tx.date + 'T00:00:00'), t1 = Date.parse(_dayKey(Date.now()) + 'T00:00:00'), t = Date.parse(day + 'T00:00:00');
+  if (!(t1 > t0)) return h.currentPrice;
+  const f = Math.max(0, Math.min(1, (t - t0) / (t1 - t0)));
+  return tx.price + (h.currentPrice - tx.price) * f;
 }
 const _accValueEnv = { qtyOnDay: _qtyOnDay, closeOn: _closeOn, conv: (v, c) => toRefCcy(v, c), cashOn: (a, day) => accCash(a, day) };
 function accPerfNow(acc) {
@@ -49,7 +61,7 @@ function accPerfCardHTML(acc, perf, sum) {
   const modeBtn = (k, l) => `<span data-pm="${k}" class="tap" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;${mode === k ? 'background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.18)' : 'color:var(--text2)'}">${l}</span>`;
   const sub = mode === 'all'
     ? `Depuis le ${fmtDate(sum.t0)}${sum.annual != null ? ' · ' + fmtPct(sum.annual) + ' / an' : ''}`
-    : (cur ? `Depuis le 1er janvier${sum.approx ? ' · approximatif (historique de cours incomplet)' : ''}` : 'Valeur au 31 décembre inconnue : consulte la performance historique');
+    : (cur ? `Depuis le 1er janvier${sum.approx ? ' · approximatif (historique de cours incomplet)' : ''}` : 'Cours au 31 décembre inconnus : récupère l\'historique des titres (⟲ sur la fiche titre) ou consulte la performance historique');
   return `<div style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
       <div class="t-label">Performance ${mode === 'all' ? 'historique' : 'YTD'}</div>
