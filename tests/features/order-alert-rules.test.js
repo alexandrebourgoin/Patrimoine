@@ -3,7 +3,7 @@ import { loadClassic } from '../helpers/load-classic.js';
 
 const R = loadClassic('js/features/order-alert-rules.js', {
   exports: ['oaHeldQty', 'oaFindTarget', 'oaOrderableAccounts', 'oaQuote', 'oaAlertTriggered', 'oaBadgeCount', 'oaPriceHint',
-    'oaOrderError', 'oaExecutionError', 'oaQtyAfter', 'oaIsDuplicateAlert', 'oaFmtQty', 'oaNewId'],
+    'oaOrderError', 'oaExecutionError', 'oaQtyAfter', 'oaIsDuplicateAlert', 'oaFmtQty', 'oaNewId', 'oaGapPct'],
 });
 const hold = (over = {}) => ({ id: 'h1', ticker: 'MC', name: 'LVMH', type: 'Action', currency: 'EUR', quantity: 10, currentPrice: 100, transactions: [], ...over });
 const acc = (over = {}) => ({ id: 'a1', name: 'PEA', holdings: [hold()], ...over });
@@ -131,5 +131,14 @@ describe('divers', () => {
     expect(R.oaNewId('o', 1000, 0.5)).toBe(R.oaNewId('o', 1000, 0.5));
     expect(R.oaNewId('o', 1000, 0.5).startsWith('o')).toBe(true);
     expect(R.oaNewId('o', 1000, 0.1)).not.toBe(R.oaNewId('o', 1000, 0.9));
+  });
+});
+
+describe('oaGapPct : variation restante jusqu\'au prix visé', () => {
+  it('baisse et hausse en %, null si incalculable', () => {
+    expect(R.oaGapPct(100, 95)).toBeCloseTo(-5, 10);
+    expect(R.oaGapPct(100, 110)).toBeCloseTo(10, 10);
+    expect(R.oaGapPct(0, 95)).toBeNull();
+    expect(R.oaGapPct(100, NaN)).toBeNull();
   });
 });

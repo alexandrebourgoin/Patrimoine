@@ -81,6 +81,10 @@ function oaIsDuplicateAlert(alerts, { ticker, dir, price }) {
 }
 
 // Quantité sans bruit de flottant (6 décimales max)
+// Variation (en %) que le cours actuel doit faire pour atteindre un prix : (cible / actuel − 1) × 100. null si incalculable.
+function oaGapPct(current, target) {
+  return current > 0 && target > 0 && Number.isFinite(current) && Number.isFinite(target) ? (target / current - 1) * 100 : null;
+}
 function oaFmtQty(q) { return (Math.round(q * 1e6) / 1e6).toString(); }
 
 // Identifiant unique (horodatage + aléa) ; now / rnd injectables pour les tests
