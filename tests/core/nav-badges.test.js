@@ -29,11 +29,11 @@ describe('raccourci « Ordres »', () => {
     const sh = shell({});
     expect(sh.NAV_CATALOG.orders).toEqual({ label: 'Ordres', kind: 'screen' });
   });
-  it('le menu l\'appelle « Ordres et alertes » et affiche la pastille', () => {
+  it('le menu utilise le même libellé « Ordres » que la barre du bas et affiche la pastille', () => {
     const sh = shell({ screen: 'dashboard', navItems: [] });
     sh.NAV_BADGES.orders = () => 12;
     const html = sh.drawerRow('orders');
-    expect(html).toContain('Ordres et alertes');
+    expect(html).toContain('<span class="dr-lbl">Ordres</span>');
     expect(html).toContain('dr-pill">9+<');
   });
   it('la barre du bas affiche la pastille (plafonnée à 9+), et aucune quand le compteur est nul', () => {

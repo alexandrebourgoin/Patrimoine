@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { loadClassic } from '../helpers/load-classic.js';
+
+// Un seul libellé par module : NAV_CATALOG.<clé>.label, repris par la barre du bas, le menu et le titre de l'écran.
+const S = { screen: 'dashboard', navItems: [], privacy: false, assistantEnabled: true };
+const sh = loadClassic('js/core/shell.js', {
+  globals: { S, assistantAlertCount: () => 0, NAV_SCREENS: ['dashboard', 'comptes', 'recherche', 'analysis'] },
+  exports: ['NAV_CATALOG', 'drawerRow', 'navLabel'],
+});
+const titleOf = file => (readFileSync(file, 'utf8').match(/<div class="t-title">([^<]*)<\/div>/) || [])[1];
+
+describe('libellés des modules', () => {
+  it('le menu affiche exactement le libellé de la barre du bas, pour chaque raccourci', () => {
+    for (const key of Object.keys(sh.NAV_CATALOG)) {
+      expect(sh.drawerRow(key)).toContain(`<span class="dr-lbl">${sh.navLabel(key)}</span>`);
+    }
+  });
+  it('« Masquer » devient « Afficher » quand les montants sont masqués, dans la barre comme dans le menu', () => {
+    S.privacy = true;
+    expect(sh.drawerRow('privacy')).toContain('<span class="dr-lbl">Afficher</span>');
+    S.privacy = false;
+  });
+  it.each([
+    ['dca', 'js/features/dca.js'],
+    ['orders', 'js/screens/orders.js'],
+    ['assistant', 'js/screens/assistant.js'],
+    ['settings', 'js/screens/settings.js'],
+    ['immo', 'js/screens/immo.js'],
+  ])('le titre de l\'écran %s est navLabel(clé) : aucun nom écrit en dur', (key, file) => {
+    expect(titleOf(file)).toBe(`\${navLabel('${key}')}`);
+  });
+  it('aucun alias de libellé dans le menu (drawerRow passe par navLabel)', () => {
+    const src = readFileSync('js/core/shell.js', 'utf8');
+    const row = src.slice(src.indexOf('function drawerRow'), src.indexOf('function renderDrawer'));
+    expect(row).toContain('navLabel(key)');
+    expect(row).not.toMatch(/'(Ordres et alertes|DCA & objectifs|Assistant IA|Actualiser les cours|Masquer les montants)'/);
+  });
+});

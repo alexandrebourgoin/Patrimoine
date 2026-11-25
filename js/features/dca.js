@@ -80,7 +80,7 @@ function renderDca() {
     Retour
   </div>
   <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">DCA & objectifs</div>
+    <div class="t-title">${navLabel('dca')}</div>
     <div class="t-sm" style="margin-top:2px">Investissement programmé, objectifs et projection — calculs théoriques, aucun ordre passé</div>
   </div>${_dcaBanner()}`;
   const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;

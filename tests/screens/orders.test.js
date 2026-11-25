@@ -65,8 +65,8 @@ describe('Écran Ordres et alertes', () => {
       expect(api.renderOrders()).toContain('data-oexec="o2"');
     });
 
-    it('le titre de l\'écran est « Ordres et alertes »', () => {
-      expect(api.renderOrders()).toContain('Ordres et alertes');
+    it('le titre de l\'écran reprend le libellé unique « Ordres »', () => {
+      expect(api.renderOrders()).toContain('<div class="t-title">Ordres</div>');
     });
 
     it('signale les alertes déclenchées et les trie en premier', () => {
