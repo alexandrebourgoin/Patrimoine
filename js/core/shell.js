@@ -23,7 +23,14 @@ function renderTopBar(extraBtns='') {
   </div>`;
 }
 
-// ── BARRE « RETOUR » commune aux écrans secondaires : lien retour à gauche, menu burger à droite ──
+// ── BARRE DE TITRE des écrans de module (DCA, Ordres, Immobilier, Assistant, Réglages…) : on y arrive par le menu ou la
+// barre du bas, comme aux écrans principaux : nom du module (navLabel) + burger, pas de « Retour » (le retour Android reste).
+// subtitle : texte déjà échappé, facultatif.
+function moduleBarHTML(key, subtitle='') {
+  return `<div class="top-bar"><div class="top-bar-title">${navLabel(key)}</div><div class="row gap8">${burgerBtnHTML()}</div></div>${subtitle ? `<div class="module-sub">${subtitle}</div>` : ''}`;
+}
+
+// ── BARRE « RETOUR » commune aux écrans de détail (compte, fiche titre, fiche d'un bien…) : lien retour à gauche, menu burger à droite ──
 // label : texte déjà échappé par l'appelant (ex. esc(acc.name)).
 const _SVG_BACK = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>`;
 function backBarHTML(label='Retour') {

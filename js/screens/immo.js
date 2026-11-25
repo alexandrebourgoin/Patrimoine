@@ -62,11 +62,7 @@ function renderImmo() {
       <div class="t-sm" style="margin-top:4px">Crédit remboursé : ${c.loan.pct.toFixed(1)} %</div>` : ''}
     </button>`;
   }).join('');
-  return `${backBarHTML()}
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">${navLabel('immo')}</div>
-    <div class="t-sm" style="margin-top:2px">Sélectionne un bien pour consulter sa fiche. Ni loyers, ni fiscalité.</div>
-  </div>
+  return `${moduleBarHTML('immo', "Sélectionne un bien pour consulter sa fiche. Ni loyers, ni fiscalité.")}
   <div style="padding:12px 20px">
     ${_imBanner()}${legacyCard}
     <div class="t-label">Patrimoine immobilier net</div>

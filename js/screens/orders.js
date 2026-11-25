@@ -105,11 +105,7 @@ function renderOrders() {
   const orphanNote = orphans
     ? `<div class="t-sm" style="margin:0 0 10px">${plural(orphans, 'ordre')} sans compte ou titre correspondant (supprimés ?) <span class="tap" data-opurge="1" style="color:var(--accent);font-weight:700;cursor:pointer">Nettoyer</span></div>`
     : '';
-  return `${backBarHTML()}
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">${navLabel('orders')}</div>
-    <div class="t-sm" style="margin-top:2px">Suivi manuel : aucun ordre n'est passé par l'application</div>
-  </div>
+  return `${moduleBarHTML('orders', "Suivi manuel : aucun ordre n'est passé par l'application")}
   <div style="padding:4px 16px 110px">
     ${banner}${legacyCard}
     <div class="oa-h">Ordres en cours <span class="t-sm" style="font-weight:600">(${rows.length})</span></div>

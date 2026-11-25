@@ -38,7 +38,9 @@ export function loadClassic(relPath, { globals = {}, exports = [] } = {}) {
   // les tests de modales injectent leur propre registre.
   // backBarHTML (js/core/shell.js) : barre « Retour » + burger des écrans secondaires, simplifiée ici.
   const backBarHTML = (label = 'Retour') => `<div class="back-bar"><div class="back tap" id="js-back">${label}</div><div id="js-burger-btn"></div></div>`;
-  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, backBarHTML, ...globals };
+  // moduleBarHTML (js/core/shell.js) : barre de titre des écrans de module (nom + burger), simplifiée ici.
+  const moduleBarHTML = (key, sub = '') => `<div class="top-bar"><div class="top-bar-title">${globals.navLabel ? globals.navLabel(key) : key}</div><div id="js-burger-btn"></div></div>${sub ? `<div class="module-sub">${sub}</div>` : ''}`;
+  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, backBarHTML, moduleBarHTML, ...globals };
   const names = Object.keys(base);
   return new Function(...names, `${src}\n;return { ${exports.join(', ')} };`)(...names.map(n => base[n]));
 }

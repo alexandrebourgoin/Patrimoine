@@ -6,7 +6,7 @@ import { loadClassic } from '../helpers/load-classic.js';
 const S = { screen: 'dashboard', navItems: [], privacy: false, assistantEnabled: true };
 const sh = loadClassic('js/core/shell.js', {
   globals: { S, assistantAlertCount: () => 0, NAV_SCREENS: ['dashboard', 'comptes', 'recherche', 'analysis'] },
-  exports: ['NAV_CATALOG', 'drawerRow', 'navLabel'],
+  exports: ['NAV_CATALOG', 'drawerRow', 'navLabel', 'moduleBarHTML'],
 });
 const titleOf = file => (readFileSync(file, 'utf8').match(/<div class="t-title">([^<]*)<\/div>/) || [])[1];
 
@@ -27,8 +27,13 @@ describe('libellés des modules', () => {
     ['assistant', 'js/screens/assistant.js'],
     ['settings', 'js/screens/settings.js'],
     ['immo', 'js/screens/immo.js'],
-  ])('le titre de l\'écran %s est navLabel(clé) : aucun nom écrit en dur', (key, file) => {
-    expect(titleOf(file)).toBe(`\${navLabel('${key}')}`);
+  ])('le titre de l\'écran %s vient de moduleBarHTML(clé) → navLabel : aucun nom écrit en dur', (key, file) => {
+    const src = readFileSync(file, 'utf8');
+    expect(src).toContain(`moduleBarHTML('${key}'`);
+    expect(src).not.toMatch(/<div class="t-title">/);
+  });
+  it('moduleBarHTML affiche le libellé du catalogue', () => {
+    expect(sh.moduleBarHTML('orders')).toContain('<div class="top-bar-title">Ordres</div>');
   });
   it('aucun alias de libellé dans le menu (drawerRow passe par navLabel)', () => {
     const src = readFileSync('js/core/shell.js', 'utf8');
