@@ -63,7 +63,7 @@ function back() {
     // où on doit revenir selon l'écran courant
     const fallbacks = {
       account: 'comptes', stock: 'account',
-      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard', orders: 'dashboard', immo: 'dashboard', immodetail: 'immo',
+      watchstock: 'dashboard', settings: 'dashboard', assistant: 'dashboard', dca: 'dashboard', orders: 'dashboard', stale: 'dashboard', immo: 'dashboard', immodetail: 'immo',
     };
     const fb = fallbacks[S.screen];
     if (fb) go(fb);
@@ -75,7 +75,7 @@ function back() {
 // ═══════════════════════════════════════════════
 function renderScreen(id) {
   const el=document.getElementById('s-'+id);
-  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca,orders:renderOrders,immo:renderImmo,immodetail:renderImmoDetail};
+  const map={dashboard:renderDash,comptes:renderComptes,recherche:renderRecherche,account:renderAccount,stock:renderStock,analysis:renderAnalysis,settings:renderSettings,watchstock:renderWatchStock,assistant:renderAssistant,dca:renderDca,orders:renderOrders,stale:renderStale,immo:renderImmo,immodetail:renderImmoDetail};
   if(map[id]) { el.innerHTML=map[id](); bindEvents(id,el); }
 }
 
@@ -87,6 +87,7 @@ function refreshMain() {
   renderScreen('analysis');
   if(S.screen==='recherche') renderScreen('recherche');
   if(S.screen==='orders') renderScreen('orders');   // alertes recalculées après chaque actualisation des cours
+  if(S.screen==='stale')  renderScreen('stale');    // liste « Non synchro » recalculée après chaque actualisation
   renderNav();                                      // pastilles de la barre du bas
   saveData();
 }

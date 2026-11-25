@@ -215,6 +215,7 @@ function renderHoldsHTML(acc) {
     hs.map(h=>{
       const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
       const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
+      const stale   = priceStale(h);   // cours trop ancien ou date de cotation inconnue (js/services/prices.js)
       return `
       <div class="hold-item" data-hid="${h.id}">
         <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
@@ -227,7 +228,7 @@ function renderHoldsHTML(acc) {
             </div>
           </div>
           <div class="hold-item-bot">
-            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
+            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${stale?';color:var(--loss);font-weight:700':''}"${stale?` title="Cours non synchronisé (${esc(priceAgeLabel(h.quoteAt))})"`:''}>${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${esc(h.type)}${stale?' · ⚠ cours obsolète':''}</div>
             <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
             <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>

@@ -73,6 +73,7 @@ const SHELL = [
   './js/screens/settings.js',
   './js/screens/watch.js',
   './js/screens/orders.js',
+  './js/screens/stale.js',
   './js/screens/immo.js',
   './manifest.json',
   './icon.svg'
