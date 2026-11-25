@@ -13,9 +13,10 @@ function burgerBtnHTML() {
   return `<div id="js-burger-btn" class="top-btn tap" title="Menu${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''} dans l'assistant`:''}" style="position:relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`;
 }
 
-function renderTopBar(extraBtns='') {
+// title : nom de l'écran principal (navLabel) ; l'Accueil garde « Mon patrimoine », nom de l'application.
+function renderTopBar(extraBtns='', title='Mon patrimoine') {
   return `<div class="top-bar">
-    <div class="top-bar-title">Mon patrimoine</div>
+    <div class="top-bar-title">${title}</div>
     <div class="row gap8">
       ${extraBtns}
       ${burgerBtnHTML()}

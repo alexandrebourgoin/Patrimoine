@@ -42,3 +42,15 @@ describe('libellés des modules', () => {
     expect(row).not.toMatch(/'(Ordres et alertes|DCA & objectifs|Assistant IA|Actualiser les cours|Masquer les montants)'/);
   });
 });
+
+describe('titres des écrans principaux', () => {
+  it('Comptes, Recherche et Analyse affichent leur nom ; l\'Accueil garde « Mon patrimoine »', () => {
+    const shell = loadClassic('js/core/shell.js', { globals: { S, assistantAlertCount: () => 0 }, exports: ['renderTopBar'] });
+    expect(shell.renderTopBar()).toContain('<div class="top-bar-title">Mon patrimoine</div>');
+    expect(shell.renderTopBar('', 'Analyse')).toContain('<div class="top-bar-title">Analyse</div>');
+    expect(readFileSync('js/screens/accounts.js', 'utf8')).toContain("navLabel('comptes'))");
+    expect(readFileSync('js/screens/search.js', 'utf8')).toContain("renderTopBar('', navLabel('recherche'))");
+    expect(readFileSync('js/screens/analysis.js', 'utf8')).toContain("renderTopBar('', navLabel('analysis'))");
+    expect(readFileSync('js/screens/dashboard.js', 'utf8')).not.toContain('navLabel(\'dashboard\')');
+  });
+});
