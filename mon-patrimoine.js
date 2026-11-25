@@ -165,4 +165,8 @@ try {
   }
 } catch(e) {}
 
+// Rappel de sauvegarde si la dernière date de plus de 10 jours (js/features/backup.js) : attend le déverrouillage
+// et la fermeture de la fenêtre Nouveautés.
+setTimeout(maybeRemindBackup, 1500);
+
 // Retour Android + Échap : js/core/back-handler.js. Mise à jour + enregistrement du service worker : js/core/app-update.js.
