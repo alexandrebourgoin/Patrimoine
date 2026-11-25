@@ -9,10 +9,7 @@ function renderAssistant() {
     2: { bg: 'rgba(245,158,11,.12)', col: '#F59E0B' },
     1: { bg: 'var(--accent-dim)', col: 'var(--accent)' },
   };
-  const header = `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
+  const header = `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
     <div class="t-title">Assistant IA</div>
     <div class="t-sm" style="margin-top:2px">Analyse automatique de vos comptes et titres</div>

@@ -7,14 +7,27 @@ const _SVG_ASSISTANT = `<svg width="19" height="19" viewBox="0 0 24 24" fill="cu
 const _SVG_VIEW_LIST = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h16v2H4V5zm0 6h16v2H4v-2zm0 6h16v2H4v-2z"/></svg>`;
 const _SVG_VIEW_GRID = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>`;
 
+// Bouton du menu burger (ouvre le tiroir : écouteur délégué sur #js-burger-btn plus bas), avec la pastille de l'assistant.
+function burgerBtnHTML() {
+  const _n = S.assistantEnabled ? assistantAlertCount() : 0;
+  return `<div id="js-burger-btn" class="top-btn tap" title="Menu${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''} dans l'assistant`:''}" style="position:relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`;
+}
+
 function renderTopBar(extraBtns='') {
   return `<div class="top-bar">
     <div class="top-bar-title">Mon patrimoine</div>
     <div class="row gap8">
       ${extraBtns}
-      ${(() => { const _n = S.assistantEnabled ? assistantAlertCount() : 0; return `<div id="js-burger-btn" class="top-btn tap" title="Menu${_n?` — ${_n} point${_n>1?'s':''} important${_n>1?'s':''} dans l'assistant`:''}" style="position:relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>${_n?`<span class="assistant-badge">${_n>9?'9+':_n}</span>`:''}</div>`; })()}
+      ${burgerBtnHTML()}
     </div>
   </div>`;
+}
+
+// ── BARRE « RETOUR » commune aux écrans secondaires : lien retour à gauche, menu burger à droite ──
+// label : texte déjà échappé par l'appelant (ex. esc(acc.name)).
+const _SVG_BACK = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>`;
+function backBarHTML(label='Retour') {
+  return `<div class="back-bar"><div class="back tap" id="js-back">${_SVG_BACK} ${label}</div>${burgerBtnHTML()}</div>`;
 }
 
 // ═══════════════════════════════════════════════

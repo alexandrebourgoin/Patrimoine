@@ -175,6 +175,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 /* BACK BUTTON */
 .back{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:14px 20px 6px;min-height:44px}
 .back svg{width:20px;height:20px}
+.back-bar{display:flex;align-items:center;justify-content:space-between;padding-right:20px}
+.back-bar .top-btn{margin-top:8px}
 
 /* BADGE */
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:700}

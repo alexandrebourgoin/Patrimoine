@@ -25,7 +25,9 @@ export function loadClassic(relPath, { globals = {}, exports = [] } = {}) {
   const src = readFileSync(new URL(`../../${relPath}`, import.meta.url), 'utf8');
   // Les modules enregistrent leurs modales dès l'évaluation (registerModal) : ce défaut ne simule pas leur comportement,
   // les tests de modales injectent leur propre registre.
-  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, ...globals };
+  // backBarHTML (js/core/shell.js) : barre « Retour » + burger des écrans secondaires, simplifiée ici.
+  const backBarHTML = (label = 'Retour') => `<div class="back-bar"><div class="back tap" id="js-back">${label}</div><div id="js-burger-btn"></div></div>`;
+  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, backBarHTML, ...globals };
   const names = Object.keys(base);
   return new Function(...names, `${src}\n;return { ${exports.join(', ')} };`)(...names.map(n => base[n]));
 }
