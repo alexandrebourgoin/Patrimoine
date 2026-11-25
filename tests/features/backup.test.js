@@ -141,3 +141,24 @@ describe('garde-fou : chaque clé de stockage du code est sauvegardée ou exclue
     expect(outside).toEqual(['accPerfMode']);   // préférence d'affichage YTD / Historique : volontairement hors sauvegarde
   });
 });
+
+describe('date de dernière sauvegarde visible dans le menu ☰', () => {
+  it('ligne du menu : libellé de la date, en rouge si le rappel est dû', () => {
+    const S = { isDemo: false };
+    const storage = fakeStorage();
+    const m = loadClassic('js/features/backup.js', {
+      globals: { S, localStorage: storage, toast() {}, openConfirm() {}, registerModal() {} },
+      exports: ['drawerBackupRow', 'markBackup'],
+    });
+    expect(m.drawerBackupRow()).toContain('Jamais sauvegardé sur cet appareil');
+    expect(m.drawerBackupRow()).toContain('dr-sub due');
+    m.markBackup(storage, Date.now());
+    expect(m.drawerBackupRow()).toContain('Dernière sauvegarde : aujourd\'hui');
+    expect(m.drawerBackupRow()).not.toContain(' due');
+  });
+  it('le menu affiche la ligne et un toucher lance la sauvegarde', () => {
+    const src = readFileSync('js/core/shell.js', 'utf8');
+    expect(src).toContain('drawerBackupRow()');
+    expect(src).toContain("if (e.target.closest('#js-drawer-backup')) { closeDrawer(); runBackup(); return; }");
+  });
+});

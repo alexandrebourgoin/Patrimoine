@@ -149,7 +149,7 @@ async function saveBackupFile(json, filename) {
 async function runBackup() {
   const now = Date.now();
   const json = JSON.stringify(buildBackup(localStorage, now, APP_VERSION), null, 2);
-  const ok = await saveBackupFile(json, `patrimoine-sauvegarde-${new Date(now).toISOString().slice(0, 10)}.json`);
+  const ok = await saveBackupFile(json, `patrimoine-sauvegarde-${new Date(now).toLocaleDateString('sv-SE')}.json`);
   if (!ok) { toast('Sauvegarde annulée'); return false; }
   markBackup(localStorage, Date.now());
   toast('Sauvegarde enregistrée ✓');
@@ -175,6 +175,13 @@ function restoreBackupFromFile(file) {
   };
   reader.onerror = () => toast('Fichier illisible');
   reader.readAsText(file);
+}
+
+// Menu ☰ : date de la dernière sauvegarde, toujours visible (en rouge au-delà de 10 jours) ; un toucher sauvegarde.
+function drawerBackupRow() {
+  const due = !S.isDemo && backupDue(localStorage);
+  return `<div class="dr-row" id="js-drawer-backup"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+    <span class="dr-lbl">Sauvegarder mes données<span class="dr-sub${due ? ' due' : ''}">${backupAgeLabel(localStorage)}</span></span></div>`;
 }
 
 // Rappel à l'ouverture (mode réel uniquement) : proposé tant que la dernière sauvegarde a plus de 10 jours.
