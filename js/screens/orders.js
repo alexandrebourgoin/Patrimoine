@@ -1,5 +1,5 @@
-// Écran « Ordres et alertes » : ordres limites en cours (en haut) et alertes de prix (en bas).
-// Nom du module : « Ordres » dans la barre du bas (place limitée), « Ordres et alertes » dans le menu et comme titre d'écran.
+// Écran « Ordres » : ordres limites en cours (en haut) et alertes de prix (en bas).
+// Nom du module : NAV_CATALOG.orders.label via navLabel(), identique dans la barre du bas, le menu et le titre.
 // Données : createOrderAlertStore (js/features/order-alert-storage.js), une clé par mode démo / réel.
 // Règles : js/features/order-alert-rules.js (fonctions pures, testées seules). Ici : rendu et événements uniquement.
 // Une alerte est « déclenchée » tant que le dernier cours connu est du bon côté du prix ; vérifiée au rendu et à chaque
@@ -105,14 +105,7 @@ function renderOrders() {
   const orphanNote = orphans
     ? `<div class="t-sm" style="margin:0 0 10px">${plural(orphans, 'ordre')} sans compte ou titre correspondant (supprimés ?) <span class="tap" data-opurge="1" style="color:var(--accent);font-weight:700;cursor:pointer">Nettoyer</span></div>`
     : '';
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Ordres et alertes</div>
-    <div class="t-sm" style="margin-top:2px">Suivi manuel : aucun ordre n'est passé par l'application</div>
-  </div>
+  return `${moduleBarHTML('orders', "Suivi manuel : aucun ordre n'est passé par l'application")}
   <div style="padding:4px 16px 110px">
     ${banner}${legacyCard}
     <div class="oa-h">Ordres en cours <span class="t-sm" style="font-weight:600">(${rows.length})</span></div>

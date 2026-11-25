@@ -98,13 +98,13 @@ function wealthCardHTML(d) {
 
 function renderAnalysis() {
   const d=analysisNow();
-  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar()}</div>
+  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
     </div>`;
   const sec=t=>`<div class="t-section px" style="padding-bottom:10px">${t}</div>`;
-  return `<div class="analysis-top anim">${renderTopBar()}</div>
+  return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
   ${wealthCardHTML(d)}
   ${sec('Grandes classes')}
   ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}

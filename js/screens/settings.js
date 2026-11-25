@@ -40,13 +40,7 @@ function renderFxModalRows() {
 
 function renderSettings() {
   const demo=S.isDemo;
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Réglages</div>
-  </div>
+  return `${moduleBarHTML('settings')}
   <div class="s-section">Profil</div>
   <div class="s-group">
     <div class="s-item">
@@ -201,14 +195,14 @@ function renderSettings() {
     </div>` : ''}
   </div>
 
-  <div class="s-section">Assistant IA</div>
+  <div class="s-section">${navLabel('assistant')}</div>
   <div class="s-group">
     <div class="s-item tap" id="js-assistant-tog">
       <div class="s-ico" style="background:var(--accent-dim)">
         <svg viewBox="0 0 24 24" fill="var(--accent)"><path d="M12 2l1.6 4.4L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.6L12 2zm6 10l.9 2.5L21.5 15.5l-2.6.95L18 19l-.9-2.55L14.5 15.5l2.6-1L18 12z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name">Assistant IA</div>
+        <div class="s-name">${navLabel('assistant')}</div>
         <div class="s-sub">Recommandations locales sur vos comptes et titres</div>
       </div>
       <div class="toggle ${S.assistantEnabled ? 'on' : ''}" id="js-assistant-inner"><div class="toggle-thumb"></div></div>
@@ -496,7 +490,7 @@ SCREEN_BIND.settings = function (el, id) {
       // Re-render des écrans à top-bar pour afficher/masquer le bouton immédiatement
       ['dashboard','comptes','recherche','analysis'].forEach(renderScreen);
       renderNav();
-      toast('Assistant IA ' + (S.assistantEnabled ? 'activé' : 'masqué'));
+      toast(navLabel('assistant') + ' ' + (S.assistantEnabled ? 'activé' : 'masqué'));
     });
     el.querySelector('#js-bgpriv-tog')?.addEventListener('click', () => {
       S.bgPrivacy = !S.bgPrivacy;

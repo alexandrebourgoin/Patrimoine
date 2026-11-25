@@ -5,7 +5,7 @@
 function renderRecherche() {
   const mode = S.srchMode || 'titres';
   const ph = mode === 'mouvements' ? 'Ticker, date, compte…' : 'Nom, ticker, secteur…';
-  return `${renderTopBar()}
+  return `${renderTopBar('', navLabel('recherche'))}
   <div style="padding:0 20px 10px">
     <div style="position:relative">
     <div class="search-box" id="js-srch-box">

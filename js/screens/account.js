@@ -125,10 +125,7 @@ function renderAccount() {
   const tracked=cfs.length>0||!!adj;           // liquidités suivies (apports saisis ou régularisation)
   const {perf,sum}=accPerfNow(acc);
   const netCf=accFlows(acc,(v,c)=>toRefCcy(v,c)).reduce((s,f)=>s+f.amt,0);   // apports − retraits, devise appli
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
+  return `${backBarHTML()}
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
       <div style="font-size:26px">${iconHtml(acc.icon)}</div>
