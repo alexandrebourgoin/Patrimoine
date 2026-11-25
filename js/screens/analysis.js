@@ -92,7 +92,6 @@ function wealthCardHTML(d) {
     ${w.count?`${row('Patrimoine brut',w.gross)}${row('Crédits immobiliers restants',w.debt)}${row('Dont immobilier brut',w.property)}`:''}
     ${row('Dont comptes financiers',w.financial)}
     <div class="t-sm" style="margin-top:8px">${parts} · comment le patrimoine est placé aujourd'hui</div>
-    <div id="js-go-proj" class="tap wl-chip">DCA et projection →</div>
   </div>`;
 }
 
@@ -117,6 +116,7 @@ function renderAnalysis() {
   ${sec('Par secteur')}
   <div class="px" style="padding-bottom:6px">${barList(d.bySec)}</div>
   <div class="t-sm px" style="padding-bottom:10px">Titres seulement : les liquidités n'ont ni pays ni secteur, les cryptos sont regroupées.</div>
+  ${renderDcaProjectionNow()}
   <details style="margin:10px 20px"><summary class="t-section" style="cursor:pointer;padding:8px 0">Objectifs d'allocation ⓘ</summary>${renderTargetsBlock(d.byRaw,d.totRaw)}</details>`;
 }
 
@@ -124,7 +124,7 @@ function renderAnalysis() {
 SCREEN_BIND.analysis = function (el, id) {
     el.querySelector('#js-settings-btn')?.addEventListener('click', ()=>go('settings'));
     el.querySelector('#js-assistant-btn')?.addEventListener('click', ()=>go('assistant'));
-    el.querySelector('#js-go-proj')?.addEventListener('click', ()=>go('dca'));
+    bindDcaProjection(el);   // projection du patrimoine (js/features/dca.js)
     // Délégation : un seul écouteur par élément écran (l'élément persiste entre les rendus)
     if (el._tgtBound) return;
     el._tgtBound = true;
