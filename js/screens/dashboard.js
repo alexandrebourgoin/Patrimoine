@@ -1,4 +1,4 @@
-// Écran Accueil (dashboard) : rendu + cartes Évolution / Titres suivis + binding.
+// Écran Accueil (dashboard) : rendu + cartes Grandes classes / Évolution / Titres suivis + binding.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
 // ── DASHBOARD ──
@@ -41,8 +41,19 @@ function renderDash() {
     </div>
     ${S.lastPriceUpdate?`<div style="font-size:10px;color:rgba(255,255,255,.28);margin-top:5px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}
   </div>
+  ${renderPocketCard()}
   ${renderHistCard()}
   ${renderWatchlistCard()}`;
+}
+
+// ── GRANDES CLASSES D'ACTIFS (même calcul que l'Analyse : analysisNow().byPocket, immobilier net compris) ──
+function renderPocketCard() {
+  const segs = buildSegs(analysisNow().byPocket, POCKET_C);
+  if (!segs.length) return '';
+  return `<div class="pocket-card tap anim" id="js-pocket-card" title="Ouvrir l'Analyse">
+    <div class="pocket-head"><span>Grandes classes d'actifs</span><span class="pocket-more">Analyse →</span></div>
+    ${donutBlock('', segs)}
+  </div>`;
 }
 
 // ── WATCHLIST CARD ──
@@ -123,6 +134,7 @@ function renderHistCard() {
 
 
 SCREEN_BIND.dashboard = function (el, id) {
+    el.querySelector('#js-pocket-card')?.addEventListener('click', () => go('analysis'));
     // History period selector
     el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
       S.histPeriod=p.dataset.period;
