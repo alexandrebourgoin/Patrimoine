@@ -242,7 +242,7 @@ function stockChartSvg(h, w, ch, period) {
   // BUY / SELL markers mapped to extended history window
   const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
     const idx = Math.max(0, Math.min(days-1, Math.round((new Date(tx.date+'T00:00:00') - startDate) / 86400000)));
-    const x = xs[idx].toFixed(1);
+    const x = Math.max(4, Math.min(w - 4, xs[idx])).toFixed(1);   // marqueur entier, même au bord du graphique
     const yy = ys[idx].toFixed(1);
     const mc = tx.type==='BUY'?'var(--gain)':'var(--loss)';
     return `<line x1="${x}" x2="${x}" y1="${padT}" y2="${ch-padB}" stroke="${mc}" stroke-width="1.5" opacity="0.55"/>

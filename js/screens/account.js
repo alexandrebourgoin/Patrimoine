@@ -357,7 +357,7 @@ function renderMovesHTML(acc) {
         <div class="tx-dot ${st.cls}">${st.dot}</div>
         <div class="flex1 col gap4" style="min-width:0">
           <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.label)}</div>
-          <div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fmtDate(m.date)}${m.detail?' · '+esc(m.detail):''}</div>
+          <div class="t-sm" style="overflow-wrap:anywhere">${fmtDate(m.date)}${m.detail?' · '+esc(m.detail):''}</div>
         </div>
         <div class="col right gap4" style="flex-shrink:0">
           <div style="font-size:13px;font-weight:800" class="${st.val} t-num">${st.sign}${maskedNative(m.amount,m.ccy)}</div>
