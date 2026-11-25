@@ -92,16 +92,17 @@ function navLabel(key) {
 function activeNavItems() {
   return S.navItems.filter(k => NAV_CATALOG[k] && !(k==='assistant' && !S.assistantEnabled));
 }
-// La barre reste visible sur les 4 écrans principaux ET sur tout écran ajouté en raccourci
-// (DCA, Assistant, Réglages), sinon on ne pourrait plus s'en servir depuis cet écran.
+// La barre du bas est visible sur les écrans principaux ET sur tous les écrans de module du catalogue (DCA, Ordres,
+// Immobilier, Assistant, Réglages…), raccourci ou non : depuis un module, on rejoint directement les raccourcis.
+// Les écrans de détail (compte, fiche titre, fiche d'un bien, titre suivi) gardent tout l'écran.
 function navVisibleFor(screen) {
-  return NAV_SCREENS.includes(screen) || activeNavItems().includes(screen);
+  return NAV_SCREENS.includes(screen) || NAV_CATALOG[screen]?.kind === 'screen' || activeNavItems().includes(screen);
 }
 function renderNav() {
   const nav = document.getElementById('nav'); if (!nav) return;
   const items = activeNavItems();
-  // Écrans « sans nav » devenus raccourcis : on leur réserve la place de la barre en bas
-  document.querySelectorAll('.screen.no-nav').forEach(s => s.classList.toggle('has-nav', items.includes(s.id.slice(2))));
+  // Écrans « sans nav » où la barre s'affiche quand même (modules) : on leur réserve sa place en bas
+  document.querySelectorAll('.screen.no-nav').forEach(s => s.classList.toggle('has-nav', navVisibleFor(s.id.slice(2))));
   nav.classList.toggle('hidden', !navVisibleFor(S.screen));
   nav.innerHTML = items.map(k => {
     const n = navBadgeCount(k);

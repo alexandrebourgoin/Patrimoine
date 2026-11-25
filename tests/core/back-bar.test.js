@@ -54,3 +54,18 @@ describe('barre « Retour » des écrans secondaires', () => {
     expect(html).not.toContain('js-back');
   });
 });
+
+describe('barre du bas sur les écrans de module', () => {
+  const S2 = { assistantEnabled: true, navItems: ['dashboard', 'comptes', 'orders'] };
+  const sh = loadClassic('js/core/shell.js', {
+    globals: { S: S2, assistantAlertCount: () => 0, NAV_SCREENS: ['dashboard', 'comptes', 'recherche', 'analysis'] },
+    exports: ['navVisibleFor'],
+  });
+  it('visible sur un module même absent des raccourcis (DCA, Immobilier, Réglages…)', () => {
+    for (const k of ['dca', 'immo', 'settings', 'assistant', 'orders']) expect(sh.navVisibleFor(k)).toBe(true);
+  });
+  it('visible sur les écrans principaux, masquée sur les écrans de détail', () => {
+    expect(sh.navVisibleFor('dashboard')).toBe(true);
+    for (const k of ['account', 'stock', 'watchstock', 'immodetail']) expect(sh.navVisibleFor(k)).toBe(false);
+  });
+});
