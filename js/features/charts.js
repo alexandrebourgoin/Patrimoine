@@ -408,8 +408,8 @@ function initWatchChart(container, pts, startDate, wCur = 'EUR') {
 // ═══════════════════════════════════════════════
 const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
 const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
-const POCKET_C={'Liquidités':'#F59E0B','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
-const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
+const POCKET_C={'Liquidités':'#F59E0B','Fonds euros':'#14B8A6','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
+const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Fonds euros':'#14B8A6','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
 
 function buildSegs(obj, colors) {
   // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
