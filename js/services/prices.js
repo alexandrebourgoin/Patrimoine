@@ -528,7 +528,7 @@ async function fetchLivePrices() {
     requestAnimationFrame(() => {
       const wc = document.querySelector('.wealth-card');
       if (wc) { wc.classList.remove('card-glow'); void wc.offsetWidth; wc.classList.add('card-glow'); }
-      document.querySelectorAll('.wealth-amount,.metric-val,.stat-box div:last-child').forEach(el => {
+      document.querySelectorAll('.wealth-amount,.metric-val').forEach(el => {
         el.classList.remove('num-flash'); void el.offsetWidth; el.classList.add('num-flash');
       });
       // Mettre à jour le dot fraîcheur
