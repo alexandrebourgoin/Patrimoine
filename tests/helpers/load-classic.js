@@ -40,7 +40,10 @@ export function loadClassic(relPath, { globals = {}, exports = [] } = {}) {
   const backBarHTML = (label = 'Retour') => `<div class="back-bar"><div class="back tap" id="js-back">${label}</div><div id="js-burger-btn"></div></div>`;
   // moduleBarHTML (js/core/shell.js) : barre de titre des écrans de module (nom + burger), simplifiée ici.
   const moduleBarHTML = (key, sub = '') => `<div class="top-bar"><div class="top-bar-title">${globals.navLabel ? globals.navLabel(key) : key}</div><div id="js-burger-btn"></div></div>${sub ? `<div class="module-sub">${sub}</div>` : ''}`;
-  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, backBarHTML, moduleBarHTML, ...globals };
-  const names = Object.keys(base);
+  // HOME_WATCH (js/features/home-watch.js) : registre du bloc « À surveiller », où les modules enregistrent leur source au chargement.
+  const base = { document: fakeDocument(), window: {}, crypto: webcrypto, registerModal() {}, backBarHTML, moduleBarHTML, HOME_WATCH: {}, ...globals };
+  // Un défaut que le script déclare lui-même (ex. HOME_WATCH dans home-watch.js) n'est pas injecté : il serait déclaré deux fois.
+  const declares = n => new RegExp(`^(?:const|let|var|function)\\s+${n}\\b`, 'm').test(src);
+  const names = Object.keys(base).filter(n => n in globals || !declares(n));
   return new Function(...names, `${src}\n;return { ${exports.join(', ')} };`)(...names.map(n => base[n]));
 }
