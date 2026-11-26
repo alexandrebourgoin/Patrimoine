@@ -137,6 +137,7 @@ describe('Écrans Immobilier', () => {
       expect(html).toContain('Prêt principal');
       expect(html).toContain('PTZ');
       expect(html).toContain('data-imamort="1"');
+      expect(html).toContain('data-imer="1"');   // simulation de remboursement anticipé, par crédit
       expect(html).toContain('Total des 2 crédits');
       api.openImmoAmort('im1', 1);
       expect(dom.els['ima-body'].innerHTML).toContain('Amortissement — Appart · PTZ');

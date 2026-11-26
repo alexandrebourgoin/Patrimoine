@@ -65,6 +65,7 @@ function renderCreditDetail() {
       ${s.next ? r('Prochaine échéance', fmtDate(s.next.date)) : ''}
       ${r('Fin du crédit', fmtDate(s.end))}
       <div class="tap im-link" data-cramort="1">Tableau d'amortissement →</div>
+      ${s.next ? `<div class="tap im-link" data-crer="1">Simuler un remboursement anticipé →</div>` : ''}
     </div>` : ''}
     ${k < 1 && s ? `<div class="im-sep"></div>${r(`Ma part de la dette (${c.debtShare} %)`, masked(s.remaining * k), true)}` : ''}
     <div class="im-actions">
@@ -88,6 +89,7 @@ SCREEN_BIND.creditdetail = function (el) {
     const c = crRead().find(x => x.id === S.creditId);
     if (e.target.closest('[data-credit]')) return openCreditForm(S.creditId);
     if (e.target.closest('[data-cramort]') && c) return openLoanAmort(esc(c.name || CREDIT_KINDS[c.kind]), creditSchedule(c, _crToday()));
+    if (e.target.closest('[data-crer]') && c) return openEarlyRepay(esc(c.name || CREDIT_KINDS[c.kind]), c, loanAddMonths(c.signDate, 1), 'conso');   // js/screens/early-repay.js
     if (e.target.closest('[data-crdel]') && c) {
       openConfirm(`Supprimer le crédit « ${c.name || CREDIT_KINDS[c.kind]} » ?`, () => {
         if (!crSave(crRead().filter(x => x.id !== c.id))) return;
