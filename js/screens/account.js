@@ -146,6 +146,17 @@ function accBenchHTML(acc, perf, sum) {
   </div>`;
 }
 
+// Type retiré de la liste (migration guidée) : bandeau avec conseil, « Choisir un type » (fiche Modifier) ou « Garder ce type »
+function accRetiredTypeHTML(acc) {
+  if (!accToReclassify([acc]).length) return '';
+  return `<div class="acc-retired" style="margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:12px">
+    <div style="font-size:13px;font-weight:700">Le type « ${esc(acc.type)} » n'est plus proposé</div>
+    <div class="t-sm" style="margin-top:4px">${esc(accRetiredHint(acc.type))} La valeur du compte et ses mouvements ne changent pas.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <div id="js-retype" class="tap" style="${_CHIP}">Choisir un type</div>
+      <div id="js-keeptype" class="tap" style="${_CHIP}">Garder ce type</div>
+    </div></div>`;
+}
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   if(savingsView(acc)) return renderSavingsAccount(acc);   // livret : solde, taux, mouvements, sans titres (js/screens/savings.js)
@@ -178,6 +189,7 @@ function renderAccount() {
     ${accPerfCardHTML(acc,perf,sum)}
     ${accBenchHTML(acc,perf,sum)}
     ${accEnvelopeHTML(acc)}
+    ${accRetiredTypeHTML(acc)}
     ${tracked?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
@@ -472,6 +484,8 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-cf-btn')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-add-move')?.addEventListener('click',()=>openCfModal(S.accountId));
     el.querySelector('#js-ca-btn')?.addEventListener('click',()=>openCashAdjust(S.accountId));
+    el.querySelector('#js-retype')?.addEventListener('click',()=>{ if(acc) openRenameAcc(acc.id, acc.name); });
+    el.querySelector('#js-keeptype')?.addEventListener('click',()=>{ if(!acc) return; acc.keepType=acc.type; saveAccounts(); refreshMain(); renderScreen('account'); toast('Type conservé ✓'); });
     el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
     el.querySelectorAll('[data-pm]').forEach(b=>b.addEventListener('click',()=>{ _perfModeSet(b.dataset.pm); renderScreen('account'); }));
     // Indice de comparaison : téléchargement de la série si elle est absente ou ne remonte pas jusqu'à la date de début

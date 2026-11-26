@@ -4,7 +4,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 
 // Modales de compte et de position avec les VRAIES règles (js/features/account-rules.js).
 const rules = loadClassic('js/features/account-rules.js', {
-  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions', 'accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName'],
+  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions', 'accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName', 'accApplyTypeChange', 'accToReclassify'],
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
 const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });

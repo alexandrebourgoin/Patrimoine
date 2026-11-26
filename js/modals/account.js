@@ -10,6 +10,10 @@ taxEnvelopeProblems(ACCOUNT_TYPES).forEach(p => console.warn('[enveloppes fiscal
 if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.accountLimits = () => accTypeLimitProblems(S.accounts)
   .map(x => ({ level: 'alert', go: 'comptes', text: `${x.count} comptes « ${x.type} »`, sub: x.max === 1 ? 'Un seul autorisé par personne : supprime le doublon ou passe-le en « Compte observateur »' : `Au plus ${x.max} par personne` }));
 
+// Accueil « À surveiller » (sous garde) : comptes dont le type n'est plus proposé, à reclasser (migration guidée)
+if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.accountTypes = () => accToReclassify(S.accounts)
+  .map(a => ({ level: 'info', go: 'account', accountId: a.id, text: `« ${a.name} » à reclasser`, sub: `Le type « ${a.type} » n'est plus proposé` }));
+
 // Aligne le sélecteur de devise sur le type choisi (règle : accCurrencyForType). apply = true à la création, false pour un compte existant.
 function syncAccCurrency(typeSelId, curSelId, apply){
   const typeSel=document.getElementById(typeSelId), cur=document.getElementById(curSelId);
@@ -254,7 +258,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
     const bad=accTypeViolations(acc,newType);
     if(bad.length){toast('Type incompatible avec : '+bad.map(h=>h.ticker).join(', '));return;}
   }
-  acc.type=newType;
+  accApplyTypeChange(acc,newType);   // garde l'ancien type s'il a été retiré de la liste (acc.formerType)
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   const startDate=document.getElementById('rename-acc-start').value||'';
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}

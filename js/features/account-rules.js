@@ -32,6 +32,29 @@ const ACCOUNT_TYPE_INFO = {
 function accTypeTone(type) { const g = ACCOUNT_TYPE_GROUPS.find(g => g.types.includes(type)); return g ? g.tone : ''; }
 const ACCOUNT_TYPES = ACCOUNT_TYPE_GROUPS.flatMap(g => g.types);
 
+// Types retirés de la liste le 26/11/2026 (SCPI / Immobilier, Métaux précieux, Compte à terme, Compte courant, saisie libre « Autre… »).
+// Migration guidée, jamais automatique : le compte garde son type et sa valeur (accPocket le classe toujours, js/features/wealth.js)
+// jusqu'à ce que l'utilisateur choisisse un nouveau type ou décide de garder l'ancien (acc.keepType = le type gardé).
+// En cas de changement, l'ancien type est conservé dans acc.formerType.
+const ACC_RETIRED_HINTS = [
+  [/courant|à terme|a terme/i, "Pour des liquidités, choisis le livret qui correspond. Tu peux aussi garder ce type : sa valeur reste comptée dans les Liquidités."],
+  [/scpi|immo/i, "Des parts de SCPI se suivent dans un compte-titres ou une assurance-vie ; un bien détenu en direct va dans le module Immobilier."],
+  [/métaux|metaux/i, "Des ETF ou ETC sur métaux se suivent dans un compte-titres. Tu peux aussi garder ce type : sa valeur reste comptée dans « Autres »."],
+];
+// Type absent de la liste proposée (donnée ancienne ou saisie libre)
+function accTypeRetired(type) { return !!type && !ACCOUNT_TYPES.includes(type); }
+function accRetiredHint(type) { const h = ACC_RETIRED_HINTS.find(([re]) => re.test(type || '')); return h ? h[1] : 'Choisis le type le plus proche dans la liste, ou garde celui-ci.'; }
+// Comptes à reclasser : type retiré, et l'utilisateur n'a pas choisi de le garder
+function accToReclassify(accounts) { return (accounts || []).filter(a => a && accTypeRetired(a.type) && a.keepType !== a.type); }
+// Applique un changement de type : retient l'ancien s'il était retiré, oublie le choix « garder »
+function accApplyTypeChange(acc, newType) {
+  if (!acc || newType === acc.type) return acc;
+  if (accTypeRetired(acc.type)) acc.formerType = acc.type;
+  delete acc.keepType;
+  acc.type = newType;
+  return acc;
+}
+
 // Détention à plusieurs (compte joint / co-adhésion) : seuls le compte-titres et l'assurance-vie (co-adhésion, selon l'assureur)
 // le permettent. PEA, PEA-PME, livrets réglementés, PEL / CEL, PER, épargne salariale, Pilier 3a : un seul titulaire
 // (economie.gouv.fr « compte individuel, joint ou indivis » ; BOFiP : « le PEA ne peut avoir qu'un titulaire »), vérifié le 26/11/2026.
