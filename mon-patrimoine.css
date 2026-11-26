@@ -38,7 +38,7 @@
   --loss-dim: rgba(220,38,38,0.08);
 }
 /* Thèmes supplémentaires (liste et couleurs des graphiques : js/core/themes.js) */
-[data-theme="sable"]{--bg:#F6F1E8;--surface:#FFFDF8;--card:#FFFDF8;--card2:#F1EADD;--border:#E6DCCB;--border2:#D6C8B1;
+[data-theme="sable"]{--tp-bourse:#1D4ED8;--tp-retraite:#6D28D9;--tp-livret:#047857;--bg:#F6F1E8;--surface:#FFFDF8;--card:#FFFDF8;--card2:#F1EADD;--border:#E6DCCB;--border2:#D6C8B1;
  --accent:#2F5D50;--accent2:#C0703F;--accent-dim:rgba(47,93,80,.10);--text:#2A2420;--text2:#6E6255;--text3:#A89A88;
  --gain:#2E7D4F;--gain-dim:rgba(46,125,79,.10);--loss:#B5452F;--loss-dim:rgba(181,69,47,.10)}
 [data-theme="sable"] .wealth-card{background:linear-gradient(135deg,#2F5D50 0%,#3F7564 55%,#C0703F 130%);box-shadow:0 10px 30px rgba(47,93,80,.25)}
