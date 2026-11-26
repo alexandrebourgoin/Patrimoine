@@ -5,6 +5,7 @@
 // La liste ACCOUNT_TYPES et les règles (devise par type, types d'actifs autorisés) sont dans js/features/account-rules.js (pures, testées).
 // Une table de règles qui référencerait un libellé inconnu serait inopérante sans bruit : on le signale dès le démarrage.
 accountRulesProblems().forEach(p => console.warn('[règles de comptes] ' + p));
+taxEnvelopeProblems(ACCOUNT_TYPES).forEach(p => console.warn('[enveloppes fiscales] type inconnu : ' + p));
 const ACC_TYPE_OTHER = '__other__';
 
 // Aligne le sélecteur de devise sur le type choisi (règle : accCurrencyForType). apply = true à la création, false pour un compte existant.
@@ -36,7 +37,20 @@ function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId, apply
     if(otherRow) otherRow.classList.toggle('hidden',!isOther);
     if(isOther && otherInp) otherInp.focus();
     if(curSelId) syncAccCurrency(selId,curSelId,!!applyCurrency);
+    syncAccEnvHint(selId);
   };
+  syncAccEnvHint(selId);
+}
+
+// Rappel de l'enveloppe fiscale du type choisi (E11), sous la date d'ouverture : ligne `<selId>-env` (règles : js/features/tax-envelope.js)
+function syncAccEnvHint(selId){
+  const el=document.getElementById(selId+'-env'), sel=document.getElementById(selId);
+  if(!el||!sel) return;
+  const r=TAX_ENVELOPES[sel.value];
+  const parts=r?[r.years?`fiscalité allégée après ${r.years} ans, comptés depuis la date d'ouverture (1er versement)`:'',
+    r.ceiling?`plafond de versements ${r.ceiling.toLocaleString('fr-FR')} €`:'',r.note&&!r.years&&!r.ceiling?r.note:''].filter(Boolean):[];
+  el.textContent=parts.length?`${r.short} : ${parts.join(' · ')}.`:'';
+  el.classList.toggle('hidden',!parts.length);
 }
 
 // Valeur retenue : le texte libre si « Autre… » est sélectionné, sinon l'option choisie.
