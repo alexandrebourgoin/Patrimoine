@@ -1,6 +1,10 @@
 // Écran Réglages : toutes les sections + binding (thème, devise, sécurité, données, débogage…).
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
+// Accueil « À surveiller » (registre HOME_WATCH, js/features/home-watch.js), s'il est présent : sauvegarde en retard (règles : js/features/backup.js)
+if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.backup = () => (!S.isDemo && backupDue(localStorage)
+  ? [{ level: 'alert', go: 'settings', text: 'Sauvegarde à faire', sub: backupAgeLabel(localStorage) }] : []);
+
 // ── SETTINGS ──
 function fxSubText() { return PU.fxSubText(FX_RATES, S.currency || 'EUR', _fxUpdatedAt); }
 
@@ -81,8 +85,18 @@ function renderSettings() {
         <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
       </div>
       <div class="flex1 col gap4">
-        <div class="s-name">Exporter les données</div>
-        <div class="s-sub">Télécharge comptes &amp; transactions en JSON</div>
+        <div class="s-name">Sauvegarder mes données</div>
+        <div class="s-sub" id="js-backup-age" style="${backupDue(localStorage)&&!demo?'color:var(--loss);font-weight:600':''}">${backupAgeLabel(localStorage)} · tous les modules, dans le dossier de votre choix</div>
+      </div>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+    </div>
+    <div class="s-item tap" id="js-restore-btn">
+      <div class="s-ico" style="background:rgba(99,102,241,.12)">
+        <svg viewBox="0 0 24 24" fill="#6366F1"><path d="M5 20h14v-2H5v2zm0-10h4v6h6v-6h4l-7-7-7 7z"/></svg>
+      </div>
+      <div class="flex1 col gap4">
+        <div class="s-name">Restaurer une sauvegarde</div>
+        <div class="s-sub">Remplace les données de cet appareil par un fichier de sauvegarde</div>
       </div>
       <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>
@@ -426,40 +440,9 @@ SCREEN_BIND.settings = function (el, id) {
       if(sub) sub.textContent='Aucun cache enregistré';
       toast('Cache des prix effacé');
     });
-    el.querySelector('#js-export-btn')?.addEventListener('click', () => {
-      let ordersAlerts = null;
-      if (!S.isDemo) {
-        try { ordersAlerts = createOrderAlertStore(localStorage, 'real').read(); }
-        catch (e) { toast('Ordres et alertes illisibles : non inclus dans l\'export'); }
-      }
-      let immo = null;
-      if (!S.isDemo) {
-        try { immo = createImmoStore(localStorage, 'real').read(); }
-        catch (e) { toast('Biens immobiliers illisibles : non inclus dans l\'export'); }
-      }
-      const data = {
-        exportedAt: new Date().toISOString(),
-        version: '1.0.2',
-        accounts:  S.isDemo ? [] : S.accounts,
-        watchlist: S.watchlist,
-        targets:   S.targets,
-        user:      S.user,
-        dca:       S.isDemo ? null : S.dca,
-        ordersAlerts,
-        immo,
-      };
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `patrimoine-${new Date().toISOString().slice(0,10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast('Export téléchargé ✓');
-    });
+    // Sauvegarde complète et restauration : js/features/backup.js
+    el.querySelector('#js-export-btn')?.addEventListener('click', () => { runBackup(); });
+    el.querySelector('#js-restore-btn')?.addEventListener('click', () => document.getElementById('backup-file').click());
     el.querySelector('#js-reset-all')?.addEventListener('click',()=>{
       openConfirm('Supprimer tous les comptes et transactions ? Les réglages sont conservés.', ()=>{
         localStorage.removeItem(STORE_ACCOUNTS);

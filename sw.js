@@ -53,6 +53,7 @@ const SHELL = [
   './js/features/privacy.js',
   './js/features/charts.js',
   './js/features/chart-fullscreen.js',
+  './js/features/backup.js',
   './js/modals/fx.js',
   './js/modals/changelog.js',
   './js/modals/confirm.js',

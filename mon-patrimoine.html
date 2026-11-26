@@ -114,6 +114,7 @@
 </div>
 <div id="toast"></div>
 <input type="file" id="csv-file" accept=".csv">
+<input type="file" id="backup-file" accept=".json,application/json" style="display:none">
 
 <!-- ADD ORDER MODAL -->
 <div id="modal-bg" class="modal-bg"></div>
@@ -258,6 +259,17 @@
 <div id="ima-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
   <div class="modal-drag"></div>
   <div class="modal-body" id="ima-body"></div>
+</div>
+
+<!-- RAPPEL DE SAUVEGARDE (js/features/backup.js) -->
+<div id="backup-remind-bg" class="modal-bg" style="z-index:211"></div>
+<div id="backup-remind-sheet" class="confirm-sheet">
+  <div class="modal-drag"></div>
+  <div class="confirm-msg"><b>Sauvegarder vos données ?</b><br><span id="backup-remind-msg"></span></div>
+  <div class="confirm-btns">
+    <button class="confirm-cancel" id="backup-remind-later">Plus tard</button>
+    <button class="confirm-ok" id="backup-remind-ok" style="background:var(--accent)">Sauvegarder</button>
+  </div>
 </div>
 
 <!-- CONFIRM DIALOG -->
@@ -881,6 +893,7 @@
 <script src="js/features/privacy.js"></script>
 <script src="js/features/charts.js"></script>
 <script src="js/features/chart-fullscreen.js"></script>
+<script src="js/features/backup.js"></script>
 <script src="js/modals/fx.js"></script>
 <script src="js/modals/changelog.js"></script>
 <script src="js/modals/confirm.js"></script>
