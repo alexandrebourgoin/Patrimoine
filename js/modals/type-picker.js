@@ -6,6 +6,10 @@
 // Dépend, À L'APPEL seulement, de esc.
 
 let _tpSelId = null;
+// Une seule fenêtre à la fois : la fiche qui ouvre le choix (création ou modification du compte) est masquée pendant le choix,
+// puis réaffichée telle quelle (valeurs saisies conservées) au choix d'un type comme à l'annulation.
+const _TP_PARENTS = { 'acc-type': ['acc-modal-sheet', 'acc-modal-bg'], 'rename-acc-type': ['rename-acc-sheet', 'rename-acc-bg'] };
+let _tpHidden = [];
 
 // Précision sous le nom : taux en vigueur pour un livret réglementé, sinon la précision du type
 function accTypeSub(type) {
@@ -21,12 +25,15 @@ function accTypeBadgeHTML(type, size = 36) {
   return `<span class="tp-badge tp-${tone || 'autre'}" style="width:${size}px;height:${size}px;font-size:${fs}px;border-radius:${Math.round(size * 0.28)}px">${esc(abbr)}</span>`;
 }
 // Contenu de la fenêtre. Un type hors liste (données anciennes) est affiché en tête, dans « Type actuel ».
-function typePickerHTML(current) {
+// blocked(type, short) → '' si le type est possible, sinon la raison : courte sous le nom (ligne grisée et inactive),
+// complète au toucher (data-why)
+function typePickerHTML(current, blocked = () => '') {
   const row = (t, tone) => {
-    const on = t === current, info = ACCOUNT_TYPE_INFO[t];
-    return `<button type="button" class="tp-row tp-${tone || 'autre'}${on ? ' on' : ''}" data-type="${esc(t)}">
+    const on = t === current, info = ACCOUNT_TYPE_INFO[t], why = on ? '' : blocked(t, true), full = why ? (blocked(t, false) || why) : '';
+    const sub = why || accTypeSub(t);
+    return `<button type="button" class="tp-row tp-${tone || 'autre'}${on ? ' on' : ''}${why ? ' off' : ''}" data-type="${esc(t)}"${why ? ` aria-disabled="true" data-why="${esc(full)}"` : ''}>
       ${accTypeBadgeHTML(t)}
-      <span class="tp-txt"><span class="tp-name">${esc(info ? info.short : t)}</span>${accTypeSub(t) ? `<span class="tp-sub">${esc(accTypeSub(t))}</span>` : ''}</span>
+      <span class="tp-txt"><span class="tp-name">${esc(info ? info.short : t)}</span>${sub ? `<span class="tp-sub${why ? ' tp-why' : ''}">${esc(sub)}</span>` : ''}</span>
       ${on ? '<svg class="tp-check" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
     </button>`;
   };
@@ -46,7 +53,12 @@ function syncTypePickerButton(selId) {
 function openTypePicker(selId) {
   const sel = document.getElementById(selId); if (!sel) return;
   _tpSelId = selId;
-  document.getElementById('tp-list').innerHTML = typePickerHTML(sel.value);
+  const ctx = typeof accTypePickerContext === 'function' ? accTypePickerContext(selId) : null;
+  const accounts = typeof S !== 'undefined' ? S.accounts : [];
+  document.getElementById('tp-list').innerHTML = typePickerHTML(sel.value, (t, short) => (ctx ? accTypeBlockReason(ctx, t, accounts, short) : ''));
+  _tpHidden = (_TP_PARENTS[selId] || []).map(id => document.getElementById(id)).filter(el => el && el.classList.contains('show'));
+  _tpHidden.forEach(el => el.classList.remove('show'));
+  const sheet = document.getElementById('tp-sheet'); if (sheet) sheet.scrollTop = 0;
   document.getElementById('tp-bg').classList.add('show');
   document.getElementById('tp-sheet').classList.add('show');
 }
@@ -55,9 +67,12 @@ function closeTypePicker() {
   document.getElementById('tp-bg').classList.remove('show');
   document.getElementById('tp-sheet').classList.remove('show');
   _tpSelId = null;
+  _tpHidden.forEach(el => el.classList.add('show'));   // la fiche d'origine revient
+  _tpHidden = [];
 }
 document.getElementById('tp-list').addEventListener('click', e => {
   const row = e.target.closest('[data-type]'); if (!row || !_tpSelId) return;
+  if (row.classList.contains('off')) { if (typeof toast === 'function') toast(row.dataset.why || 'Type indisponible'); return; }
   const sel = document.getElementById(_tpSelId), selId = _tpSelId;
   closeTypePicker();
   if (sel.value === row.dataset.type) return;

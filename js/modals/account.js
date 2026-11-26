@@ -226,6 +226,12 @@ function accShareInput(id){
 // EDIT ACCOUNT (nom, icône, type, devise)
 // ═══════════════════════════════════════════════
 let _renameAccId=null;
+// Compte concerné par le choix du type (js/modals/type-picker.js) : le compte modifié, ou un brouillon vide à la création
+function accTypePickerContext(selId){
+  if(selId==='rename-acc-type') return S.accounts.find(a=>a.id===_renameAccId)||null;
+  if(selId==='acc-type') return { id:null, type:'', holdings:[], observer:!!_accObserver };
+  return null;
+}
 function openRenameAcc(accId, currentName){
   _renameAccId=accId;
   const acc=S.accounts.find(a=>a.id===accId);
@@ -257,14 +263,10 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const shareBefore=accShare(acc);   // avant tout changement de type ou de part (message sur l'historique)
   const newType0=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
   const name=document.getElementById('rename-acc-input').value.trim()||accDefaultName(newType0,document.getElementById('rename-acc-bank').value,S.accounts.filter(a=>a.id!==acc.id));
-  if(newType0!==acc.type){ const limit=accTypeLimitError(S.accounts,newType0,acc.id,acc.observer); if(limit){toast(limit);return;} }
+  { const why=accTypeBlockReason(acc,newType0,S.accounts); if(why){toast(why);return;} }   // positions non autorisées, nombre maximal
   acc.name=name;
   // Changer de type ne doit pas rendre interdites des positions déjà saisies (un compte déjà non conforme reste modifiable sans changer de type)
   const newType=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
-  if(newType!==acc.type){
-    const bad=accTypeViolations(acc,newType);
-    if(bad.length){toast('Type incompatible avec : '+bad.map(h=>h.ticker).join(', '));return;}
-  }
   accApplyTypeChange(acc,newType);   // garde l'ancien type s'il a été retiré de la liste (acc.formerType)
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   const startDate=document.getElementById('rename-acc-start').value||'';

@@ -2,6 +2,10 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.115': [
+    { type:'fix', text:"Changer le type d'un compte : la liste des types s'ouvrait derrière la fiche « Modifier » et bloquait l'écran. Elle la remplace maintenant le temps du choix, défile au doigt jusqu'au dernier type, puis la fiche revient avec le type choisi." },
+    { type:'fix', text:"Un type impossible pour ce compte est grisé avec sa raison (ex. un compte-titres avec des actions ne peut pas devenir un Livret A ; un seul Livret A par personne) ; les autres types restent accessibles. Un compte vide peut prendre n'importe quel type." },
+  ],
   '1.11.114': [
     { type:'new', text:"Sauvegarde complète (Réglages) : tous les modules, dans le dossier de votre choix, restauration d'un fichier et rappel si la dernière sauvegarde a plus de 10 jours. Date de la dernière sauvegarde dans le menu ☰." },
     { type:'new', text:"Accueil : camembert des grandes classes d'actifs (dont « Fonds euros », distincte de la Bourse), lignes cliquables (Comptes, Immobilier, Crédits) et bloc « À surveiller » : alertes, ordres, échéances, sauvegarde, positions non synchronisées, jalons fiscaux." },

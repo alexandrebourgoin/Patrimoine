@@ -33,7 +33,7 @@
     if (now - _lastBack < 250) { _lastBack = now; return; }
     _lastBack = now;
 
-    // Le choix du type est empilé AU-DESSUS d'une fenêtre de compte : il se ferme seul
+    // Choix du type ouvert (il remplace la fiche de compte le temps du choix) : le retour le ferme et réaffiche la fiche
     if (typeof typePickerOpen === 'function' && typePickerOpen()) { closeTypePicker(); return; }
 
     // Tiroir ☰ ouvert : le retour le ferme (ou revient au menu depuis l'édition des raccourcis)

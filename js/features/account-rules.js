@@ -168,6 +168,20 @@ function assetTypeError(acc, type, country) {
 function accTypeViolations(acc, newType) {
   return (acc.holdings || []).filter(h => assetTypeError({ type: newType }, h.type, h.country));
 }
+// Raison pour laquelle `acc` (compte existant, ou brouillon { holdings: [] } à la création) ne peut pas prendre le type `type`,
+// '' s'il le peut : positions non autorisées sur ce type (ex. des actions sur un Livret A), puis nombre maximal par personne.
+// Utilisée par le choix du type (type grisé avec sa raison courte : short = true) ET à l'enregistrement (message complet).
+function accTypeBlockReason(acc, type, accounts, short = false) {
+  if (!acc || !type || type === acc.type) return '';
+  const bad = accTypeViolations(acc, type);
+  if (bad.length) {
+    const n = bad.length, ex = bad.slice(0, 3).map(h => h.ticker).join(', ') + (n > 3 ? '…' : '');
+    if (short) return `${n} position${n > 1 ? 's' : ''} non autorisée${n > 1 ? 's' : ''}`;
+    return `${n} position${n > 1 ? 's' : ''} non autorisée${n > 1 ? 's' : ''} sur ce type (${ex}) : à vendre ou supprimer d'abord`;
+  }
+  const lim = accTypeLimitError(accounts, type, acc.id, acc.observer);
+  return lim && short ? 'Nombre maximal atteint' : lim;
+}
 
 // Import CSV : titres que les règles du compte refusent → [{ ticker, reason }] (dans l'ordre du fichier, un par titre).
 // Seuls les NOUVEAUX titres du compte sont contrôlés (un titre déjà présent peut recevoir des mouvements, même s'il n'est plus conforme).
