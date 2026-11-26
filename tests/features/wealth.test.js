@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
-const calc = loadClassic('js/features/realestate-calc.js', { exports: ['immoCalc'] });
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoCalc'] });
 const W = loadClassic('js/features/wealth.js', {
   globals: calc,
   exports: ['wealthProperties', 'wealthBreakdown', 'accPocket', 'analysisData'],
@@ -26,7 +27,7 @@ describe('wealthProperties', () => {
 describe('wealthBreakdown', () => {
   it('sans bien : patrimoine net = patrimoine brut = comptes financiers', () => {
     const w = W.wealthBreakdown([acc({ value: 5000 })], [], TODAY);
-    expect(w).toEqual({ financial: 5000, property: 0, debt: 0, count: 0, gross: 5000, net: 5000 });
+    expect(w).toEqual({ financial: 5000, property: 0, debt: 0, otherDebt: 0, count: 0, credits: 0, gross: 5000, net: 5000 });
   });
   it('exclut les comptes observateurs', () => {
     expect(W.wealthBreakdown([acc({ value: 5000 }), acc({ id: 'o', value: 999, observer: true })], [], TODAY).financial).toBe(5000);
@@ -134,5 +135,72 @@ describe('cas de référence des captures : comptes financiers 102 738,83 € + 
     expect(w.financial).toBeCloseTo(102738.83, 2);
     expect(w.net).toBeCloseTo(133273.96, 2);
     expect(W.analysisData(accounts, [p], TODAY, noCash).tot).toBeCloseTo(133273.96, 2);
+  });
+});
+
+describe('autres crédits dans le patrimoine', () => {
+  const LOAN = loadClassic('js/features/loan-calc.js', { exports: ['loanSchedule', 'loanAddMonths'] });
+  const CR = loadClassic('js/features/credits.js', { globals: LOAN, exports: ['creditTotals', 'creditSchedule'] });
+  const W2 = loadClassic('js/features/wealth.js', { globals: { ...calc, ...CR }, exports: ['wealthBreakdown'] });
+  const credit = (o = {}) => ({ id: 'c1', name: 'Auto', kind: 'auto', amount: 12000, rate: 0, years: 4, signDate: '2026-10-22', ...o });
+  it('seule ma part du capital restant dû est déduite du patrimoine net ; le brut ne change pas', () => {
+    const full = W2.wealthBreakdown([acc({ value: 20000 })], [], TODAY, [credit()]);
+    expect(full.otherDebt).toBe(12000 - 250);         // 1 échéance passée (22/11) sur 48
+    expect(full.net).toBe(20000 - 11750);
+    expect(full.gross).toBe(20000);
+    const half = W2.wealthBreakdown([acc({ value: 20000 })], [], TODAY, [credit({ debtShare: 50 })]);
+    expect(half.otherDebt).toBe(11750 / 2);
+  });
+});
+
+describe('quotes-parts dans le patrimoine (E04, E05)', () => {
+  it('compte joint à 50 % : la moitié de sa valeur dans le patrimoine et dans toutes les répartitions', () => {
+    const joint = acc({ value: 10000, share: 50, holdings: [{ type: 'ETF', valueRef: 8000, country: 'France', sector: 'Tech' }] });
+    const w = W.wealthBreakdown([joint, acc({ id: 'b', value: 2000 })], [], TODAY);
+    expect(w.financial).toBe(7000);
+    const d = W.analysisData([joint], [], TODAY, () => 2000);
+    expect(d.byPocket.Bourse).toBe(5000);
+    expect(d.byAsset['ETF / Fonds']).toBe(4000);
+    expect(d.byAsset.Cash).toBe(1000);
+    expect(d.byGeo.France).toBe(4000);
+  });
+  it('bien à 60 % : ma part de la valeur, ma part de la dette', () => {
+    const p = { id: 'p', name: 'A', kind: 'main', buyDate: '2026-01-01', price: 200000, growth: 0, share: 60, loans: [{ id: 'l', amount: 100000, rate: 0, years: 10 }] };
+    const w = W.wealthBreakdown([], [p], '2026-01-01');
+    expect(w.property).toBe(120000);
+    expect(w.debt).toBe(60000);
+    expect(w.net).toBe(60000);
+  });
+});
+
+describe('part d un compte : seulement pour les types détenus à plusieurs', () => {
+  const rules = loadClassic('js/features/account-rules.js', { exports: ['accJointAllowed'] });
+  const W2 = loadClassic('js/features/wealth.js', { globals: { ...calc, ...rules }, exports: ['accShare'] });
+  it('compte-titres joint à 50 % : 0,5 ; PEA ou livret avec une part saisie avant : compté à 100 %', () => {
+    expect(W2.accShare({ type: 'Compte-Titres Ordinaire', share: 50 })).toBe(0.5);
+    expect(W2.accShare({ type: "Plan d'Épargne en Actions (PEA)", share: 50 })).toBe(1);
+    expect(W2.accShare({ type: 'Livret A', share: 50 })).toBe(1);
+  });
+});
+
+describe('grande classe « Fonds euros »', () => {
+  const FE = loadClassic('js/features/wealth.js', { globals: calc, exports: ['analysisData', 'isFondsEuros'] });
+  const av = { id: 'av', type: 'Assurance-Vie', value: 100, holdings: [
+    { name: 'Fonds Euros', type: 'Obligation', sector: 'Fonds euros', valueRef: 70 },
+    { name: 'Amundi EM', type: 'ETF', valueRef: 25 },
+  ] };
+  it('repère un support en fonds euros par son nom, son secteur ou son type', () => {
+    expect(FE.isFondsEuros({ name: 'Fonds Euros' })).toBe(true);
+    expect(FE.isFondsEuros({ name: 'Eurossima', sector: 'Fonds en euros' })).toBe(true);
+    expect(FE.isFondsEuros({ type: 'Fonds euros' })).toBe(true);
+    expect(FE.isFondsEuros({ name: 'Amundi Euro Stoxx 50', type: 'ETF' })).toBe(false);
+  });
+  it('l\'assurance-vie est ventilée : fonds euros à part, le reste (et le cash) en Bourse ; total inchangé', () => {
+    const d = FE.analysisData([av], [], '2026-11-26', () => 5);
+    expect(d.byPocket['Fonds euros']).toBe(70);
+    expect(d.byPocket.Bourse).toBe(30);
+    expect(d.byAsset['Fonds euros']).toBe(70);
+    expect(d.byAsset.Obligations).toBeUndefined();
+    expect(Object.values(d.byPocket).reduce((s, v) => s + v, 0)).toBe(100);
   });
 });

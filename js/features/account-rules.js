@@ -1,29 +1,75 @@
 // Règles des comptes : types de compte, devise de référence par type, types d'actifs autorisés. Fonctions PURES (aucun accès à S ni au DOM).
 // Les clés des tables sont les libellés EXACTS de ACCOUNT_TYPES : une faute de frappe désactiverait une règle sans rien dire,
 // accountRulesProblems() la détecte (vérifié par les tests ET signalé dans la console au démarrage, voir js/modals/account.js).
-// Un type absent des tables ou saisi librement (« Autre… ») n'a ni devise présélectionnée ni restriction.
+// Un type absent des tables (données anciennes) n'a ni devise présélectionnée ni restriction.
 
-// Liste proposée à la création ET à la modification. Un type hors liste (données anciennes, saisie « Autre ») reste conservé :
-// il est ajouté à la volée comme option supplémentaire.
-const ACCOUNT_TYPES = [
-  "Compte-Titres Ordinaire",
-  "Plan d'Épargne en Actions (PEA)",
-  "PEA-PME",
-  "Assurance-Vie",
-  "Plan d'Épargne Retraite (PER)",
-  "Épargne salariale (PEE / PERCO)",
-  "Pilier 3a",
-  "Livret A",
-  "LDDS",
-  "LEP",
-  "Livret Jeune",
-  "Compte à terme",
-  "Compte courant",
-  "PEL / CEL",
-  "SCPI / Immobilier",
-  "Crypto / Exchange",
-  "Métaux précieux",
+// Types proposés à la création ET à la modification, regroupés par grande catégorie (listes déroulantes à sections).
+// Un type hors liste (données anciennes : SCPI, compte courant, saisie libre…) reste conservé : il est ajouté à la volée
+// dans une section « Type actuel » et garde son comportement.
+// tone : couleur de la catégorie dans le choix du type (variables CSS --tp-<tone>, js/modals/type-picker.js).
+const ACCOUNT_TYPE_GROUPS = [
+  { label: 'Bourse et crypto', tone: 'bourse', types: ["Compte-Titres Ordinaire", "Plan d'Épargne en Actions (PEA)", "PEA-PME", "Crypto / Exchange"] },
+  { label: 'Assurance-vie et retraite', tone: 'retraite', types: ["Assurance-Vie", "Plan d'Épargne Retraite (PER)", "Épargne salariale (PEE / PERCO)", "Pilier 3a"] },
+  { label: 'Livrets et épargne logement', tone: 'livret', types: ["Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
 ];
+// Affichage du choix du type : nom court, abréviation de la pastille, précision sous le nom
+// (pour les livrets réglementés, la précision est le taux en vigueur : SAVINGS_RATES, js/features/savings.js).
+const ACCOUNT_TYPE_INFO = {
+  "Compte-Titres Ordinaire": { short: 'CTO', abbr: 'CTO', sub: 'Compte-titres ordinaire' },
+  "Plan d'Épargne en Actions (PEA)": { short: 'PEA', abbr: 'PEA', sub: "Plan d'épargne en actions" },
+  "PEA-PME": { short: 'PEA-PME', abbr: 'PME', sub: 'PEA dédié aux PME et ETI' },
+  "Crypto / Exchange": { short: 'Crypto', abbr: '₿', sub: "Plateforme d'échange" },
+  "Assurance-Vie": { short: 'Assurance-vie', abbr: 'AV', sub: 'Contrat multisupport ou fonds euros' },
+  "Plan d'Épargne Retraite (PER)": { short: 'PER', abbr: 'PER', sub: "Plan d'épargne retraite" },
+  "Épargne salariale (PEE / PERCO)": { short: 'PEE / PERCO', abbr: 'PEE', sub: 'Épargne salariale' },
+  "Pilier 3a": { short: 'Pilier 3a', abbr: '3a', sub: 'Prévoyance suisse' },
+  "Livret A": { short: 'Livret A', abbr: 'A', sub: 'Livret réglementé' },
+  "LDDS": { short: 'LDDS', abbr: 'DD', sub: 'Livret de développement durable et solidaire' },
+  "LEP": { short: 'LEP', abbr: 'LEP', sub: "Livret d'épargne populaire" },
+  "Livret Jeune": { short: 'Livret Jeune', abbr: 'LJ', sub: '12 à 25 ans' },
+  "PEL / CEL": { short: 'PEL / CEL', abbr: 'PEL', sub: 'Épargne logement' },
+};
+function accTypeTone(type) { const g = ACCOUNT_TYPE_GROUPS.find(g => g.types.includes(type)); return g ? g.tone : ''; }
+const ACCOUNT_TYPES = ACCOUNT_TYPE_GROUPS.flatMap(g => g.types);
+
+// Détention à plusieurs (compte joint / co-adhésion) : seuls le compte-titres et l'assurance-vie (co-adhésion, selon l'assureur)
+// le permettent. PEA, PEA-PME, livrets réglementés, PEL / CEL, PER, épargne salariale, Pilier 3a : un seul titulaire
+// (economie.gouv.fr « compte individuel, joint ou indivis » ; BOFiP : « le PEA ne peut avoir qu'un titulaire »), vérifié le 26/11/2026.
+// Un type hors liste (données anciennes) garde la possibilité.
+const ACC_JOINT_TYPES = ["Compte-Titres Ordinaire", "Assurance-Vie"];
+function accJointAllowed(type) { return !ACCOUNT_TYPES.includes(type) || ACC_JOINT_TYPES.includes(type); }
+
+// Nombre maximal de comptes d'un type par personne (comptes observés exclus : ils suivent le compte de quelqu'un d'autre).
+// « PEL / CEL » : un PEL et un CEL, d'où 2.
+const ACC_MAX_PER_PERSON = {
+  "Plan d'Épargne en Actions (PEA)": 1, "PEA-PME": 1, "Livret A": 1, "LDDS": 1, "LEP": 1, "Livret Jeune": 1, "PEL / CEL": 2,
+};
+// Message si ajouter (ou passer) un compte au type `type` dépasse le maximum ; exceptId : le compte modifié lui-même
+function accTypeLimitError(accounts, type, exceptId, observer) {
+  const max = ACC_MAX_PER_PERSON[type];
+  if (!max || observer) return '';
+  const n = (accounts || []).filter(a => a && a.id !== exceptId && !a.observer && a.type === type).length;
+  if (n < max) return '';
+  return max === 1 ? `Un seul compte « ${type} » par personne : tu en as déjà un` : `Au plus ${max} comptes « ${type} » par personne (un PEL et un CEL)`;
+}
+// Types en surnombre parmi les comptes existants → [{ type, count, max }]
+function accTypeLimitProblems(accounts) {
+  return Object.entries(ACC_MAX_PER_PERSON).map(([type, max]) => ({ type, max, count: (accounts || []).filter(a => a && !a.observer && a.type === type).length }))
+    .filter(x => x.count > x.max);
+}
+
+// Nom proposé quand on n'en saisit pas : nom court du type, suivi de la banque, numéroté s'il existe déjà (« Compte-titres 2 »)
+const ACC_DEFAULT_NAMES = {
+  "Compte-Titres Ordinaire": 'Compte-titres', "Plan d'Épargne en Actions (PEA)": 'PEA', "PEA-PME": 'PEA-PME', "Crypto / Exchange": 'Crypto',
+  "Assurance-Vie": 'Assurance-vie', "Plan d'Épargne Retraite (PER)": 'PER', "Épargne salariale (PEE / PERCO)": 'Épargne salariale', "Pilier 3a": '3e pilier',
+  "Livret A": 'Livret A', "LDDS": 'LDDS', "LEP": 'LEP', "Livret Jeune": 'Livret Jeune', "PEL / CEL": 'PEL / CEL',
+};
+function accDefaultName(type, bank, accounts) {
+  const base = [ACC_DEFAULT_NAMES[type] || type || 'Compte', String(bank || '').trim()].filter(Boolean).join(' ');
+  const taken = new Set((accounts || []).map(a => String(a.name || '').toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let i = 2; ; i++) if (!taken.has(`${base} ${i}`.toLowerCase())) return `${base} ${i}`;
+}
 
 // Devise de référence par type : [devise, imposée].
 // Imposée : le produit n'existe que dans cette devise (PEA, Livret A, Pilier 3a…). Sinon, simple valeur par défaut modifiable.
@@ -40,9 +86,6 @@ const ACC_TYPE_CCY = {
   "Pilier 3a": ['CHF', true],
   "Assurance-Vie": ['EUR', false],
   "Compte-Titres Ordinaire": ['EUR', false],
-  "Compte à terme": ['EUR', false],
-  "Compte courant": ['EUR', false],
-  "SCPI / Immobilier": ['EUR', false],
 };
 
 // Types d'actifs acceptés par type de compte. Absent = aucune restriction.
@@ -56,6 +99,8 @@ const ACC_ASSET_TYPES = {
   "Plan d'Épargne Retraite (PER)": _ACC_MARKET_ASSETS,
   "Épargne salariale (PEE / PERCO)": _ACC_MARKET_ASSETS,
   "Pilier 3a": _ACC_MARKET_ASSETS,
+  // Livrets et comptes d'épargne : un solde et un taux, aucun titre (voir js/features/savings.js)
+  "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [],
 };
 // Comptes dont les actions doivent appartenir à l'Espace économique européen
 const ACC_PEA_TYPES = ["Plan d'Épargne en Actions (PEA)", "PEA-PME"];
@@ -72,7 +117,12 @@ function accountRulesProblems() {
     ...Object.keys(ACC_TYPE_CCY).map(k => ['ACC_TYPE_CCY', k]),
     ...Object.keys(ACC_ASSET_TYPES).map(k => ['ACC_ASSET_TYPES', k]),
     ...ACC_PEA_TYPES.map(k => ['ACC_PEA_TYPES', k]),
-  ].filter(([, label]) => !known.has(label)).map(([table, label]) => `${table} : « ${label} » n'est pas un type de compte connu`);
+    ...ACC_JOINT_TYPES.map(k => ['ACC_JOINT_TYPES', k]),
+    ...Object.keys(ACC_MAX_PER_PERSON).map(k => ['ACC_MAX_PER_PERSON', k]),
+    ...Object.keys(ACC_DEFAULT_NAMES).map(k => ['ACC_DEFAULT_NAMES', k]),
+    ...Object.keys(ACCOUNT_TYPE_INFO).map(k => ['ACCOUNT_TYPE_INFO', k]),
+  ].filter(([, label]) => !known.has(label)).map(([table, label]) => `${table} : « ${label} » n'est pas un type de compte connu`)
+    .concat(ACCOUNT_TYPES.filter(t => !ACCOUNT_TYPE_INFO[t]).map(t => `ACCOUNT_TYPE_INFO : « ${t} » sans nom court ni pastille`));
 }
 
 function allowedAssetTypes(accType) { return ACC_ASSET_TYPES[accType] || null; }
@@ -82,6 +132,7 @@ function allowedAssetTypes(accType) { return ACC_ASSET_TYPES[accType] || null; }
 function assetTypeError(acc, type, country) {
   const accType = acc && acc.type;
   const ok = allowedAssetTypes(accType);
+  if (ok && !ok.length) return 'Pas de titres sur ce type de compte : saisis les versements, retraits et intérêts';
   if (ok && !ok.includes(type)) return type === 'Crypto' ? 'Crypto interdite sur ce type de compte' : type + ' interdit sur ce type de compte';
   if (type === 'Action' && ACC_PEA_TYPES.includes(accType)) {
     const c = (country || '').trim().toLowerCase();
@@ -129,6 +180,6 @@ function accCurrencyForType(type, current, available, apply) {
 function assetTypeOptions(accType, values, current, keepValue) {
   const ok = allowedAssetTypes(accType);
   const disabled = values.filter(v => !!ok && !ok.includes(v));
-  const value = !keepValue && ok && !ok.includes(current) ? ok[0] : current;
+  const value = !keepValue && ok && ok.length && !ok.includes(current) ? ok[0] : current;
   return { disabled, value };
 }

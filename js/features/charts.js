@@ -223,12 +223,12 @@ function stockChartSvg(h, w, ch, period) {
   const line = 'M'+xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line+`L${xs[xs.length-1].toFixed(1)},${ch}L0,${ch}Z`;
   const gid = 'sc'+Math.random().toString(36).slice(2,7);
-  // PRU line with value label
+  // Ligne du PRU, étiquette à GAUCHE : le cours actuel est annoté à droite, les deux ne se chevauchent plus
   const pruClamp = Math.max(mn, Math.min(mx, h.avgBuyPrice));
   const pruY = (padT+(1-(pruClamp-mn)/rng)*(ch-padT-padB)).toFixed(1);
   const pruLabel = `PRU ${h.avgBuyPrice.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
-    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
+    <text x="4" y="${Math.max(padT + 9, parseFloat(pruY) - 3).toFixed(1)}" text-anchor="start" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
   // Current price annotation at the right edge
   const lastY = ys[ys.length - 1];
   const txtY = Math.max(padT + 10, Math.min(ch - padB - 2, lastY - 4));
@@ -403,3 +403,34 @@ function initWatchChart(container, pts, startDate, wCur = 'EUR') {
   svg.addEventListener('mouseleave', hide);
 }
 
+// ═══════════════════════════════════════════════
+// RÉPARTITIONS : couleurs, segments, donut + légende (Analyse et Accueil)
+// ═══════════════════════════════════════════════
+const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
+const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
+const POCKET_C={'Liquidités':'#F59E0B','Fonds euros':'#14B8A6','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
+const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Fonds euros':'#14B8A6','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
+
+function buildSegs(obj, colors) {
+  // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
+  // donut — la garder faisait planter le dessin des tranches (voir donutSvg).
+  const entries=Object.entries(obj).filter(([,v])=>v>0);
+  const tot=entries.reduce((s,[,v])=>s+v,0);
+  return entries.sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
+    name, value,
+    color: colors[name]||colors[i%colors.length],
+    pct: tot>0?(value/tot*100).toFixed(1):'0.0'
+  }));
+}
+// Donut + légende : le nom a sa propre ligne (avec le pourcentage), le montant passe dessous. Ainsi rien n'est tronqué
+// (« Obligati… », « ETF / Fo… » en largeur de téléphone) ; un nom vraiment trop long reste coupé par une ellipse.
+function donutBlock(title, segs) {
+  const legend=segs.map(s=>`<div class="legend-row legend-2l">
+    <div class="leg-dot" style="background:${s.color}"></div>
+    <div class="leg-txt"><div class="leg-line"><span class="leg-name">${esc(s.name)}</span><span class="leg-pct" style="color:${s.color}">${s.pct}%</span></div><div class="t-sm t-num">${masked(s.value)}</div></div>
+  </div>`).join('');
+  return `<div class="donut-block anim">
+    ${donutSvg(segs,108,16)}
+    <div class="legend">${legend}</div>
+  </div>`;
+}
