@@ -257,8 +257,6 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 /* ─── ACCOUNT DETAIL ─── */
 .acc-hero{padding:8px 20px 18px;border-bottom:1px solid var(--border)}
 .acc-hero-val{background:linear-gradient(135deg,var(--text) 0%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:30px;font-weight:800;letter-spacing:-1px;margin:4px 0 10px}
-.stat-row{display:flex;gap:20px}
-.stat-box .t-label{margin-bottom:3px}
 .ticker{width:44px;height:44px;border-radius:12px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--accent);letter-spacing:-.3px;flex-shrink:0}
 
 /* ─── STOCK DETAIL ─── */

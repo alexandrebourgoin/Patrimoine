@@ -109,11 +109,8 @@ function accBenchHTML(acc, perf, sum) {
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
-  const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
   const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
   const cash=accCash(acc);                    // liquidités non investies
-  const costBase=secVal-totPnl;               // performance calculée sur les titres, pas sur le cash
-  const totPnlPct=costBase>0?(totPnl/costBase)*100:0;
   const pills=SORT_OPTS.map(o=>{
     const on=S.sort===o.key;
     const arrow=on?(S.sortDir===-1?' ↓':' ↑'):'';
@@ -136,14 +133,6 @@ function renderAccount() {
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
-    <div class="stat-row">
-      <div class="stat-box"><div class="t-label">P&amp;L Total</div>
-        <div style="font-size:15px;font-weight:800" class="${totPnl>=0?'t-gain':'t-loss'} t-num">${totPnl>=0?'+':''}${masked(totPnl)}</div></div>
-      <div class="stat-box"><div class="t-label">Performance</div>
-        <div style="font-size:15px;font-weight:800" class="${totPnlPct>=0?'t-gain':'t-loss'} t-num">${fmtPct(totPnlPct)}</div></div>
-      <div class="stat-box"><div class="t-label">Variation J</div>
-        <div style="font-size:15px;font-weight:800" class="${acc.change1d>=0?'t-gain':'t-loss'} t-num">${fmtPct(acc.change1d)}</div></div>
-    </div>
     ${accPerfCardHTML(acc,perf,sum)}
     ${accBenchHTML(acc,perf,sum)}
     ${tracked?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
