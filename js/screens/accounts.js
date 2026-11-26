@@ -64,7 +64,7 @@ function renderComptes() {
     <div class="top-btn tap" id="js-acc-add" title="Ajouter un compte">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
     </div>
-  `)}
+  `, navLabel('comptes'))}
   <div class="${gridView?'acc-grid':'col gap12'} px" id="js-acc-list">${accs}${empty}</div>`;
 }
 
