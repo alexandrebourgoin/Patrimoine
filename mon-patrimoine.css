@@ -535,3 +535,6 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 
 /* Compte synchronisé (eToro, js/screens/etoro.js) : pas d'ajout ni de suppression de position */
 .acc-synced .hold-add-btn,.acc-synced .hold-del-btn{display:none!important}
+
+/* « Supprimer les clés » masqué tant qu'aucune clé n'est enregistrée */
+#et-del.hidden{display:none}
