@@ -323,15 +323,13 @@ function renderSettings() {
         <div class="cur-opt tap ${S.currency==='USD'?'on':''}" data-cur="USD">USD</div>
       </div>
     </div>
-    <div class="s-item">
+    <div class="s-item stack">
       <div class="s-ico" style="background:rgba(167,139,250,.12)">
         <svg viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
       </div>
       <div class="flex1 col gap4"><div class="s-name">Thème</div></div>
-      <div class="cur-opts">
-        <div class="cur-opt tap ${S.theme==='auto'?'on':''}" data-theme-opt="auto">Auto</div>
-        <div class="cur-opt tap ${S.theme==='light'?'on':''}" data-theme-opt="light">☀</div>
-        <div class="cur-opt tap ${S.theme==='dark'?'on':''}" data-theme-opt="dark">🌙</div>
+      <div class="cur-opts theme-opts">
+        ${THEMES.map(t=>`<div class="cur-opt tap ${S.theme===t.key?'on':''}" data-theme-opt="${t.key}"><span class="theme-sw" style="background:linear-gradient(135deg,${t.swatch[0]} 50%,${t.swatch[1]} 50%)"></span>${t.label}</div>`).join('')}
       </div>
     </div>
   </div>
@@ -428,10 +426,10 @@ SCREEN_BIND.settings = function (el, id) {
     el.querySelectorAll('[data-theme-opt]').forEach(b=>b.addEventListener('click',()=>{
       S.theme=b.dataset.themeOpt;
       applyTheme(S.theme);
+      refreshMain();   // camemberts et courbes redessinés avec les couleurs du thème
       el.querySelectorAll('[data-theme-opt]').forEach(x=>x.classList.toggle('on',x.dataset.themeOpt===S.theme));
       saveData();
-      const lbl={auto:'automatique',light:'clair',dark:'sombre'};
-      toast('Thème '+(lbl[S.theme]||S.theme));
+      toast('Thème : '+(THEMES.find(t=>t.key===S.theme)?.label||S.theme));
     }));
     el.querySelector('#js-clear-prices')?.addEventListener('click',()=>{
       localStorage.removeItem(STORE_PRICES);

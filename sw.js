@@ -27,6 +27,7 @@ const SHELL = [
   './js/core/screens.js',
   './js/core/modals.js',
   './js/core/storage.js',
+  './js/core/themes.js',
   './js/core/ui.js',
   './js/core/navigation.js',
   './js/core/shell.js',
