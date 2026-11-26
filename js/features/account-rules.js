@@ -13,6 +13,45 @@ const ACCOUNT_TYPE_GROUPS = [
 ];
 const ACCOUNT_TYPES = ACCOUNT_TYPE_GROUPS.flatMap(g => g.types);
 
+// Détention à plusieurs (compte joint / co-adhésion) : seuls le compte-titres et l'assurance-vie (co-adhésion, selon l'assureur)
+// le permettent. PEA, PEA-PME, livrets réglementés, PEL / CEL, PER, épargne salariale, Pilier 3a : un seul titulaire
+// (economie.gouv.fr « compte individuel, joint ou indivis » ; BOFiP : « le PEA ne peut avoir qu'un titulaire »), vérifié le 26/11/2026.
+// Un type hors liste (données anciennes) garde la possibilité.
+const ACC_JOINT_TYPES = ["Compte-Titres Ordinaire", "Assurance-Vie"];
+function accJointAllowed(type) { return !ACCOUNT_TYPES.includes(type) || ACC_JOINT_TYPES.includes(type); }
+
+// Nombre maximal de comptes d'un type par personne (comptes observés exclus : ils suivent le compte de quelqu'un d'autre).
+// « PEL / CEL » : un PEL et un CEL, d'où 2.
+const ACC_MAX_PER_PERSON = {
+  "Plan d'Épargne en Actions (PEA)": 1, "PEA-PME": 1, "Livret A": 1, "LDDS": 1, "LEP": 1, "Livret Jeune": 1, "PEL / CEL": 2,
+};
+// Message si ajouter (ou passer) un compte au type `type` dépasse le maximum ; exceptId : le compte modifié lui-même
+function accTypeLimitError(accounts, type, exceptId, observer) {
+  const max = ACC_MAX_PER_PERSON[type];
+  if (!max || observer) return '';
+  const n = (accounts || []).filter(a => a && a.id !== exceptId && !a.observer && a.type === type).length;
+  if (n < max) return '';
+  return max === 1 ? `Un seul compte « ${type} » par personne : tu en as déjà un` : `Au plus ${max} comptes « ${type} » par personne (un PEL et un CEL)`;
+}
+// Types en surnombre parmi les comptes existants → [{ type, count, max }]
+function accTypeLimitProblems(accounts) {
+  return Object.entries(ACC_MAX_PER_PERSON).map(([type, max]) => ({ type, max, count: (accounts || []).filter(a => a && !a.observer && a.type === type).length }))
+    .filter(x => x.count > x.max);
+}
+
+// Nom proposé quand on n'en saisit pas : nom court du type, suivi de la banque, numéroté s'il existe déjà (« Compte-titres 2 »)
+const ACC_DEFAULT_NAMES = {
+  "Compte-Titres Ordinaire": 'Compte-titres', "Plan d'Épargne en Actions (PEA)": 'PEA', "PEA-PME": 'PEA-PME', "Crypto / Exchange": 'Crypto',
+  "Assurance-Vie": 'Assurance-vie', "Plan d'Épargne Retraite (PER)": 'PER', "Épargne salariale (PEE / PERCO)": 'Épargne salariale', "Pilier 3a": '3e pilier',
+  "Livret A": 'Livret A', "LDDS": 'LDDS', "LEP": 'LEP', "Livret Jeune": 'Livret Jeune', "PEL / CEL": 'PEL / CEL',
+};
+function accDefaultName(type, bank, accounts) {
+  const base = [ACC_DEFAULT_NAMES[type] || type || 'Compte', String(bank || '').trim()].filter(Boolean).join(' ');
+  const taken = new Set((accounts || []).map(a => String(a.name || '').toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let i = 2; ; i++) if (!taken.has(`${base} ${i}`.toLowerCase())) return `${base} ${i}`;
+}
+
 // Devise de référence par type : [devise, imposée].
 // Imposée : le produit n'existe que dans cette devise (PEA, Livret A, Pilier 3a…). Sinon, simple valeur par défaut modifiable.
 const ACC_TYPE_CCY = {
@@ -59,6 +98,9 @@ function accountRulesProblems() {
     ...Object.keys(ACC_TYPE_CCY).map(k => ['ACC_TYPE_CCY', k]),
     ...Object.keys(ACC_ASSET_TYPES).map(k => ['ACC_ASSET_TYPES', k]),
     ...ACC_PEA_TYPES.map(k => ['ACC_PEA_TYPES', k]),
+    ...ACC_JOINT_TYPES.map(k => ['ACC_JOINT_TYPES', k]),
+    ...Object.keys(ACC_MAX_PER_PERSON).map(k => ['ACC_MAX_PER_PERSON', k]),
+    ...Object.keys(ACC_DEFAULT_NAMES).map(k => ['ACC_DEFAULT_NAMES', k]),
   ].filter(([, label]) => !known.has(label)).map(([table, label]) => `${table} : « ${label} » n'est pas un type de compte connu`);
 }
 

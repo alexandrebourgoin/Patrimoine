@@ -7,7 +7,11 @@
 // Dépend de immoCalc (realestate-calc.js, chargé avant). wealthNow() est le seul accès à l'état (S, biens, date), utilisé À L APPEL.
 
 // Part détenue d'un compte (0 à 1) : acc.share en % (compte joint à 50 %…), 100 % par défaut. Les montants du compte restent à 100 %.
-function accShare(acc) { const s = +acc.share; return s > 0 && s <= 100 ? s / 100 : 1; }
+// Un type qui ne peut pas être détenu à plusieurs (PEA, livrets…) compte toujours à 100 % (accJointAllowed : account-rules.js)
+function accShare(acc) {
+  if (typeof accJointAllowed === 'function' && !accJointAllowed(acc.type)) return 1;
+  const s = +acc.share; return s > 0 && s <= 100 ? s / 100 : 1;
+}
 
 // Biens pris en compte : date d'achat renseignée et passée, prix > 0, valeurs calculables. → [{ p, c }]
 function wealthProperties(properties, today) {

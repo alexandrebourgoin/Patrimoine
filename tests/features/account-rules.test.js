@@ -123,3 +123,29 @@ describe('assetTypeOptions : liste des types d\'actifs d\'un formulaire', () => 
   it('compte crypto : tout sauf la crypto est grisé', () => expect(R.assetTypeOptions('Crypto / Exchange', all, 'Action', false)).toEqual({ disabled: ['Action', 'ETF', 'Obligation', 'Cash'], value: 'Crypto' }));
   it('type sans restriction : rien n\'est grisé', () => expect(R.assetTypeOptions('SCPI / Immobilier', all, 'Crypto', false)).toEqual({ disabled: [], value: 'Crypto' }));
 });
+
+describe('compte joint, nombre de comptes, nom proposé', () => {
+  const R2 = loadClassic('js/features/account-rules.js', { exports: ['accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName', 'ACC_JOINT_TYPES'] });
+  it('détention à plusieurs : compte-titres et assurance-vie seulement (types anciens : autorisé)', () => {
+    expect(R2.ACC_JOINT_TYPES).toEqual([CTO, 'Assurance-Vie']);
+    for (const t of [PEA, 'PEA-PME', 'Livret A', 'LDDS', 'LEP', 'Livret Jeune', 'PEL / CEL', "Plan d'Épargne Retraite (PER)", 'Épargne salariale (PEE / PERCO)', 'Pilier 3a', 'Crypto / Exchange'])
+      expect(R2.accJointAllowed(t), t).toBe(false);
+    expect(R2.accJointAllowed('Compte courant')).toBe(true);
+  });
+  it('un PEA, un PEA-PME, un Livret A, un LDDS, un LEP, un Livret Jeune ; PEL / CEL : deux ; compte modifié et observateurs exclus', () => {
+    const accs = [{ id: 'a', type: 'Livret A' }, { id: 'b', type: 'PEL / CEL' }, { id: 'o', type: PEA, observer: true }];
+    expect(R2.accTypeLimitError(accs, 'Livret A')).toMatch(/Un seul compte « Livret A »/);
+    expect(R2.accTypeLimitError(accs, 'Livret A', 'a')).toBe('');
+    expect(R2.accTypeLimitError(accs, PEA)).toBe('');
+    expect(R2.accTypeLimitError(accs, 'Livret A', null, true)).toBe('');
+    expect(R2.accTypeLimitError(accs, 'PEL / CEL')).toBe('');
+    expect(R2.accTypeLimitError([...accs, { id: 'c', type: 'PEL / CEL' }], 'PEL / CEL')).toMatch(/Au plus 2/);
+    expect(R2.accTypeLimitError(accs, CTO)).toBe('');
+    expect(R2.accTypeLimitProblems([{ type: 'Livret A' }, { type: 'Livret A' }, { type: PEA }])).toEqual([{ type: 'Livret A', max: 1, count: 2 }]);
+  });
+  it('nom proposé : nom court du type, banque, numéro si déjà pris', () => {
+    expect(R2.accDefaultName(PEA, '', [])).toBe('PEA');
+    expect(R2.accDefaultName('Assurance-Vie', 'Linxea', [])).toBe('Assurance-vie Linxea');
+    expect(R2.accDefaultName(CTO, '', [{ name: 'compte-titres' }, { name: 'Compte-titres 2' }])).toBe('Compte-titres 3');
+  });
+});

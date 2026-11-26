@@ -4,7 +4,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 
 // Modales de compte et de position avec les VRAIES règles (js/features/account-rules.js).
 const rules = loadClassic('js/features/account-rules.js', {
-  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions'],
+  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions', 'accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName'],
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
 const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });
@@ -152,6 +152,44 @@ describe('modale de compte : devise et type', () => {
       dom.handlers['acc-submit'].click();
       expect(S.accounts).toEqual([]);
       expect(toasts.at(-1)).toBe("La date d'ouverture ne peut pas être dans le futur");
+    });
+    it('sans nom : nom proposé selon le type et la banque, numéroté s il existe déjà', () => {
+      setup([{ id: 'x', name: 'Compte-titres Boursorama', type: CTO, holdings: [], cashflows: [] }]); api.openAccModal();
+      dom.els['acc-bank'].value = 'Boursorama';
+      dom.handlers['acc-bank'].input();
+      expect(dom.els['acc-name'].placeholder).toBe('Compte-titres Boursorama 2');
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts[1].name).toBe('Compte-titres Boursorama 2');
+    });
+    it('un seul PEA et un seul Livret A : le second est refusé ; un compte observateur n est pas compté', () => {
+      setup([{ id: 'p', name: 'PEA', type: PEA, holdings: [], cashflows: [] }]); api.openAccModal();
+      chooseType('acc-type', PEA);
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts).toHaveLength(1);
+      expect(toasts.at(-1)).toBe(`Un seul compte « ${PEA} » par personne : tu en as déjà un`);
+      dom.handlers['acc-obs-tog'].click();   // compte observateur (le PEA de quelqu'un d'autre)
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts).toHaveLength(2);
+    });
+    it('PEA, livret : pas de part (compte joint impossible) ; compte-titres : part enregistrée', () => {
+      setup(); api.openAccModal();
+      chooseType('acc-type', PEA);
+      dom.els['acc-share'].value = '50';
+      dom.handlers['acc-submit'].click();
+      expect('share' in S.accounts[0]).toBe(false);
+      api.openAccModal();
+      chooseType('acc-type', CTO);
+      dom.els['acc-share'].value = '50';
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts[1].share).toBe(50);
+    });
+    it('types en catégories repliables : seule celle du type choisi est dépliée', () => {
+      setup(); api.openAccModal();
+      chooseType('acc-type', 'LDDS');
+      const html = dom.els['acc-type-picker']?.innerHTML || '';
+      expect([...html.matchAll(/<details class="tp-group" data-group="([^"]+)"( open)?>/g)].map(m => [m[1], !!m[2]])).toEqual([
+        ['Bourse et crypto', false], ['Assurance-vie et retraite', false], ['Épargne disponible (livrets)', true]]);
+      expect(html).toContain('<div class="tp-opt tap on" data-type="LDDS">LDDS <span class="tp-chk">✓</span></div>');
     });
     it('sans date : pas de champ startDate', () => {
       setup(); api.openAccModal();

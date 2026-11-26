@@ -539,3 +539,16 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .bg-shield-logo svg{width:34px;height:34px}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
+
+/* Choix du type de compte en catégories repliables (js/modals/account.js : renderAccTypePicker) */
+select.form-input.hidden{display:none}
+.tp{display:flex;flex-direction:column;gap:6px}
+.tp-group{border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden}
+.tp-group>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 14px;font-size:13px;font-weight:800;cursor:pointer}
+.tp-group>summary::-webkit-details-marker{display:none}
+.tp-group>summary::after{content:'▾';color:var(--text3);transition:transform .2s;margin-left:auto}
+.tp-group[open]>summary::after{transform:rotate(180deg)}
+.tp-cur{font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+.tp-group[open] .tp-cur{display:none}
+.tp-opt{padding:10px 14px;border-top:1px solid var(--border);font-size:14px;cursor:pointer;display:flex;justify-content:space-between}
+.tp-opt.on{color:var(--accent);font-weight:700;background:var(--accent-dim)}
