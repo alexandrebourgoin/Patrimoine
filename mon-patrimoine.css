@@ -126,6 +126,11 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .wl-amount{font-size:28px;font-weight:800;margin:4px 0 6px}
 .wl-row{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:13px}
 .wl-row.dark{color:rgba(255,255,255,.8);margin-top:7px}
+.wl-link{cursor:pointer;padding:3px 0;border-radius:6px}
+.wl-chev{opacity:.55;font-weight:700;margin-left:2px}
+.hw-item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--border);cursor:pointer}
+.hw-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hw-text{font-size:14px;font-weight:700}
 .wl-chip{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer}
 .legend-2l{align-items:flex-start}
 .legend-2l .leg-dot{margin-top:4px;flex-shrink:0}

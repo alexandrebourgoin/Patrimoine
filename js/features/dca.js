@@ -60,6 +60,13 @@ function dcaCommit(mutate) {
 const _dcaToday = () => dcaYmd(new Date());
 function _fmtDate(s) { return dcaParseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
 function _numIn(v) { return parseFloat(String(v).replace(',', '.')); }
+// Accueil « À surveiller » : prochain investissement programmé dans les 7 jours
+HOME_WATCH.dca = () => {
+  if (!S.dca || !S.dca.plans.length) return [];
+  const today = _dcaToday(), next = dcaStats(S.dca.plans, today).next;
+  if (!next || next.date > _hwAddDays(today, 7)) return [];
+  return [{ level: 'soon', when: next.date, go: 'dca', text: `Investissement programmé le ${fmtDate(next.date)}`, sub: masked(next.plan.budget) + ' à répartir' }];
+};
 
 function dcaPriceRef(ticker) {
   for (const a of S.accounts) for (const h of a.holdings) if (h.ticker === ticker && h.currentPrice) return toRefCcy(h.currentPrice, h.currency || 'EUR');

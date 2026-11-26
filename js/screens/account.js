@@ -110,6 +110,10 @@ function accEnvelopeHTML(acc) {
   if (info.note) h += `<div class="t-sm" style="margin-top:6px">${esc(info.note)}</div>`;
   return `<div id="js-acc-env" style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)"><div class="t-label">Enveloppe fiscale · ${esc(info.short)}</div>${h}</div>`;
 }
+// Accueil « À surveiller » : jalon fiscal (PEA 5 ans, assurance-vie 8 ans) dans les 90 jours
+HOME_WATCH.taxEnvelope = () => taxMilestonesSoon(S.accounts, { today: _dayKey(Date.now()), conv: (v, c) => toRefCcy(v, c) }, 90)
+  .map(({ acc, info }) => ({ level: 'info', when: info.milestone.date, go: 'account', accountId: acc.id,
+    text: `${info.short} « ${acc.name} » : ${info.milestone.years} ans le ${fmtDate(info.milestone.date)}`, sub: 'Fiscalité allégée à partir de cette date' }));
 // Comparaison à l'indice : tableau Période / Compte / Indice / Écart, depuis la même date de début que le compte
 function accBenchHTML(acc, perf, sum) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
