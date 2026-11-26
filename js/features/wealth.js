@@ -20,7 +20,7 @@ function wealthBreakdown(accounts, properties, today) {
   return { financial, property, debt, count: list.length, gross: financial + property, net: financial + property - debt };
 }
 
-// Grande classe d'un compte, d'après son type : Liquidités (livrets, compte courant, compte à terme), Bourse (comptes-titres, PEA,
+// Grande classe d'un compte, d'après son type (les supports en fonds euros sont ensuite isolés : isFondsEuros) : Liquidités (livrets, compte courant, compte à terme), Bourse (comptes-titres, PEA,
 // assurance-vie, PER, épargne salariale, Pilier 3a), Crypto, Immobilier (SCPI…), Autres. La valeur du compte ENTIER (positions +
 // liquidités) va dans sa classe : le cash d'un PEA reste dans la Bourse.
 function accPocket(acc) {
@@ -31,6 +31,12 @@ function accPocket(acc) {
   if (/métaux|metaux/.test(t)) return 'Autres';
   if (/pea|titres|assurance|retraite|\bper\b|épargne salariale|pee|perco|pilier/.test(t)) return 'Bourse';
   return 'Autres';
+}
+
+// Fonds en euros (assurance-vie, PER) : capital garanti, à part de la Bourse. Repéré par le nom, le secteur ou le type du support.
+const _FONDS_EUROS_RE = /fonds\s*(en\s*)?euros?/i;
+function isFondsEuros(h) {
+  return !!h && (h.type === 'Fonds euros' || _FONDS_EUROS_RE.test(h.name || '') || _FONDS_EUROS_RE.test(h.sector || ''));
 }
 
 const ASSET_LABEL = { Action: 'Actions', ETF: 'ETF / Fonds', Obligation: 'Obligations', Cash: 'Cash', Crypto: 'Crypto' };
@@ -47,14 +53,17 @@ function analysisData(accounts, properties, today, cashOf) {
   const byPocket = {}, byAsset = {}, byAccType = {}, byRaw = {}, byGeo = {}, bySec = {};
   accs.forEach(a => {
     const pk = accPocket(a);
-    _wAdd(byPocket, pk, a.value || 0);
+    // Les supports en fonds euros forment leur propre grande classe ; le reste du compte garde sa classe
+    const fe = (a.holdings || []).filter(isFondsEuros).reduce((s, h) => s + (h.valueRef ?? h.value ?? 0), 0);
+    _wAdd(byPocket, pk, (a.value || 0) - fe);
+    if (fe) _wAdd(byPocket, 'Fonds euros', fe);
     _wAdd(byAccType, a.type || 'Autre', a.value || 0);
     const cash = cashOf(a);
     if (cash) { _wAdd(byAsset, 'Cash', cash); _wAdd(byRaw, 'Cash', cash); }
     (a.holdings || []).forEach(h => {
       const hv = h.valueRef ?? h.value;
       const crypto = h.type === 'Crypto' || pk === 'Crypto';
-      _wAdd(byAsset, pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : (ASSET_LABEL[h.type] || h.type || 'Autres'), hv);
+      _wAdd(byAsset, pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : isFondsEuros(h) ? 'Fonds euros' : (ASSET_LABEL[h.type] || h.type || 'Autres'), hv);
       _wAdd(byRaw, h.type, hv);
       _wAdd(byGeo, crypto ? 'Crypto (sans pays)' : (_wUnknown(h.country) ? 'Non renseigné' : h.country), hv);
       _wAdd(bySec, crypto ? 'Crypto' : (_wUnknown(h.sector) ? 'Non renseigné' : h.sector), hv);
