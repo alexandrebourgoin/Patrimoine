@@ -21,7 +21,7 @@ const globals = () => ({
   masked: v => v.toFixed(2), esc: s => globalThis.PU.esc(s), fmtCur: v => v.toFixed(2) + ' €', fmtPct: v => v.toFixed(2) + ' %',
   timeSince: () => 'à l\'instant', toRefCcy: v => v, sparkData: () => [1, 2], totalWealth: () => S.accounts.filter(a => !a.observer).reduce((s, a) => s + a.value, 0),
   renderTopBar: () => '<TOPBAR/>', genHistData: () => Object.assign([100, 110], { real: true }), histSvg: () => '<svg/>',
-  donutSvg: () => '<svg/>', SCREEN_BIND: {},
+  donutSvg: () => '<svg/>', SCREEN_BIND: {}, renderDcaProjectionNow: () => '<PROJECTION/>',
 });
 beforeEach(() => {
   S = { privacy: false, lastPriceUpdate: null, targets: {}, watchlist: [], histPeriod: '1M', accounts: [{ id: 'a', name: 'PEA', type: 'Plan d\'Épargne en Actions (PEA)', value: 1000, change1d: 1, holdings: [hold()] }] };
@@ -62,7 +62,8 @@ describe('Analyse', () => {
     for (const t of ['Grandes classes', "Par type d'actif", 'Par type de compte', 'Répartition géographique', 'Par secteur', "Objectifs d'allocation"])
       expect(html).toContain(t);
     expect(html).toContain('<details');
-    expect(html).toContain('id="js-go-proj"');
+    expect(html).toContain('<PROJECTION/>');           // projection du patrimoine, déplacée depuis le DCA
+    expect(html).not.toContain('DCA et projection');   // ancien lien supprimé
   });
   it('légende des donuts : le montant est sous le nom (aucune troncature de nom à cause du montant)', () => {
     const html = render();

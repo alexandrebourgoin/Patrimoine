@@ -280,18 +280,27 @@ describe('DCA : écran et projection', () => {
     });
   });
 
-  it('sans plan : invite à configurer, objectifs et projection (sans versements) restent visibles', () => {
+  it('sans plan : invite à configurer, objectifs visibles ; la projection est dans l\'Analyse, plus ici', () => {
     S.dca.plans = [];
     const html = api.renderDca();
     expect(html).toContain('Aucun plan DCA');
-    expect(html).toContain('Projection du patrimoine');
-    expect(html).toContain('Aucun plan en vigueur : projection sans versements.');
+    expect(html).not.toContain('Projection du patrimoine');
+    const proj = api.renderDcaProjection(null);
+    expect(proj).toContain('Aucun plan en vigueur : projection sans versements.');
+    expect(proj).toContain('Créer un plan DCA →');
   });
-  it('avec un plan : rythme, répartition, graphique, projection à 6 horizons, historique', () => {
+  it('avec un plan : rythme, répartition, graphique, historique (sans projection)', () => {
     const html = api.renderDca();
-    for (const t of ['Mon rythme', 'Prochaine répartition', 'Et dans 12 échéances ?', 'Projection du patrimoine', 'Historique des stratégies']) expect(html).toContain(t);
+    for (const t of ['Mon rythme', 'Prochaine répartition', 'Et dans 12 échéances ?', 'Historique des stratégies']) expect(html).toContain(t);
+    expect(html).not.toContain('Projection du patrimoine');
+  });
+  it('projection : 6 horizons jusqu\'à 20 ans et lien vers le plan DCA', () => {
+    const html = api.renderDcaProjection(S.dca.plans[0]);
+    expect(html).toContain('Projection du patrimoine');
     expect((html.match(/class="dca-proj-row"/g) || [])).toHaveLength(6);
     expect(html).toContain('20 ans');
+    expect(html).toContain('data-go-dca="1"');
+    expect(html).toContain('Modifier le plan DCA →');
   });
   it('la projection porte sur le patrimoine FINANCIER (immobilier exclu, rappelé dans la note)', () => {
     const html = api.renderDcaProjection(S.dca.plans[0]);
