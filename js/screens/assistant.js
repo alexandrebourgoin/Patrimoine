@@ -11,7 +11,7 @@ function renderAssistant() {
   };
   const header = `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Assistant IA</div>
+    <div class="t-title">${navLabel('assistant')}</div>
     <div class="t-sm" style="margin-top:2px">Analyse automatique de vos comptes et titres</div>
   </div>`;
 
