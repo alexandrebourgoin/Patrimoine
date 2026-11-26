@@ -58,5 +58,6 @@ describe('écrans Crédits', () => {
     expect(html).toContain('Capital restant dû');
     expect(html).toContain('Ma part de la dette (50 %)');
     expect(html).toContain('data-cramort="1"');
+    expect(html).toContain('data-crer="1"');
   });
 });

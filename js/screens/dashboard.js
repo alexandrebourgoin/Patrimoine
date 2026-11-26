@@ -1,4 +1,4 @@
-// Écran Accueil (dashboard) : rendu + cartes Évolution / Titres suivis + binding.
+// Écran Accueil (dashboard) : rendu + cartes Grandes classes / Évolution / Titres suivis + binding.
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
 // ── DASHBOARD ──
@@ -16,7 +16,7 @@ function renderDash() {
     ? '<span style="font-size:28px;letter-spacing:4px;color:rgba(255,255,255,.6)">● ● ●</span>'
     : `<div class="wealth-amount t-num">${fmtCur(wl.net)}</div>`;
   const wlRow=(k,v)=>`<div class="wl-row dark"><span>${k}</span><span class="t-num">${masked(v)}</span></div>`;
-  const wlDetail=(wl.count||wl.otherDebt)?`<div style="margin-top:10px">${wlRow('Patrimoine brut',wl.gross)}${wl.count?wlRow('Crédits immobiliers restants',wl.debt):''}${wl.otherDebt?wlRow('Autres crédits restants',wl.otherDebt):''}${wl.count?wlRow('Dont immobilier brut',wl.property):''}</div>`:'';
+  const wlDetail=homeWealthRowsHTML(wl);   // lignes cliquables vers Comptes / Immobilier / Crédits (js/screens/home-links.js)
   const nAcc=S.accounts.filter(a=>!a.observer).length;
   return `<div class="dash-top">
     ${renderTopBar(`
@@ -42,7 +42,19 @@ function renderDash() {
     ${S.lastPriceUpdate?`<div style="font-size:10px;color:rgba(255,255,255,.28);margin-top:5px">Cours · ${timeSince(S.lastPriceUpdate)}</div>`:''}
   </div>
   ${renderHistCard()}
+  ${renderPocketCard()}
+  ${homeWatchHTML()}
   ${renderWatchlistCard()}`;
+}
+
+// ── GRANDES CLASSES D'ACTIFS (même calcul que l'Analyse : analysisNow().byPocket, immobilier net compris) ──
+function renderPocketCard() {
+  const segs = buildSegs(analysisNow().byPocket, POCKET_C);
+  if (!segs.length) return '';
+  return `<div class="pocket-card tap anim" id="js-pocket-card" title="Ouvrir l'Analyse">
+    <div class="pocket-head"><span>Grandes classes d'actifs</span><span class="pocket-more">Analyse →</span></div>
+    ${donutBlock('', segs)}
+  </div>`;
 }
 
 // ── WATCHLIST CARD ──
@@ -123,6 +135,8 @@ function renderHistCard() {
 
 
 SCREEN_BIND.dashboard = function (el, id) {
+    bindHomeLinks(el);
+    el.querySelector('#js-pocket-card')?.addEventListener('click', () => go('analysis'));
     // History period selector
     el.querySelectorAll('.hperiod').forEach(p=>p.addEventListener('click',()=>{
       S.histPeriod=p.dataset.period;

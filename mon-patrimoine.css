@@ -114,6 +114,11 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .wl-amount{font-size:28px;font-weight:800;margin:4px 0 6px}
 .wl-row{display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:13px}
 .wl-row.dark{color:rgba(255,255,255,.8);margin-top:7px}
+.wl-link{cursor:pointer;padding:3px 0;border-radius:6px}
+.wl-chev{opacity:.55;font-weight:700;margin-left:2px}
+.hw-item{display:flex;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--border);cursor:pointer}
+.hw-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.hw-text{font-size:14px;font-weight:700}
 .wl-chip{display:inline-block;margin-top:10px;padding:6px 14px;border-radius:20px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);cursor:pointer}
 .legend-2l{align-items:flex-start}
 .legend-2l .leg-dot{margin-top:4px;flex-shrink:0}
@@ -355,6 +360,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .ptr-spin{display:inline-block;animation:ptr-spin .7s linear infinite}
 
 /* ─── HISTORY CHART ─── */
+.pocket-card{margin:14px 0 0;cursor:pointer}
+.pocket-head{display:flex;justify-content:space-between;align-items:center;margin:0 20px 8px;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)}
+.pocket-more{color:var(--accent);text-transform:none;letter-spacing:0;font-size:12px}
+.pocket-card .donut-block{margin-bottom:0}
 .hist-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:14px 20px 0;padding:16px 16px 12px;position:relative}
 .hist-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .hist-periods{display:flex;gap:5px}
@@ -535,6 +544,15 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 
 /* bouton « Intérêts » réservé aux livrets (il apparaissait sur tous les comptes) */
 .type-btn.hidden{display:none}
+/* Remboursement anticipé : tableaux avant / après et sensibilité (js/screens/early-repay.js) */
+.er-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:6px 10px;font-size:13px;margin-top:8px;align-items:baseline}
+.er-grid>b{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px}
+.er-grid>.er-l{color:var(--text2)}
+.er-grid>.t-num,.er-grid>b:not(:first-child){text-align:right}
+.er-sens{grid-template-columns:1fr 1fr;margin-top:12px}
+
+/* comparaison masquée tant qu'aucune somme n'est saisie */
+#er-cmp-box.hidden{display:none}
 /* lignes d'aide masquées quand elles sont vides (.hidden n'avait d'effet que sur .form-row) */
 .t-sm.hidden{display:none}
 

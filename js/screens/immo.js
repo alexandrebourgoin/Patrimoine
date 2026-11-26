@@ -90,6 +90,7 @@ function _imOneLoanHTML(L, s, idx, many) {
     ${s.next ? _imRow('Prochaine échéance', fmtDate(s.next.date)) : ''}
     ${_imRow('Fin du prêt', fmtDate(s.end))}
     <div class="tap im-link" data-imamort="${idx}">Tableau d'amortissement →</div>
+    ${s.next ? `<div class="tap im-link" data-imer="${idx}">Simuler un remboursement anticipé →</div>` : ''}
     ${s.warn ? `<div class="t-sm" style="color:var(--loss);margin-top:4px">La mensualité saisie est inférieure à la mensualité calculée (${masked(s.pmt)}) : vérifie le taux ou la durée.</div>` : ''}
   </div>`;
 }
@@ -161,6 +162,8 @@ SCREEN_BIND.immodetail = function (el) {
     if (e.target.closest('[data-imedit]')) return openImmoForm(S.immoId);
     const am = e.target.closest('[data-imamort]');
     if (am) return openImmoAmort(S.immoId, +am.dataset.imamort || 0);
+    const er = e.target.closest('[data-imer]');
+    if (er) return openImmoEarlyRepay(S.immoId, +er.dataset.imer || 0);
     if (e.target.closest('[data-imdel]')) {
       const id = S.immoId, p = imRead().find(x => x.id === id);
       openConfirm(`Supprimer le bien "${p ? p.name : ''}" ?`, () => {
@@ -303,7 +306,13 @@ _imEl('im-save').addEventListener('click', saveImmoForm);
 function openImmoAmort(id, idx = 0) {
   const p = imRead().find(x => x.id === id), part = p && immoLoanSchedules(p, _imToday())[idx];
   if (!part) return;
-  openLoanAmort(esc(p.name) + (immoLoans(p).length > 1 ? ' · ' + esc(part.L.label || 'Crédit ' + (idx + 1)) : ''), part.s);   // js/features/loan-amort.js
+  openLoanAmort(_imLoanTitle(p, part, idx), part.s);   // js/features/loan-amort.js
+}
+function _imLoanTitle(p, part, idx) { return esc(p.name) + (immoLoans(p).length > 1 ? ' · ' + esc(part.L.label || 'Crédit ' + (idx + 1)) : ''); }
+// Simulation de remboursement anticipé d'un crédit du bien (js/screens/early-repay.js)
+function openImmoEarlyRepay(id, idx = 0) {
+  const p = imRead().find(x => x.id === id), part = p && immoLoanSchedules(p, _imToday())[idx];
+  if (part) openEarlyRepay(_imLoanTitle(p, part, idx), part.L, immoAddMonths(p.buyDate, 1), 'immo');
 }
 
 // Fermée par le bouton retour Android et la touche Échap (voir js/core/modals.js).

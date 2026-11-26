@@ -29,6 +29,15 @@ const _oaTarget = o => oaFindTarget(S.accounts, o);
 const _oaQuoteOf = ticker => oaQuote(S.accounts, S.watchlist, ticker);
 function orderAlertBadgeCount() { return oaBadgeCount(S.accounts, S.watchlist, oaRead()); }
 NAV_BADGES.orders = orderAlertBadgeCount;
+// Accueil « À surveiller » : alertes de cours atteintes, ordres en attente (registre : js/features/home-watch.js)
+HOME_WATCH.orders = () => {
+  const d = oaRead(), out = [];
+  const hit = d.alerts.filter(a => oaAlertTriggered(a, _oaQuoteOf(a.ticker)));
+  if (hit.length) out.push({ level: 'alert', go: 'orders', text: hit.length === 1 ? `Alerte de cours atteinte : ${hit[0].ticker}` : `${hit.length} alertes de cours atteintes`, sub: hit.map(a => a.ticker).slice(0, 4).join(' · ') });
+  const open = d.orders.filter(o => _oaTarget(o)).length;
+  if (open) out.push({ level: 'info', go: 'orders', text: `${open} ordre${open > 1 ? 's' : ''} en attente`, sub: 'Vérifie s\'ils ont été exécutés' });
+  return out;
+};
 
 function _oaHintOf(o, h) {
   const ser = o.createdAt ? getHistorySeries(h.ticker) : null;

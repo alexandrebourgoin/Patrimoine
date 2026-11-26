@@ -182,3 +182,25 @@ describe('part d un compte : seulement pour les types détenus à plusieurs', ()
     expect(W2.accShare({ type: 'Livret A', share: 50 })).toBe(1);
   });
 });
+
+describe('grande classe « Fonds euros »', () => {
+  const FE = loadClassic('js/features/wealth.js', { globals: calc, exports: ['analysisData', 'isFondsEuros'] });
+  const av = { id: 'av', type: 'Assurance-Vie', value: 100, holdings: [
+    { name: 'Fonds Euros', type: 'Obligation', sector: 'Fonds euros', valueRef: 70 },
+    { name: 'Amundi EM', type: 'ETF', valueRef: 25 },
+  ] };
+  it('repère un support en fonds euros par son nom, son secteur ou son type', () => {
+    expect(FE.isFondsEuros({ name: 'Fonds Euros' })).toBe(true);
+    expect(FE.isFondsEuros({ name: 'Eurossima', sector: 'Fonds en euros' })).toBe(true);
+    expect(FE.isFondsEuros({ type: 'Fonds euros' })).toBe(true);
+    expect(FE.isFondsEuros({ name: 'Amundi Euro Stoxx 50', type: 'ETF' })).toBe(false);
+  });
+  it('l\'assurance-vie est ventilée : fonds euros à part, le reste (et le cash) en Bourse ; total inchangé', () => {
+    const d = FE.analysisData([av], [], '2026-11-26', () => 5);
+    expect(d.byPocket['Fonds euros']).toBe(70);
+    expect(d.byPocket.Bourse).toBe(30);
+    expect(d.byAsset['Fonds euros']).toBe(70);
+    expect(d.byAsset.Obligations).toBeUndefined();
+    expect(Object.values(d.byPocket).reduce((s, v) => s + v, 0)).toBe(100);
+  });
+});
