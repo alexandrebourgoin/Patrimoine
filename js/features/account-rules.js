@@ -6,11 +6,30 @@
 // Types proposés à la création ET à la modification, regroupés par grande catégorie (listes déroulantes à sections).
 // Un type hors liste (données anciennes : SCPI, compte courant, saisie libre…) reste conservé : il est ajouté à la volée
 // dans une section « Type actuel » et garde son comportement.
+// tone : couleur de la catégorie dans le choix du type (variables CSS --tp-<tone>, js/modals/type-picker.js).
 const ACCOUNT_TYPE_GROUPS = [
-  { label: 'Bourse et crypto', types: ["Compte-Titres Ordinaire", "Plan d'Épargne en Actions (PEA)", "PEA-PME", "Crypto / Exchange"] },
-  { label: 'Assurance-vie et retraite', types: ["Assurance-Vie", "Plan d'Épargne Retraite (PER)", "Épargne salariale (PEE / PERCO)", "Pilier 3a"] },
-  { label: 'Épargne disponible (livrets)', types: ["Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
+  { label: 'Bourse et crypto', tone: 'bourse', types: ["Compte-Titres Ordinaire", "Plan d'Épargne en Actions (PEA)", "PEA-PME", "Crypto / Exchange"] },
+  { label: 'Assurance-vie et retraite', tone: 'retraite', types: ["Assurance-Vie", "Plan d'Épargne Retraite (PER)", "Épargne salariale (PEE / PERCO)", "Pilier 3a"] },
+  { label: 'Livrets et épargne logement', tone: 'livret', types: ["Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
 ];
+// Affichage du choix du type : nom court, abréviation de la pastille, précision sous le nom
+// (pour les livrets réglementés, la précision est le taux en vigueur : SAVINGS_RATES, js/features/savings.js).
+const ACCOUNT_TYPE_INFO = {
+  "Compte-Titres Ordinaire": { short: 'CTO', abbr: 'CTO', sub: 'Compte-titres ordinaire' },
+  "Plan d'Épargne en Actions (PEA)": { short: 'PEA', abbr: 'PEA', sub: "Plan d'épargne en actions" },
+  "PEA-PME": { short: 'PEA-PME', abbr: 'PME', sub: 'PEA dédié aux PME et ETI' },
+  "Crypto / Exchange": { short: 'Crypto', abbr: '₿', sub: "Plateforme d'échange" },
+  "Assurance-Vie": { short: 'Assurance-vie', abbr: 'AV', sub: 'Contrat multisupport ou fonds euros' },
+  "Plan d'Épargne Retraite (PER)": { short: 'PER', abbr: 'PER', sub: "Plan d'épargne retraite" },
+  "Épargne salariale (PEE / PERCO)": { short: 'PEE / PERCO', abbr: 'PEE', sub: 'Épargne salariale' },
+  "Pilier 3a": { short: 'Pilier 3a', abbr: '3a', sub: 'Prévoyance suisse' },
+  "Livret A": { short: 'Livret A', abbr: 'A', sub: 'Livret réglementé' },
+  "LDDS": { short: 'LDDS', abbr: 'DD', sub: 'Livret de développement durable et solidaire' },
+  "LEP": { short: 'LEP', abbr: 'LEP', sub: "Livret d'épargne populaire" },
+  "Livret Jeune": { short: 'Livret Jeune', abbr: 'LJ', sub: '12 à 25 ans' },
+  "PEL / CEL": { short: 'PEL / CEL', abbr: 'PEL', sub: 'Épargne logement' },
+};
+function accTypeTone(type) { const g = ACCOUNT_TYPE_GROUPS.find(g => g.types.includes(type)); return g ? g.tone : ''; }
 const ACCOUNT_TYPES = ACCOUNT_TYPE_GROUPS.flatMap(g => g.types);
 
 // Détention à plusieurs (compte joint / co-adhésion) : seuls le compte-titres et l'assurance-vie (co-adhésion, selon l'assureur)
@@ -101,7 +120,9 @@ function accountRulesProblems() {
     ...ACC_JOINT_TYPES.map(k => ['ACC_JOINT_TYPES', k]),
     ...Object.keys(ACC_MAX_PER_PERSON).map(k => ['ACC_MAX_PER_PERSON', k]),
     ...Object.keys(ACC_DEFAULT_NAMES).map(k => ['ACC_DEFAULT_NAMES', k]),
-  ].filter(([, label]) => !known.has(label)).map(([table, label]) => `${table} : « ${label} » n'est pas un type de compte connu`);
+    ...Object.keys(ACCOUNT_TYPE_INFO).map(k => ['ACCOUNT_TYPE_INFO', k]),
+  ].filter(([, label]) => !known.has(label)).map(([table, label]) => `${table} : « ${label} » n'est pas un type de compte connu`)
+    .concat(ACCOUNT_TYPES.filter(t => !ACCOUNT_TYPE_INFO[t]).map(t => `ACCOUNT_TYPE_INFO : « ${t} » sans nom court ni pastille`));
 }
 
 function allowedAssetTypes(accType) { return ACC_ASSET_TYPES[accType] || null; }

@@ -381,6 +381,16 @@
   </div>
 </div>
 
+<!-- CHOIX DU TYPE DE COMPTE (js/modals/type-picker.js) : au-dessus des fenêtres de création et de modification -->
+<div id="tp-bg" class="add-modal-bg" style="z-index:226"></div>
+<div id="tp-sheet" class="add-modal-sheet" style="z-index:227;max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:4px"><div class="modal-title" style="margin-bottom:0">Type de compte</div><div id="tp-close" class="oa-x">✕</div></div>
+    <div id="tp-list"></div>
+  </div>
+</div>
+
 <!-- ADD ACCOUNT MODAL -->
 <div id="acc-modal-bg" class="add-modal-bg"></div>
 <div id="acc-modal-sheet" class="add-modal-sheet">
@@ -404,7 +414,7 @@
     <div class="form-row">
       <div class="form-field">
         <div class="form-label">Type de compte</div>
-        <select class="form-input" id="acc-type" style="cursor:pointer"></select>
+        <select class="form-input tp-native" id="acc-type" tabindex="-1" aria-hidden="true"></select><button type="button" class="form-input tp-btn" id="acc-type-btn" aria-label="Type de compte"></button>
       </div>
       <div class="form-field">
         <div class="form-label">Devise</div>
@@ -512,7 +522,7 @@
     <div class="form-row">
       <div class="form-field">
         <div class="form-label">Type de compte</div>
-        <select class="form-input" id="rename-acc-type" style="cursor:pointer"></select>
+        <select class="form-input tp-native" id="rename-acc-type" tabindex="-1" aria-hidden="true"></select><button type="button" class="form-input tp-btn" id="rename-acc-type-btn" aria-label="Type de compte"></button>
       </div>
       <div class="form-field">
         <div class="form-label">Devise</div>
@@ -915,6 +925,7 @@
 <script src="js/modals/watchlist.js"></script>
 <script src="js/modals/icon-picker.js"></script>
 <script src="js/modals/account.js"></script>
+<script src="js/modals/type-picker.js"></script>
 <script src="js/modals/position.js"></script>
 <script src="js/modals/order.js"></script>
 <script src="js/modals/cashflow.js"></script>

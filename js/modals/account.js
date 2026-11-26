@@ -39,6 +39,7 @@ function fillAccTypeSelect(selId, value, curSelId, applyCurrency){
   syncAccEnvHint(selId);
   syncAccSavings(selId,false);
   syncAccShareRow(selId);
+  if(typeof syncTypePickerButton==='function') syncTypePickerButton(selId);   // bouton du choix du type (js/modals/type-picker.js)
 }
 
 // Part du compte (compte joint) : seulement pour les types qui peuvent être détenus à plusieurs (accJointAllowed)

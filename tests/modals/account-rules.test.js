@@ -71,7 +71,7 @@ describe('modale de compte : devise et type', () => {
   it('création : types regroupés par catégorie, sans « Autre… » ni SCPI / métaux / compte courant / compte à terme', () => {
     setup(); api.openAccModal();
     const html = dom.els['acc-type'].innerHTML;
-    expect([...html.matchAll(/<optgroup label="([^"]+)">/g)].map(m => m[1])).toEqual(['Bourse et crypto', 'Assurance-vie et retraite', 'Épargne disponible (livrets)']);
+    expect([...html.matchAll(/<optgroup label="([^"]+)">/g)].map(m => m[1])).toEqual(['Bourse et crypto', 'Assurance-vie et retraite', 'Livrets et épargne logement']);
     for (const gone of ['Autre…', 'SCPI', 'Métaux', 'Compte courant', 'Compte à terme']) expect(html.includes(gone)).toBe(false);
     expect(html.indexOf('LDDS')).toBeGreaterThan(html.indexOf('Épargne disponible'));
   });
