@@ -5,7 +5,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 // L'écran dépend du stockage et des règles : on charge les VRAIS fichiers (comme le navigateur) et on les injecte en globales.
 const { createOrderAlertStore } = loadClassic('js/features/order-alert-storage.js', { exports: ['createOrderAlertStore'] });
 const RULE_NAMES = ['OA_EPS', 'oaHeldQty', 'oaFindTarget', 'oaOrderableAccounts', 'oaQuote', 'oaAlertTriggered', 'oaBadgeCount', 'oaPriceHint',
-  'oaOrderError', 'oaExecutionError', 'oaQtyAfter', 'oaIsDuplicateAlert', 'oaFmtQty', 'oaNewId'];
+  'oaOrderError', 'oaExecutionError', 'oaQtyAfter', 'oaIsDuplicateAlert', 'oaFmtQty', 'oaNewId', 'oaGapPct'];
 const rules = loadClassic('js/features/order-alert-rules.js', { exports: RULE_NAMES });
 const txCheck = loadClassic('js/features/transaction-check.js', { globals: { PU: globalThis.PU, fmtDate: d => d }, exports: ['txCheckAdd'] });
 
@@ -58,7 +58,7 @@ describe('Écran Ordres et alertes', () => {
       store('real').saveOrders([order()]);
       store('demo').saveOrders([order({ id: 'o2', qty: 7 })]);
       const html = api.renderOrders();
-      expect(html).toContain('Ordres en cours <span class="t-sm" style="font-weight:600">(1)</span>');
+      expect(html).toContain('Ordres en cours <span class="oa-count">1</span>');
       expect(html).toContain('data-oexec="o1"');
       expect(html.includes('data-oexec="o2"')).toBe(false);
       S.isDemo = true;
@@ -69,10 +69,27 @@ describe('Écran Ordres et alertes', () => {
       expect(api.renderOrders()).toContain('<div class="top-bar-title">Ordres</div>');
     });
 
+    it('carte d\'ordre compacte : nom, montant total, sens, compte, écart du cours à la limite', () => {
+      store().saveOrders([order({ limit: 95 })]);
+      const html = api.renderOrders();
+      expect(html).toContain('LVMH <span class="oa-tick">MC</span>');
+      expect(html).toContain('<div class="oa-total t-num">190 EUR</div>');
+      expect(html).toContain('<span class="oa-side buy">Achat</span> 2 × 95 EUR');
+      expect(html).toContain('limite à <b>−5,0 %</b>');
+      expect(html).toContain('data-onew="1"');
+      expect(html).toContain('data-anew="1"');
+    });
+    it('alerte : seuil, écart restant et suppression par icône', () => {
+      store().saveAlerts([alert({ price: 110 })]);
+      const html = api.renderOrders();
+      expect(html).toContain('Alerte si cours ≥ <b>110 EUR</b>');
+      expect(html).toContain('seuil à <b>+10,0 %</b>');
+      expect(html).toContain('class="oa-icon" data-adel="x1"');
+    });
     it('signale les alertes déclenchées et les trie en premier', () => {
       store().saveAlerts([alert({ id: 'x1', price: 500 }), alert({ id: 'x2', price: 90 })]);
       const html = api.renderOrders();
-      expect(html).toContain('(2 · 1 déclenchée)');
+      expect(html).toContain('Alertes de prix <span class="oa-count">2 · 1 déclenchée</span>');
       expect(html.indexOf('data-adel="x2"')).toBeLessThan(html.indexOf('data-adel="x1"'));
     });
 

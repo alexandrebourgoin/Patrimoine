@@ -88,7 +88,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .oa-card{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px}
 .oa-card.hit{border-color:#F59E0B}
 .oa-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.oa-title{font-weight:800;font-size:15px}
+.oa-title{font-weight:800;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .oa-name{font-size:12px;font-weight:600;color:var(--text2)}
 .oa-side{font-size:12px;font-weight:700}
 .oa-side.buy{color:var(--gain)}
@@ -96,9 +96,22 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .oa-pill{font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;background:var(--card);color:var(--text2)}
 .oa-pill.hit{background:rgba(245,158,11,.15);color:#F59E0B}
 .oa-warn{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(245,158,11,.12);color:#F59E0B;font-size:12px;font-weight:600}
-.oa-actions{display:flex;gap:8px;margin-top:12px}
+.oa-actions{display:flex;gap:8px;margin-top:10px}
 .oa-btn{flex:1;height:42px;border-radius:12px;font-weight:700;cursor:pointer}
-.oa-h{font-size:15px;font-weight:800;margin-bottom:2px}
+.oa-h{font-size:15px;font-weight:800}
+.oa-count{font-size:12px;font-weight:700;color:var(--text2);background:var(--card2);border:1px solid var(--border);padding:1px 8px;border-radius:20px;margin-left:4px;vertical-align:2px}
+.oa-sec{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 4px 10px}
+.oa-add{height:32px;padding:0 14px;border-radius:16px;border:0;background:var(--accent-dim);color:var(--accent);font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0}
+.oa-tick{font-size:11px;font-weight:700;color:var(--text3)}
+.oa-total{font-size:15px;font-weight:800;white-space:nowrap}
+.oa-line{margin-top:4px;font-size:13px}
+.oa-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.oa-act{flex:1;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.oa-act.primary{flex:1.4;background:var(--accent);border-color:var(--accent);color:#fff}
+.oa-act.danger{color:var(--loss)}
+.oa-icon{width:32px;height:32px;border-radius:8px;border:0;background:var(--loss-dim);color:var(--loss);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.oa-empty{font-size:13px;color:var(--text2);text-align:center;padding:14px 0;border:1px dashed var(--border);border-radius:var(--r)}
+.oa-note{font-size:11px;color:var(--text3);line-height:1.5;margin:18px 4px 0}
 .oa-banner{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:var(--card2);border:1px solid var(--border)}
 .oa-banner.err{background:var(--loss-dim);color:var(--loss);font-size:13px;font-weight:600;border:0}
 .oa-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);font-size:14px}

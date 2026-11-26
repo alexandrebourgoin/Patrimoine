@@ -53,36 +53,47 @@ function _oaLegacy(data) {
 function _oaRow(k, v) {
   return `<div class="oa-row"><span class="oa-k">${k}</span><span class="oa-v">${v}</span></div>`;
 }
+// « −5,0 % » / « +10,0 % » : chemin restant entre le cours actuel et le prix visé
+function _oaGapText(current, target) {
+  const g = oaGapPct(current, target);
+  return g === null ? '' : `${g >= 0 ? '+' : '−'}${Math.abs(g).toFixed(1).replace('.', ',')} %`;
+}
+// Carte d'ordre compacte : titre et sens, montant total à droite ; quantité × limite, compte, date ; cours actuel et écart.
 function _oaOrderCard(o, { acc, h }) {
   const buy = o.type === 'BUY', hint = _oaHintOf(o, h);
-  return `<div class="oa-card">
+  const date = o.createdAt ? esc(new Date(o.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })) : '';
+  return `<div class="oa-card${hint.hit ? ' hit' : ''}">
     <div class="oa-head">
-      <div class="oa-title">${esc(h.ticker)} <span class="oa-side ${buy ? 'buy' : 'sell'}">${buy ? 'Achat limite' : 'Vente limite'}</span></div>
-      <div class="t-sm">${o.createdAt ? esc(new Date(o.createdAt).toLocaleDateString('fr-FR')) : ''}</div>
+      <div class="oa-title">${esc(h.name || h.ticker)} <span class="oa-tick">${esc(h.ticker)}</span></div>
+      <div class="oa-total t-num">${maskedNative(o.qty * o.limit, h.currency)}</div>
     </div>
-    <div class="t-sm" style="margin-top:2px">${esc(acc.icon || '')} ${esc(acc.name)}</div>
-    <div style="margin-top:8px;font-size:14px">${oaFmtQty(o.qty)} × ${maskedNative(o.limit, h.currency)} = <b>${maskedNative(o.qty * o.limit, h.currency)}</b></div>
-    <div class="t-sm" style="margin-top:2px">Cours actuel : ${maskedNative(h.currentPrice, h.currency)}</div>
+    <div class="oa-line"><span class="oa-side ${buy ? 'buy' : 'sell'}">${buy ? 'Achat' : 'Vente'}</span> ${oaFmtQty(o.qty)} × ${maskedNative(o.limit, h.currency)} · ${esc(acc.icon || '')} ${esc(acc.name)}${date ? ' · ' + date : ''}</div>
+    <div class="oa-line t-sm">Cours ${maskedNative(h.currentPrice, h.currency)}${hint.hit ? '' : ` · limite à <b>${_oaGapText(h.currentPrice, o.limit)}</b>`}</div>
     ${hint.hit ? `<div class="oa-warn">⚠ ${_oaHintText(hint, h)}</div>` : ''}
     <div class="oa-actions">
-      <button class="form-submit" data-oexec="${esc(o.id)}" style="margin:0;flex:2;height:42px">Exécuté ✓</button>
-      <button class="confirm-cancel oa-btn" data-oedit="${esc(o.id)}">Modifier</button>
-      <button class="confirm-cancel oa-btn" data-ocancel="${esc(o.id)}">Annuler</button>
+      <button class="oa-act primary" data-oexec="${esc(o.id)}">Exécuté ✓</button>
+      <button class="oa-act" data-oedit="${esc(o.id)}">Modifier</button>
+      <button class="oa-act danger" data-ocancel="${esc(o.id)}">Annuler</button>
     </div>
   </div>`;
 }
+// Carte d'alerte compacte : titre, statut ; seuil et écart restant ; suppression par une icône
 function _oaAlertCard({ a, q, hit }) {
-  const above = a.dir === 'above';
+  const above = a.dir === 'above', ccy = q ? q.ccy : 'EUR';
   return `<div class="oa-card${hit ? ' hit' : ''}">
     <div class="oa-head">
-      <div class="oa-title">${esc(a.ticker)} <span class="oa-name">${esc(a.name || '')}</span></div>
+      <div class="oa-title">${esc(a.name || a.ticker)} ${a.name ? `<span class="oa-tick">${esc(a.ticker)}</span>` : ''}</div>
       <span class="oa-pill${hit ? ' hit' : ''}">${hit ? 'Déclenchée' : 'En attente'}</span>
     </div>
-    <div style="margin-top:8px;font-size:14px">Cours ${above ? '≥' : '≤'} <b>${maskedNative(a.price, q ? q.ccy : 'EUR')}</b></div>
-    <div class="t-sm" style="margin-top:2px">${q ? 'Cours actuel : ' + maskedNative(q.p, q.ccy) : 'Cours actuel inconnu (titre absent des comptes et du suivi)'}</div>
-    <div style="margin-top:10px"><button class="confirm-cancel oa-btn" data-adel="${esc(a.id)}" style="flex:none;padding:0 18px">Supprimer</button></div>
+    <div class="oa-line">Alerte si cours ${above ? '≥' : '≤'} <b>${maskedNative(a.price, ccy)}</b></div>
+    <div class="oa-foot">
+      <span class="t-sm">${q ? `Cours ${maskedNative(q.p, ccy)}${hit ? '' : ` · seuil à <b>${_oaGapText(q.p, a.price)}</b>`}` : 'Cours actuel inconnu (titre absent des comptes et du suivi)'}</span>
+      <button class="oa-icon" data-adel="${esc(a.id)}" title="Supprimer l'alerte" aria-label="Supprimer l'alerte"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button>
+    </div>
   </div>`;
 }
+// En-tête de section : titre + compteur, bouton d'ajout compact à droite
+const _oaSec = (title, count, attr, label) => `<div class="oa-sec"><div class="oa-h">${title} <span class="oa-count">${count}</span></div><button class="oa-add" ${attr}="1">+ ${label}</button></div>`;
 function renderOrders() {
   const data = oaRead();
   const rows = data.orders.map(o => ({ o, r: _oaTarget(o) })).filter(x => x.r);
@@ -108,15 +119,11 @@ function renderOrders() {
   return `${moduleBarHTML('orders', "Suivi manuel : aucun ordre n'est passé par l'application")}
   <div style="padding:4px 16px 110px">
     ${banner}${legacyCard}
-    <div class="oa-h">Ordres en cours <span class="t-sm" style="font-weight:600">(${rows.length})</span></div>
-    <div class="t-sm" style="margin-bottom:10px">Ordres limites passés chez ton courtier. Confirme l'exécution ici pour ajouter le mouvement au compte.</div>
-    <button class="form-submit" data-onew="1" style="margin:0 0 12px">+ Nouvel ordre limite</button>
-    ${orphanNote}${rows.map(({ o, r }) => _oaOrderCard(o, r)).join('') || '<div class="t-sm" style="text-align:center;padding:16px 0">Aucun ordre en cours.</div>'}
-    <div style="height:1px;background:var(--border);margin:24px 0 18px"></div>
-    <div class="oa-h">Alertes de prix <span class="t-sm" style="font-weight:600">(${alerts.length}${nHit ? ` · ${plural(nHit, 'déclenchée')}` : ''})</span></div>
-    <div class="t-sm" style="margin-bottom:10px">Vérifiées à l'ouverture de l'écran et à chaque actualisation des cours (pas quand l'appli est fermée). La pastille de la barre du bas additionne les ordres en cours et les alertes déclenchées.</div>
-    <button class="form-submit" data-anew="1" style="margin:0 0 12px">+ Nouvelle alerte</button>
-    ${alerts.map(_oaAlertCard).join('') || '<div class="t-sm" style="text-align:center;padding:16px 0">Aucune alerte.</div>'}
+    ${_oaSec('Ordres en cours', rows.length, 'data-onew', 'Ordre')}
+    ${orphanNote}${rows.map(({ o, r }) => _oaOrderCard(o, r)).join('') || '<div class="oa-empty">Aucun ordre en cours.</div>'}
+    ${_oaSec('Alertes de prix', nHit ? `${alerts.length} · ${plural(nHit, 'déclenchée')}` : alerts.length, 'data-anew', 'Alerte')}
+    ${alerts.map(_oaAlertCard).join('') || '<div class="oa-empty">Aucune alerte.</div>'}
+    <div class="oa-note">Ordres limites passés chez ton courtier : « Exécuté ✓ » ajoute le mouvement au compte. Alertes vérifiées à l'ouverture de l'écran et à chaque actualisation des cours (pas quand l'appli est fermée). La pastille additionne les ordres en cours et les alertes déclenchées.</div>
   </div>`;
 }
 
