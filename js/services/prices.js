@@ -397,12 +397,16 @@ async function fetchLivePrices() {
   if (btnSvg) btnSvg.classList.add('spin');
 
   const allH = S.accounts.flatMap(a => a.holdings).filter(h => !priceLocked(h));   // cours saisis à la main ou synchronisés : jamais écrasés
+  const linked = S.accounts.some(a => a.sync);   // comptes liés à une API (eToro : js/services/etoro.js)
   // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
-  if (!allH.length && !S.watchlist.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+  if (!allH.length && !S.watchlist.length && !linked) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
   try {
 
   // Taux de change live (avant recalcHolding pour que valueRef soit correct)
   await fetchFxRates();
+
+  // Comptes liés : solde et positions relus chez le fournisseur, par le même proxy
+  const apiSync = linked ? await etoroSyncAll() : { synced: 0, failed: 0 };
 
   // Tickers uniques : comptes + watchlist (sauf crypto).
   // Fallback yahooSymbolFor → titres hors base envoyés avec leur ticker brut.
@@ -429,6 +433,7 @@ async function fetchLivePrices() {
 
   let updated = 0;
   const errors = [];
+  if (apiSync.failed) errors.push('eToro');
   const prices = {}; // pour savePrices()
 
   // ── Proxy Cloudflare → Yahoo Finance (+ FMP en fallback) ──
@@ -526,7 +531,7 @@ async function fetchLivePrices() {
 
   // ── Finalisation ───────────────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
-  if (updated > 0) {
+  if (updated > 0 || apiSync.synced) {
     S.accounts.forEach(a=>{ a.value=accTotal(a); });
     savePrices(prices);
     snapshotWealth(); // fige la valeur totale du jour avec les cours fraîchement mis à jour
@@ -545,9 +550,9 @@ async function fetchLivePrices() {
     const total = allH.filter(h=>h.type!=='Crypto').length
                 + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
     const partial = updated < total ? ` (${updated}/${total})` : '';
-    toast(errors.length
-      ? `${updated} cours mis à jour · ⚠ ${errors.join(', ')}`
-      : `${updated} cours mis à jour ✓${partial}${partial?' · rafraîchir pour la suite':''}`);
+    const parts = [updated ? `${updated} cours mis à jour${errors.length?'':' ✓'}${partial}` : '',
+      apiSync.synced ? `${apiSync.synced} compte${apiSync.synced>1?'s':''} lié${apiSync.synced>1?'s':''} synchronisé${apiSync.synced>1?'s':''} ✓` : ''].filter(Boolean);
+    toast(parts.join(' · ') + (errors.length ? ` · ⚠ ${errors.join(', ')}` : partial ? ' · rafraîchir pour la suite' : ''));
   } else {
     toast(errors.length ? `Erreur : ${errors.join(', ')}` : 'Aucun cours trouvé');
   }

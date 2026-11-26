@@ -141,15 +141,14 @@ bioAvailable().then(v => {
 });
 if (lockArmed()) lockApp();
 else document.documentElement.classList.remove('locked');
-// Comptes eToro : synchro automatique si la dernière date de plus d'1 h (js/services/etoro.js)
-etoroSyncDue();
 // Suivre les changements du thème système (uniquement en mode auto)
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
   if(S.theme==='auto') applyTheme('auto');
 });
 // Auto-refresh au démarrage (uniquement si activé dans les réglages)
 if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000);
+  // Cours de plus de 15 min, ou compte lié (eToro) synchronisé il y a plus d'1 h
+  const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000) || etoroDue(S.accounts).length > 0;
   if (_stale) setTimeout(fetchLivePrices, 800);
 }
 // Popup changelog si nouvelle version

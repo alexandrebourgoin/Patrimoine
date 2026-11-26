@@ -218,14 +218,12 @@
 <div id="et-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
   <div class="modal-drag"></div>
   <div class="modal-body">
-    <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="et-title">Connecter un compte eToro</div><div id="et-close" class="oa-x">✕</div></div>
+    <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="et-title">Réglages eToro</div><div id="et-close" class="oa-x">✕</div></div>
     <div class="t-sm" style="margin-bottom:12px">Lecture seule : l'app lit ton solde et tes positions, sans jamais passer d'ordre. Crée une clé sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b> seulement, puis copie la clé utilisateur tout de suite (elle n'est affichée qu'une fois).</div>
-    <div class="form-row" id="et-name-row"><div class="form-field"><div class="form-label">Nom du compte</div><input class="form-input" id="et-name" type="text" autocomplete="off"></div></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Clé publique <span style="font-weight:400;color:var(--text3)">(pré-remplie, la même pour tous)</span></div><input class="form-input" id="et-api" type="text" autocomplete="off" spellcheck="false" style="font-size:12px"></div></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur <span style="font-weight:400;color:var(--text3)">(affichée une seule fois par eToro)</span></div><input class="form-input" id="et-user" type="password" autocomplete="off" spellcheck="false"></div></div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Relais (optionnel)</div><input class="form-input" id="et-proxy" type="url" placeholder="https://mon-relais.workers.dev" autocomplete="off" spellcheck="false"></div></div>
-    <div class="t-sm" style="margin:-4px 0 12px">À renseigner seulement si eToro refuse l'appel direct depuis le navigateur : voir etoro-proxy-worker.js. Les clés restent sur cet appareil : elles ne sont ni sauvegardées ni exportées.</div>
-    <button class="form-submit" id="et-submit">Connecter</button>
+    <div class="t-sm" style="margin:-4px 0 12px">Les clés restent sur cet appareil : elles ne sont ni sauvegardées ni exportées.</div>
+    <button class="form-submit" id="et-submit">Tester et enregistrer</button>
     <div id="et-del" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--loss);cursor:pointer">Supprimer les clés de cet appareil</div>
   </div>
 </div>
@@ -427,6 +425,15 @@
         <input class="form-input" type="date" id="acc-start">
       </div>
     </div>
+    <!-- Liaison API (tous types) : js/screens/etoro.js -->
+    <div class="form-row"><div class="form-field"><div class="form-label">Lier à une API <span style="font-weight:400;color:var(--text3)">(optionnel)</span></div>
+      <select class="form-input" id="acc-sync" style="cursor:pointer"><option value="">Non : saisie manuelle</option><option value="etoro">eToro (lecture seule)</option></select></div></div>
+    <div id="acc-sync-box" class="hidden">
+      <div class="t-sm" style="margin:-4px 0 12px">Solde et positions lus chez eToro, sans jamais passer d'ordre. Crée une clé sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b>, puis copie la clé utilisateur tout de suite (elle n'est affichée qu'une fois).</div>
+      <div class="form-row"><div class="form-field"><div class="form-label">Clé publique <span style="font-weight:400;color:var(--text3)">(pré-remplie, la même pour tous)</span></div><input class="form-input" id="acc-et-api" type="text" autocomplete="off" spellcheck="false" style="font-size:12px"></div></div>
+      <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur</div><input class="form-input" id="acc-et-user" type="password" autocomplete="off" spellcheck="false" placeholder="Clé utilisateur (User key)"></div></div>
+      <div class="t-sm" style="margin:-4px 0 12px">Mise à jour avec les cours (bouton rafraîchir). Les clés restent sur cet appareil, jamais sauvegardées ni exportées.</div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
         <div style="font-size:14px;font-weight:600">Compte observateur</div>
@@ -435,7 +442,6 @@
       <div class="toggle" id="acc-obs-tog"><div class="toggle-thumb"></div></div>
     </div>
     <button class="form-submit" id="acc-submit">Créer le compte</button>
-    <div id="acc-etoro-link" class="tap" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer">Ou connecter un compte eToro (synchronisé) →</div>
   </div>
 </div>
 
