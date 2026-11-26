@@ -135,6 +135,9 @@ describe('Accueil', () => {
     const order = ['Alerte &lt;b&gt;', 'Échéance A', 'Échéance B', 'Info'].map(t => html.indexOf(t));
     expect(order.every(i => i > 0)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
+    // ordre de l'accueil : patrimoine, évolution, puis « À surveiller »
+    expect(html.indexOf('Patrimoine net')).toBeLessThan(html.indexOf('hist-card'));
+    expect(html.indexOf('hist-card')).toBeLessThan(html.indexOf('À surveiller'));
   });
   it('toucher une ligne ou un élément ouvre son module ; un compte précis s ouvre directement', () => {
     HW = { t: () => [{ level: 'info', text: 'PEA 5 ans', go: 'account', accountId: 'a' }] };
