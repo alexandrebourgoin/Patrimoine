@@ -122,15 +122,10 @@ function histSvg(pts, w, h) {
   </svg>`;
 }
 
-function initHistChart(container, pts) {
-  const svg = container.querySelector('#hist-svg');
-  const tip = container.querySelector('.hist-tip');
-  if (!svg || !pts || pts.length < 2) return;
-  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
-  const pad = 2;
-  const xhair = svg.querySelector('#hist-xhair');
-  const dot = svg.querySelector('#hist-dot');
-
+// Curseur commun aux courbes (patrimoine, titre suivi) : ligne verticale + point sur la valeur la plus proche, info-bulle.
+// tipText(i) : texte de l'info-bulle pour le point i ; tipW : largeur estimée de l'info-bulle (bascule à gauche du doigt).
+function _bindChartCursor(svg, pts, { xhair, dot, tip, tipW, tipText }) {
+  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1, pad = 2;
   function update(clientX) {
     const rect = svg.getBoundingClientRect();
     const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
@@ -142,24 +137,34 @@ function initHistChart(container, pts) {
     xhair.setAttribute('opacity', '1');
     dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
     dot.setAttribute('opacity', '1');
+    if (!tip) return;
     let tipX = relX + 10;
-    if (tipX + 115 > rect.width) tipX = relX - 125;
+    if (tipX + tipW > rect.width) tipX = relX - tipW - 8;
     tip.style.left = Math.max(0, tipX) + 'px';
     tip.style.top = Math.max(0, y - 22) + 'px';
-    if(S.privacy){tip.style.opacity='0';return;}
+    if (S.privacy) { tip.style.opacity = '0'; return; }
     tip.style.opacity = '1';
-    tip.textContent = fmtCur(pts[i]);
+    tip.textContent = tipText(i);
   }
   function hide() {
     xhair.setAttribute('opacity', '0');
     dot.setAttribute('opacity', '0');
-    tip.style.opacity = '0';
+    if (tip) tip.style.opacity = '0';
   }
   svg.addEventListener('touchstart', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchmove', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
+  svg.addEventListener('touchmove',  e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
   svg.addEventListener('touchend', hide, { passive: true });
   svg.addEventListener('mousemove', e => update(e.clientX));
   svg.addEventListener('mouseleave', hide);
+}
+
+function initHistChart(container, pts) {
+  const svg = container.querySelector('#hist-svg');
+  if (!svg || !pts || pts.length < 2) return;
+  _bindChartCursor(svg, pts, {
+    xhair: svg.querySelector('#hist-xhair'), dot: svg.querySelector('#hist-dot'), tip: container.querySelector('.hist-tip'),
+    tipW: 115, tipText: i => fmtCur(pts[i]),
+  });
 }
 
 // Construit pts[] (un point par jour calendaire) depuis une série réelle :
@@ -237,7 +242,7 @@ function stockChartSvg(h, w, ch, period) {
   // BUY / SELL markers mapped to extended history window
   const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
     const idx = Math.max(0, Math.min(days-1, Math.round((new Date(tx.date+'T00:00:00') - startDate) / 86400000)));
-    const x = xs[idx].toFixed(1);
+    const x = Math.max(4, Math.min(w - 4, xs[idx])).toFixed(1);   // marqueur entier, même au bord du graphique
     const yy = ys[idx].toFixed(1);
     const mc = tx.type==='BUY'?'var(--gain)':'var(--loss)';
     return `<line x1="${x}" x2="${x}" y1="${padT}" y2="${ch-padB}" stroke="${mc}" stroke-width="1.5" opacity="0.55"/>
@@ -363,44 +368,12 @@ function watchChartSvg(pts, w, h, wCur = 'EUR') {
 
 function initWatchChart(container, pts, startDate, wCur = 'EUR') {
   const svg = container.querySelector('#watch-svg');
-  const tip = container.querySelector('#watch-chart-tip');
   if (!svg || !pts || pts.length < 2) return;
-  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
-  const pad = 2;
-  const xhair = svg.querySelector('#watch-xhair');
-  const dot = svg.querySelector('#watch-dot');
-  function update(clientX) {
-    const rect = svg.getBoundingClientRect();
-    const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const idx = Math.round((relX - pad) / (rect.width - pad * 2) * (pts.length - 1));
-    const i = Math.max(0, Math.min(pts.length - 1, idx));
-    const x = pad + (i / (pts.length - 1)) * (rect.width - pad * 2);
-    const y = pad + (1 - (pts[i] - mn) / rng) * (rect.height - pad * 2);
-    xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
-    xhair.setAttribute('opacity', '1');
-    dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
-    dot.setAttribute('opacity', '1');
-    let tipX = relX + 10;
-    if (tipX + 145 > rect.width) tipX = relX - 153;
-    if (tip) {
-      tip.style.left = Math.max(0, tipX) + 'px';
-      tip.style.top = Math.max(0, y - 22) + 'px';
-      if(S.privacy){tip.style.opacity='0';return;}
-      tip.style.opacity = '1';
-      const d = new Date(startDate.getTime() + i * 86400000);
-      tip.textContent = fmtNative(pts[i], wCur) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-    }
-  }
-  function hide() {
-    xhair.setAttribute('opacity', '0');
-    dot.setAttribute('opacity', '0');
-    if (tip) tip.style.opacity = '0';
-  }
-  svg.addEventListener('touchstart', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchmove',  e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchend', hide, { passive: true });
-  svg.addEventListener('mousemove', e => update(e.clientX));
-  svg.addEventListener('mouseleave', hide);
+  _bindChartCursor(svg, pts, {
+    xhair: svg.querySelector('#watch-xhair'), dot: svg.querySelector('#watch-dot'), tip: container.querySelector('#watch-chart-tip'),
+    tipW: 145,
+    tipText: i => fmtNative(pts[i], wCur) + '  ' + new Date(startDate.getTime() + i * 86400000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+  });
 }
 
 // ═══════════════════════════════════════════════

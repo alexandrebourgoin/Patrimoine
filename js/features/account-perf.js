@@ -88,7 +88,7 @@ function accPerfSummary(acc, perf, ctx, valueOnDay) {
   let ytd = all, approx = false;
   if (t0 <= pye) {
     const v0 = valueOnDay(pye); approx = v0.approx;
-    ytd = accPerfPeriod(acc, pye, v0.v, false, ctx);
+    ytd = v0.unknown ? null : accPerfPeriod(acc, pye, v0.v, false, ctx);   // aucun cours au 31/12 : YTD inconnu (« — »)
   }
   const years = (_apDay(ctx.today) - _apDay(t0)) / 365.25;
   const annual = years >= 1 && all.pct > -100 ? (Math.pow(1 + all.pct / 100, 1 / years) - 1) * 100 : null;
@@ -107,14 +107,17 @@ function accPerfPct(acc, mode, ctx, valueOnDay) {
 // env = { qtyOnDay(position, jour), closeOn(ticker, jour) → cours | null, conv(montant, devise), cashOn(compte, jour) }
 // approx = true si un titre n'a pas d'historique de cours à cette date (son cours actuel est alors utilisé).
 function accValueOnDay(acc, day, env) {
-  let tot = 0, approx = false;
+  let tot = 0, approx = false, known = 0, held = 0;
   (acc.holdings || []).forEach(h => {
     const q = env.qtyOnDay(h, day);
     if (q <= 0) return;
+    held++;
     let price = env.closeOn(h.ticker, day);
-    if (price == null) { price = h.currentPrice; approx = true; }
+    if (price == null) { price = h.currentPrice; approx = true; } else known++;
     tot += env.conv(q * price, h.currency);
   });
   tot += env.cashOn(acc, day);
-  return { v: tot, approx };
+  // unknown : AUCUN cours de clôture connu pour les titres détenus ce jour-là. La « valeur » ne serait que les cours
+  // actuels : une performance calculée dessus vaudrait ~0 % sans rien mesurer.
+  return { v: tot, approx, unknown: held > 0 && known === 0 };
 }

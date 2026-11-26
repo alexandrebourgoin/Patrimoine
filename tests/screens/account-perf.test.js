@@ -21,11 +21,25 @@ describe('écran du compte : performance, poches, indice', () => {
         masked: v => v.toFixed(2) + '€', maskedNative: (v, c) => `${v.toFixed(2)} ${c}`, esc: s => String(s), fmtDate: d => d, fmtPct: v => (v >= 0 ? '+' : '') + v.toFixed(2) + ' %', pctClass: v => globalThis.PU ? globalThis.PU.pctClass(v) : (v > 0 ? 't-gain' : v < 0 ? 't-loss' : ''),
         getHistorySeries: t => hist[t] || null, toRefCcy: (v, c) => v / ({ EUR: 1, USD: 1.08 }[c] || 1), _dayKey: () => '2026-06-30', _qtyOnDay: () => qty, accCash: () => 0,
       },
-      exports: ['accPerfNow', 'accPerfPctNow', 'accPerfCardHTML', 'accCashDetailHTML', 'accBenchHTML', '_perfModeSet'],
+      exports: ['accPerfNow', 'accPerfPctNow', 'accPerfCardHTML', 'accCashDetailHTML', 'accBenchHTML', '_perfModeSet', '_closeOn'],
     });
   });
 
-  describe('accPerfNow / accPerfPctNow', () => {
+  describe('cours de démonstration (mode démo sans historique réel)', () => {
+    const h = { ticker: 'DEMO', currentPrice: 200, transactions: [{ date: '2025-06-30', type: 'BUY', qty: 1, price: 100 }] };
+    it('interpolé entre le 1er achat et aujourd\'hui : la performance de démo ne vaut plus 0 %', () => {
+      S.isDemo = true; S.accounts = [{ holdings: [h] }];
+      expect(api._closeOn('DEMO', '2025-06-30')).toBe(100);
+      expect(api._closeOn('DEMO', '2026-06-30')).toBe(200);
+      expect(api._closeOn('DEMO', '2025-12-30')).toBeCloseTo(100 + 100 * 183 / 365, 1);   // 183 jours sur 365
+    });
+    it('jamais en mode réel : sans historique, aucun cours inventé', () => {
+      S.isDemo = false; S.accounts = [{ holdings: [h] }];
+      expect(api._closeOn('DEMO', '2025-12-31')).toBeNull();
+    });
+  });
+
+    describe('accPerfNow / accPerfPctNow', () => {
     it('résume la performance du compte avec le contexte de l\'appli', () => {
       const { perf, sum } = api.accPerfNow(acc());
       expect(perf.net).toBe(1000);
@@ -40,14 +54,13 @@ describe('écran du compte : performance, poches, indice', () => {
 
   describe('carte de performance', () => {
     const held = () => acc({ holdings: [{ ticker: 'X', currency: 'EUR', currentPrice: 100 }] });
-    it('YTD par défaut, avec les boutons de bascule ; valeur au 31 décembre approximative sans historique de cours', () => {
-      qty = 10;   // 10 titres détenus au 31/12 : valeur de départ 1 000 (cours actuel faute d'historique)
+    it('YTD par défaut ; sans AUCUN cours au 31 décembre, « — » et invitation à récupérer l\'historique (pas un faux 0 %)', () => {
+      qty = 10;   // 10 titres détenus au 31/12, aucun cours de clôture connu
       const { perf, sum } = api.accPerfNow(held());
       const html = api.accPerfCardHTML(held(), perf, sum);
       expect(html).toContain('Performance YTD');
-      expect(html).toContain('Depuis le 1er janvier');
-      expect(html).toContain('approximatif');
-      expect(html).toContain('+30.00 %');   // (1300 − 1000) / 1000
+      expect(html).toContain('<div style="font-size:26px;font-weight:800" class="t-num">—</div>');
+      expect(html).toContain('récupère l\'historique des titres');
       expect(html).toContain('data-pm="all"');
     });
     it('YTD sans base de calcul : la carte et sa bascule restent, avec « — » (on peut revenir à l\'historique)', () => {

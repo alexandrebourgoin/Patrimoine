@@ -131,7 +131,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .legend-2l .leg-dot{margin-top:4px;flex-shrink:0}
 .leg-txt{flex:1;min-width:0}
 .leg-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-.leg-line .leg-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.leg-line .leg-name{flex:1;min-width:0;overflow-wrap:anywhere}   /* nom complet, sur deux lignes si besoin */
 .leg-line .leg-pct{flex-shrink:0}
 .bar-item{margin-bottom:12px}
 .bar-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px}
