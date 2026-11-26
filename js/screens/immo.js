@@ -36,7 +36,6 @@ function _imRefresh() {
 // ═══════════════════════════════════════════════
 // RENDU
 // ═══════════════════════════════════════════════
-const _IM_BACK_ICON = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>`;
 function _imRow(k, v, strong) { return `<div class="im-row${strong ? ' strong' : ''}"><span class="im-k">${k}</span><span class="t-num im-v">${v}</span></div>`; }
 function _imSigned(v) { return `<span class="${v < 0 ? 't-loss' : 't-gain'}">${v >= 0 ? '+' : '−'}${masked(Math.abs(v))}</span>`; }
 const _imBanner = () => _imError
@@ -63,7 +62,7 @@ function renderImmo() {
       <div class="t-sm" style="margin-top:4px">Crédit remboursé : ${c.loan.pct.toFixed(1)} %</div>` : ''}
     </button>`;
   }).join('');
-  return `<div class="back tap" id="js-back">${_IM_BACK_ICON} Retour</div>
+  return `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
     <div class="t-title">Immobilier</div>
     <div class="t-sm" style="margin-top:2px">Sélectionne un bien pour consulter sa fiche. Ni loyers, ni fiscalité.</div>
@@ -94,7 +93,7 @@ function _imLoanBlock(p, c) {
 }
 function renderImmoDetail() {
   const p = imRead().find(x => x.id === S.immoId);
-  const back = `<div class="back tap" id="js-back">${_IM_BACK_ICON} Retour aux biens</div>`;
+  const back = backBarHTML('Retour aux biens');
   if (!p) return `${back}<div class="px t-sm">Bien introuvable.</div>`;
   const c = immoCalc(p, _imToday()), L = c.loan;
   return `${back}<div class="im-card">

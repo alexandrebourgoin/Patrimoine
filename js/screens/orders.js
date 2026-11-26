@@ -105,10 +105,7 @@ function renderOrders() {
   const orphanNote = orphans
     ? `<div class="t-sm" style="margin:0 0 10px">${plural(orphans, 'ordre')} sans compte ou titre correspondant (supprimés ?) <span class="tap" data-opurge="1" style="color:var(--accent);font-weight:700;cursor:pointer">Nettoyer</span></div>`
     : '';
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
+  return `${backBarHTML()}
   <div class="settings-top" style="padding-top:4px">
     <div class="t-title">Ordres et alertes</div>
     <div class="t-sm" style="margin-top:2px">Suivi manuel : aucun ordre n'est passé par l'application</div>

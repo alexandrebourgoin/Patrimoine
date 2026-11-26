@@ -51,10 +51,7 @@ function renderStock() {
   const _isWatched = !!S.watchlist.find(w => w.ticker === h.ticker);
   const _hist = getHistorySeries(h.ticker);
   const _histChip = `<span style="font-size:10px;font-weight:600;white-space:nowrap;color:${_hist?'var(--gain)':'var(--text3)'}" title="${_hist?('Historique réel · '+timeSince(_hist.fetchedAt)):'Courbe estimée — touchez l’icône historique pour récupérer les vrais cours'}">${_hist?'● réel':'○ estimé'}</span>`;
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    ${esc(acc.name)}
-  </div>
+  return `${backBarHTML(esc(acc.name))}
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <div>

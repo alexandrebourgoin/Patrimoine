@@ -4,8 +4,7 @@
 // ── WATCHSTOCK ──
 function renderWatchStock() {
   const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
-  if (!watch) return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg> Retour</div>`;
+  if (!watch) return backBarHTML();
 
   const period  = S.watchPeriod || '3M';
   const periods = ['1S','1M','3M','6M','1A'];
@@ -49,10 +48,7 @@ function renderWatchStock() {
     </div>`;
   };
 
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Titres suivis
-  </div>
+  return `${backBarHTML('Titres suivis')}
 
   <div class="stock-hero" style="padding-bottom:10px;border-bottom:none">
     <div class="stock-ticker-badge">${esc(watch.ticker)}</div>
