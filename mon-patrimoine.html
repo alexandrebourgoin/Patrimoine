@@ -482,6 +482,8 @@
       </div>
     </div>
     <div class="t-sm hidden" id="acc-type-env" style="margin:-4px 0 10px"></div>
+    <div class="form-row hidden" id="acc-type-sv"><div class="form-field"><div class="form-label">Solde actuel (€)</div><input class="form-input" id="acc-balance" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div><div class="form-field"><div class="form-label">Taux annuel (%)</div><input class="form-input" id="acc-type-rate" type="number" min="0" max="20" step="0.01" inputmode="decimal" placeholder="1.7"></div></div>
+    <div class="t-sm hidden" id="acc-type-svhint" style="margin:-4px 0 10px">Livret : pas de titres. Le solde au-delà du plafond est compté comme intérêts capitalisés.</div>
     <div class="form-row"><div class="form-field"><div class="form-label">Ma part du compte (%) <span style="font-weight:400;color:var(--text3)">(compte joint)</span></div><input class="form-input" type="number" id="acc-share" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
@@ -594,6 +596,7 @@
       </div>
     </div>
     <div class="t-sm hidden" id="rename-acc-type-env" style="margin:-4px 0 10px"></div>
+    <div class="form-row hidden" id="rename-acc-type-sv"><div class="form-field"><div class="form-label">Taux annuel (%)</div><input class="form-input" id="rename-acc-type-rate" type="number" min="0" max="20" step="0.01" inputmode="decimal" placeholder="1.7"></div></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Ma part du compte (%) <span style="font-weight:400;color:var(--text3)">(compte joint)</span></div><input class="form-input" type="number" id="rename-acc-share" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div></div>
     <button class="form-submit" id="rename-acc-submit">Enregistrer</button>
   </div>
@@ -753,13 +756,15 @@
   <div class="modal-drag"></div>
   <div class="modal-body">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div class="modal-title" style="margin-bottom:0">Apport / Retrait</div>
+      <div class="modal-title" style="margin-bottom:0" id="cf-title">Apport / Retrait</div>
       <div id="cf-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
     <div class="type-btns">
-      <div class="type-btn buy on" data-cftype="DEP">Apport</div>
+      <div class="type-btn buy on" data-cftype="DEP" id="cf-dep-btn">Apport</div>
       <div class="type-btn sell" data-cftype="WIT">Retrait</div>
+      <div class="type-btn buy hidden" data-cftype="INT" id="cf-int-btn">Intérêts</div>
     </div>
+    <div class="t-sm hidden" id="cf-cap" style="margin:-4px 0 10px"></div>
     <div class="form-row">
       <div class="form-field">
         <div class="form-label" id="cf-amount-label">Montant</div>
@@ -956,6 +961,7 @@
 <script src="js/features/wealth.js"></script>
 <script src="js/features/account-perf.js"></script>
 <script src="js/features/tax-envelope.js"></script>
+<script src="js/features/savings.js"></script>
 <script src="js/features/benchmark.js"></script>
 <script src="js/features/cash-pockets.js"></script>
 <script src="js/features/account-rules.js"></script>
@@ -980,6 +986,7 @@
 <script src="js/screens/accounts.js"></script>
 <script src="js/screens/search.js"></script>
 <script src="js/screens/account.js"></script>
+<script src="js/screens/savings.js"></script>
 <script src="js/screens/stock.js"></script>
 <script src="js/screens/analysis.js"></script>
 <script src="js/screens/assistant.js"></script>

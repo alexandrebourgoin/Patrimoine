@@ -38,8 +38,21 @@ function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId, apply
     if(isOther && otherInp) otherInp.focus();
     if(curSelId) syncAccCurrency(selId,curSelId,!!applyCurrency);
     syncAccEnvHint(selId);
+    syncAccSavings(selId,true);
   };
   syncAccEnvHint(selId);
+  syncAccSavings(selId,false);
+}
+
+// Livret / compte d'épargne (js/features/savings.js) : champs solde et taux à la place des titres.
+// prefill : au changement de type, le taux réglementé en vigueur est proposé.
+function syncAccSavings(selId,prefill){
+  const row=document.getElementById(selId+'-sv'), sel=document.getElementById(selId); if(!row||!sel) return;
+  const sv=isSavingsType(sel.value);
+  row.classList.toggle('hidden',!sv);
+  document.getElementById(selId+'-svhint')?.classList.toggle('hidden',!sv);
+  const rate=document.getElementById(selId+'-rate');
+  if(rate&&prefill&&sv) rate.value=SAVINGS_RATES[sel.value]??'';
 }
 
 // Rappel de l'enveloppe fiscale du type choisi (E11), sous la date d'ouverture : ligne `<selId>-env` (règles : js/features/tax-envelope.js)
@@ -72,6 +85,8 @@ function openAccModal(){
   document.getElementById('acc-bank').value='';
   document.getElementById('acc-start').value='';
   document.getElementById('acc-share').value='';
+  document.getElementById('acc-balance').value='';
+  document.getElementById('acc-type-rate').value='';
   fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency',true);
   document.getElementById('acc-currency').value='EUR';
   syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
@@ -104,7 +119,19 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{})});
+  // Livret : taux et solde de départ (le solde au-delà du plafond est compté comme intérêts : savingsOpeningFlows)
+  let rate=null, cashflows=[];
+  if(isSavingsType(type)){
+    const r=savingsRateInput(document.getElementById('acc-type-rate').value); if(r.error){toast(r.error);return;}
+    rate=r.rate;
+    const bal=parseFloat(document.getElementById('acc-balance').value);
+    if(document.getElementById('acc-balance').value!==''&&!(bal>=0)){toast('Solde invalide');return;}
+    const day=startDate||_dayKey(Date.now());
+    cashflows=savingsOpeningFlows(type,bal).map((f,i)=>({id:'cf_'+Date.now().toString(36)+i,date:day,type:f.type,amount:f.amount,ccy:currency,note:'Solde à la création'}));
+  }
+  const acc={id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
+  acc.value=accTotal(acc);
+  S.accounts.push(acc);
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -196,6 +223,7 @@ function openRenameAcc(accId, currentName){
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
   document.getElementById('rename-acc-start').value=acc?.startDate||'';
   document.getElementById('rename-acc-share').value=acc?.share??'';
+  document.getElementById('rename-acc-type-rate').value=acc?.rate??'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
   fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency',false);
   syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : sa devise n'est pas modifiée
@@ -229,6 +257,9 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const startDate=document.getElementById('rename-acc-start').value||'';
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
   const share=accShareInput('rename-acc-share'); if(share===null) return;
+  const rt=isSavingsType(newType)?savingsRateInput(document.getElementById('rename-acc-type-rate').value):{rate:null};
+  if(rt.error){toast(rt.error);return;}
+  if(rt.rate!=null) acc.rate=rt.rate; else delete acc.rate;
   if(share<100) acc.share=share; else delete acc.share;
   if(startDate) acc.startDate=startDate; else delete acc.startDate;
   cfStampCcy(acc); // les apports anciens gardent leur devise : changer la devise du compte ne les réinterprète pas

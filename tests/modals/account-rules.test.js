@@ -8,6 +8,9 @@ const rules = loadClassic('js/features/account-rules.js', {
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
 const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });
+const accPerf = loadClassic('js/features/account-perf.js', { globals: { PU: globalThis.PU }, exports: ['accFlows'] });
+const savings = loadClassic('js/features/savings.js', { globals: { ...taxEnv, ...accPerf },
+  exports: ['SAVINGS_RATES', 'isSavingsType', 'isSavingsAccount', 'savingsRateInput', 'savingsOpeningFlows', 'savingsSummary', 'savingsCeiling', 'savingsDepositError'] });
 const PEA = "Plan d'Épargne en Actions (PEA)", CTO = 'Compte-Titres Ordinaire';
 
 const opts = (...values) => values.map(value => ({ value, disabled: false }));
@@ -28,7 +31,7 @@ describe('modale de compte : devise et type', () => {
     for (const id of ['acc-currency', 'rename-acc-currency']) dom.els[id] = { ...dom.document.getElementById(id), options: opts('EUR', 'USD', 'CHF', 'GBP', 'JPY') };
     api = loadClassic('js/modals/account.js', {
       globals: {
-        ...rules, ...cashPockets, ...taxEnv, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
+        ...rules, ...cashPockets, ...taxEnv, ...savings, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
         refreshMain() { calls.main++; }, saveAccounts() { calls.saved++; }, accTotal: () => 1, renderScreen() {}, _dayKey: () => '2026-11-24',
         registerModal() {}, openConfirm() {}, back() {}, go() {}, iconHtml: s => s,
       },
@@ -181,7 +184,7 @@ describe('modale de position : types d\'actifs du compte', () => {
     expect(dom.els['pos-type'].value).toBe('Action');
   });
   it('sur un compte sans restriction : rien n\'est grisé', () => {
-    acc.type = 'Compte courant';
+    acc.type = 'SCPI / Immobilier';
     api.openPosModal('a1');
     expect(dom.els['pos-type'].options.some(o => o.disabled)).toBe(false);
   });

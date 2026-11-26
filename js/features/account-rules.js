@@ -56,6 +56,8 @@ const ACC_ASSET_TYPES = {
   "Plan d'Épargne Retraite (PER)": _ACC_MARKET_ASSETS,
   "Épargne salariale (PEE / PERCO)": _ACC_MARKET_ASSETS,
   "Pilier 3a": _ACC_MARKET_ASSETS,
+  // Livrets et comptes d'épargne : un solde et un taux, aucun titre (voir js/features/savings.js)
+  "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [], "Compte à terme": [], "Compte courant": [],
 };
 // Comptes dont les actions doivent appartenir à l'Espace économique européen
 const ACC_PEA_TYPES = ["Plan d'Épargne en Actions (PEA)", "PEA-PME"];
@@ -82,6 +84,7 @@ function allowedAssetTypes(accType) { return ACC_ASSET_TYPES[accType] || null; }
 function assetTypeError(acc, type, country) {
   const accType = acc && acc.type;
   const ok = allowedAssetTypes(accType);
+  if (ok && !ok.length) return 'Pas de titres sur ce type de compte : saisis les versements, retraits et intérêts';
   if (ok && !ok.includes(type)) return type === 'Crypto' ? 'Crypto interdite sur ce type de compte' : type + ' interdit sur ce type de compte';
   if (type === 'Action' && ACC_PEA_TYPES.includes(accType)) {
     const c = (country || '').trim().toLowerCase();
@@ -129,6 +132,6 @@ function accCurrencyForType(type, current, available, apply) {
 function assetTypeOptions(accType, values, current, keepValue) {
   const ok = allowedAssetTypes(accType);
   const disabled = values.filter(v => !!ok && !ok.includes(v));
-  const value = !keepValue && ok && !ok.includes(current) ? ok[0] : current;
+  const value = !keepValue && ok && ok.length && !ok.includes(current) ? ok[0] : current;
   return { disabled, value };
 }

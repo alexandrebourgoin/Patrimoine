@@ -67,8 +67,8 @@ describe('enveloppes fiscales : plafonds', () => {
     expect(c.left).toBe(50000);
     expect(c.over).toBe(false);
   });
-  it('livret : versements − retraits ; sans apports saisis, le solde sert d estimation ; dépassement signalé', () => {
-    expect(T.taxEnvelopeInfo(acc('LDDS', [dep('2020-01-01', 12000), wit('2021-01-01', 2000)]), ctx('2026-11-26')).ceiling.left).toBe(2000);
+  it('livret : le solde (intérêts compris) occupe le plafond ; dépassement possible par les intérêts', () => {
+    expect(T.taxEnvelopeInfo(acc('LDDS', [dep('2020-01-01', 12000), wit('2021-01-01', 2000)], { value: 10150 }), ctx('2026-11-26')).ceiling).toMatchObject({ left: 1850, basis: 'balance' });
     const c = T.taxEnvelopeInfo(acc('Livret A', [], { value: 23500 }), ctx('2026-11-26')).ceiling;
     expect(c.used).toBe(23500);
     expect(c.over).toBe(true);

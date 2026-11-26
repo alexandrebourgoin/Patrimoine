@@ -62,14 +62,14 @@ describe('types d\'actifs autorisés', () => {
     });
   });
   it('ne restreint ni les types hors table ni les types saisis librement ni l\'absence de compte', () => {
-    expect(ok('Compte courant', 'Crypto')).toBe(true);
+    expect(ok('SCPI / Immobilier', 'Crypto')).toBe(true);
     expect(ok('Mon compte perso', 'Crypto')).toBe(true);
     expect(R.assetTypeError(null, 'Crypto')).toBe('');
     expect(R.assetTypeError({}, 'Crypto')).toBe('');
   });
   it('allowedAssetTypes : liste ou null', () => {
     expect(R.allowedAssetTypes(PEA)).toEqual(['Action', 'ETF']);
-    expect(R.allowedAssetTypes('Compte courant')).toBeNull();
+    expect(R.allowedAssetTypes('SCPI / Immobilier')).toBeNull();
     expect(R.allowedAssetTypes(undefined)).toBeNull();
   });
   it('liste des pays éligibles : en minuscules, avec « europe » pour les fonds', () => {
@@ -86,7 +86,7 @@ describe('accTypeViolations : changer de type', () => {
     expect(R.accTypeViolations(acc, PEA).map(h => h.ticker)).toEqual(['BTC', 'AAPL']);
     expect(R.accTypeViolations(acc, CTO).map(h => h.ticker)).toEqual(['BTC']);
     expect(R.accTypeViolations(acc, 'Crypto / Exchange').map(h => h.ticker)).toEqual(['MC', 'AAPL']);
-    expect(R.accTypeViolations(acc, 'Compte courant')).toEqual([]);
+    expect(R.accTypeViolations(acc, 'SCPI / Immobilier')).toEqual([]);
   });
   it('compte sans position : aucune violation', () => expect(R.accTypeViolations({}, PEA)).toEqual([]));
 });
@@ -121,5 +121,5 @@ describe('assetTypeOptions : liste des types d\'actifs d\'un formulaire', () => 
     expect(R.assetTypeOptions(PEA, all, 'Crypto', true)).toEqual({ disabled: ['Obligation', 'Cash', 'Crypto'], value: 'Crypto' });
   });
   it('compte crypto : tout sauf la crypto est grisé', () => expect(R.assetTypeOptions('Crypto / Exchange', all, 'Action', false)).toEqual({ disabled: ['Action', 'ETF', 'Obligation', 'Cash'], value: 'Crypto' }));
-  it('type sans restriction : rien n\'est grisé', () => expect(R.assetTypeOptions('Compte courant', all, 'Crypto', false)).toEqual({ disabled: [], value: 'Crypto' }));
+  it('type sans restriction : rien n\'est grisé', () => expect(R.assetTypeOptions('SCPI / Immobilier', all, 'Crypto', false)).toEqual({ disabled: [], value: 'Crypto' }));
 });

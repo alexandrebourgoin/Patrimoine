@@ -28,7 +28,7 @@ describe('csvRejectedTickers', () => {
     expect(rules.csvRejectedTickers({ type: PEA, holdings: [{ ticker: US }] }, [row(US)], SECURITIES_DB)).toEqual([]);
   });
   it('type sans restriction : rien n\'est refusé', () => {
-    expect(rules.csvRejectedTickers({ type: 'Compte courant', holdings: [] }, [row(US), row('ZZZ')], SECURITIES_DB)).toEqual([]);
+    expect(rules.csvRejectedTickers({ type: 'SCPI / Immobilier', holdings: [] }, [row(US), row('ZZZ')], SECURITIES_DB)).toEqual([]);
   });
   it('ignore les lignes sans ticker', () => expect(rules.csvRejectedTickers(pea, [{ qty: 1 }], SECURITIES_DB)).toEqual([]));
 });
@@ -98,7 +98,7 @@ describe('confirmImport', () => {
     expect(toasts.at(-1)).toBe('Compte introuvable');
   });
   it('ignore les lignes incomplètes (sans quantité ou prix)', () => {
-    const a = acc({ type: 'Compte courant' }); S.accounts = [a]; selected = 'a1';
+    const a = acc({ type: 'SCPI / Immobilier' }); S.accounts = [a]; selected = 'a1';
     load([row(FR, { qty: 0 }), row(FR, { price: 0 })]);
     api.confirmImport();
     expect(toasts.at(-1)).toBe('Aucun mouvement à importer');
