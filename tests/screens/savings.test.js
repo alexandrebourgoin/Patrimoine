@@ -7,7 +7,7 @@ const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVEL
 const accPerf = loadClassic('js/features/account-perf.js', { globals: { PU: globalThis.PU }, exports: ['accFlows'] });
 const SV = loadClassic('js/features/savings.js', { globals: { ...taxEnv, ...accPerf }, exports: ['SAVINGS_RATES', 'SAVINGS_RATES_DATE', 'savingsSummary'] });
 const screen = rate => loadClassic('js/screens/savings.js', {
-  globals: { ...SV, masked: v => v.toFixed(2), fmtDate: d => d, esc: s => String(s), iconHtml: s => s, toRefCcy: v => v,
+  globals: { ...SV, masked: v => v.toFixed(2), fmtDate: d => d, esc: s => String(s), accTypeBadgeHTML: t => '[' + t + ']', toRefCcy: v => v,
     accHeroValHTML: a => a.value.toFixed(2), accEnvelopeHTML: () => '<ENV/>', _CHIP: '' },
   exports: ['renderSavingsAccount'],
 }).renderSavingsAccount({ id: 'l', name: 'Livret', type: 'Livret A', currency: 'EUR', value: 10150, holdings: [], rate,

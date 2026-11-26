@@ -87,7 +87,6 @@ function readAccType(selId, fallback){ return document.getElementById(selId)?.va
 let _accObserver=false;
 function openAccModal(){
   _accObserver=false;
-  setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
   document.getElementById('acc-start').value='';
@@ -104,7 +103,6 @@ function openAccModal(){
   setTimeout(()=>document.getElementById('acc-name').focus(),330);
 }
 function closeAccModal(){
-  closeIconPicker();
   document.getElementById('acc-modal-bg').classList.remove('show');
   document.getElementById('acc-modal-sheet').classList.remove('show');
 }
@@ -116,7 +114,6 @@ document.getElementById('acc-obs-tog').addEventListener('click',()=>{
   document.getElementById('acc-obs-tog').classList.toggle('on',_accObserver);
 });
 document.getElementById('acc-submit').addEventListener('click',()=>{
-  const icon=document.getElementById('acc-icon').value.trim()||'📊';
   const type=readAccType('acc-type',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
   const name=document.getElementById('acc-name').value.trim()||accDefaultName(type,bank,S.accounts);   // nom proposé si vide
@@ -125,8 +122,6 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const share=accJointAllowed(type)?accShareInput('acc-share'):100; if(share===null) return;
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
   const id='acc_'+Date.now().toString(36);
-  const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
-  const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
   // Livret : taux et solde de départ (le solde au-delà du plafond est compté comme intérêts : savingsOpeningFlows)
   let rate=null, cashflows=[];
@@ -138,7 +133,7 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
     const day=startDate||_dayKey(Date.now());
     cashflows=savingsOpeningFlows(type,bal).map((f,i)=>({id:'cf_'+Date.now().toString(36)+i,date:day,type:f.type,amount:f.amount,ccy:currency,note:'Solde à la création'}));
   }
-  const acc={id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
+  const acc={id,name,type,bank,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
   acc.value=accTotal(acc);
   S.accounts.push(acc);
   closeAccModal();
@@ -226,7 +221,6 @@ function openRenameAcc(accId, currentName){
   const acc=S.accounts.find(a=>a.id===accId);
   const inp=document.getElementById('rename-acc-input');
   inp.value=currentName||'';
-  setAccIcon('rename-acc-icon','rename-acc-icon-btn',acc?.icon||'📊');
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
@@ -241,7 +235,6 @@ function openRenameAcc(accId, currentName){
   setTimeout(()=>{inp.focus();inp.select();},330);
 }
 function closeRenameAcc(){
-  closeIconPicker();
   document.getElementById('rename-acc-bg').classList.remove('show');
   document.getElementById('rename-acc-sheet').classList.remove('show');
   _renameAccId=null;
@@ -255,7 +248,6 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const name=document.getElementById('rename-acc-input').value.trim()||accDefaultName(newType0,document.getElementById('rename-acc-bank').value,S.accounts.filter(a=>a.id!==acc.id));
   if(newType0!==acc.type){ const limit=accTypeLimitError(S.accounts,newType0,acc.id,acc.observer); if(limit){toast(limit);return;} }
   acc.name=name;
-  acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
   // Changer de type ne doit pas rendre interdites des positions déjà saisies (un compte déjà non conforme reste modifiable sans changer de type)
   const newType=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
   if(newType!==acc.type){

@@ -1,4 +1,5 @@
 // Choix du type de compte : fenêtre à sections colorées par catégorie (pastille, nom court, précision, coche).
+// La pastille du type (accTypeBadgeHTML) sert aussi d'icône du compte partout : liste des comptes, écran du compte, recherche.
 // Le <select> d'origine (#acc-type, #rename-acc-type) reste la source de vérité, caché : la fenêtre en change la valeur et
 // déclenche son onchange (règles de devise, livret, compte joint… : fillAccTypeSelect, js/modals/account.js).
 // Données : ACCOUNT_TYPE_GROUPS, ACCOUNT_TYPE_INFO, accTypeTone (js/features/account-rules.js) ; taux : SAVINGS_RATES (sous garde).
@@ -16,7 +17,8 @@ function accTypeSub(type) {
 function accTypeBadgeHTML(type, size = 36) {
   const info = ACCOUNT_TYPE_INFO[type], tone = accTypeTone(type);
   const abbr = info ? info.abbr : String(type || '?').slice(0, 3);
-  return `<span class="tp-badge tp-${tone || 'autre'}" style="width:${size}px;height:${size}px">${esc(abbr)}</span>`;
+  const fs = Math.max(8, Math.round(size * (abbr.length > 2 ? 0.3 : 0.36)));
+  return `<span class="tp-badge tp-${tone || 'autre'}" style="width:${size}px;height:${size}px;font-size:${fs}px;border-radius:${Math.round(size * 0.28)}px">${esc(abbr)}</span>`;
 }
 // Contenu de la fenêtre. Un type hors liste (données anciennes) est affiché en tête, dans « Type actuel ».
 function typePickerHTML(current) {
@@ -48,6 +50,7 @@ function openTypePicker(selId) {
   document.getElementById('tp-bg').classList.add('show');
   document.getElementById('tp-sheet').classList.add('show');
 }
+function typePickerOpen() { return !!document.getElementById('tp-sheet')?.classList.contains('show'); }
 function closeTypePicker() {
   document.getElementById('tp-bg').classList.remove('show');
   document.getElementById('tp-sheet').classList.remove('show');
@@ -65,4 +68,4 @@ document.getElementById('tp-list').addEventListener('click', e => {
 document.getElementById('tp-bg').addEventListener('click', closeTypePicker);
 document.getElementById('tp-close').addEventListener('click', closeTypePicker);
 ['acc-type', 'rename-acc-type'].forEach(id => document.getElementById(id + '-btn')?.addEventListener('click', () => openTypePicker(id)));
-registerModal('tp-sheet', closeTypePicker);
+// Pas de registerModal : empilée AU-DESSUS des fenêtres de compte, le retour et Échap la ferment seule (js/core/back-handler.js)
