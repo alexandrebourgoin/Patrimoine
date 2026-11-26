@@ -9,6 +9,15 @@ function crSave(list) {
 }
 const _crToday = () => _dayKey(Date.now());
 function _crRefresh() { ['credits', 'creditdetail', 'dashboard', 'analysis'].forEach(id => { if (document.getElementById('s-' + id)) renderScreen(id); }); }
+// Accueil « À surveiller » : échéances des 10 prochains jours (autres crédits et crédits immobiliers)
+HOME_WATCH.credits = () => {
+  const today = _crToday();
+  const loans = [
+    ...crRead().map(c => ({ name: c.name || CREDIT_KINDS[c.kind], schedule: creditSchedule(c, today), go: 'credits' })),
+    ...imRead().flatMap(p => immoLoanSchedules(p, today).map(({ L, s }) => ({ name: L.label || p.name, schedule: s, go: 'immo' }))),
+  ];
+  return homeWatchLoanDue(loans, today, 10).map(l => ({ level: 'soon', when: l.date, go: l.go, text: `Échéance « ${l.name} » le ${fmtDate(l.date)}`, sub: masked(l.amount) + ' assurance comprise' }));
+};
 
 function renderCredits() {
   const list = crRead(), today = _crToday(), T = creditTotals(list, today);
@@ -56,6 +65,7 @@ function renderCreditDetail() {
       ${s.next ? r('Prochaine échéance', fmtDate(s.next.date)) : ''}
       ${r('Fin du crédit', fmtDate(s.end))}
       <div class="tap im-link" data-cramort="1">Tableau d'amortissement →</div>
+      ${s.next ? `<div class="tap im-link" data-crer="1">Simuler un remboursement anticipé →</div>` : ''}
     </div>` : ''}
     ${k < 1 && s ? `<div class="im-sep"></div>${r(`Ma part de la dette (${c.debtShare} %)`, masked(s.remaining * k), true)}` : ''}
     <div class="im-actions">
@@ -79,6 +89,7 @@ SCREEN_BIND.creditdetail = function (el) {
     const c = crRead().find(x => x.id === S.creditId);
     if (e.target.closest('[data-credit]')) return openCreditForm(S.creditId);
     if (e.target.closest('[data-cramort]') && c) return openLoanAmort(esc(c.name || CREDIT_KINDS[c.kind]), creditSchedule(c, _crToday()));
+    if (e.target.closest('[data-crer]') && c) return openEarlyRepay(esc(c.name || CREDIT_KINDS[c.kind]), c, loanAddMonths(c.signDate, 1), 'conso');   // js/screens/early-repay.js
     if (e.target.closest('[data-crdel]') && c) {
       openConfirm(`Supprimer le crédit « ${c.name || CREDIT_KINDS[c.kind]} » ?`, () => {
         if (!crSave(crRead().filter(x => x.id !== c.id))) return;

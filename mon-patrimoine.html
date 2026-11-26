@@ -253,6 +253,40 @@
     <button class="form-submit" id="im-save">Enregistrer</button>
   </div>
 </div>
+<!-- REMBOURSEMENT ANTICIPÉ ET COMPARAISON (js/screens/early-repay.js, calculs : js/features/early-repay.js) -->
+<div id="er-bg" class="add-modal-bg"></div>
+<div id="er-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="er-title">Remboursement anticipé</div><div id="er-close" class="oa-x">✕</div></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Somme remboursée (€) <span id="er-all" class="tap" style="color:var(--accent);font-weight:700;cursor:pointer;margin-left:6px">Tout</span></div><input class="form-input" id="er-amount" type="number" min="0" step="any" inputmode="decimal"></div>
+    </div>
+    <div class="form-row" id="er-mode-row">
+      <div class="form-field"><div class="form-label">Ensuite</div><select class="form-input" id="er-mode" style="cursor:pointer"><option value="duration">Réduire la durée (même mensualité)</option><option value="payment">Réduire la mensualité (même fin)</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Type de crédit</div><select class="form-input" id="er-regime" style="cursor:pointer"><option value="immo">Immobilier</option><option value="conso">Consommation</option></select></div>
+      <div class="form-field"><div class="form-label">Indemnités (IRA)</div><select class="form-input" id="er-ira" style="cursor:pointer"><option value="legal">Plafond légal</option><option value="none">Aucune (contrat)</option><option value="amount">Montant du contrat</option></select></div>
+    </div>
+    <div class="form-row hidden" id="er-ira-val-row"><div class="form-field"><div class="form-label">Indemnités prévues (€)</div><input class="form-input" id="er-ira-val" type="number" min="0" step="any" inputmode="decimal"></div></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Frais de dossier (€)</div><input class="form-input" id="er-fees" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+      <div class="form-field"><div class="form-label">Assurance calculée sur</div><select class="form-input" id="er-insbasis" style="cursor:pointer"><option value="initial">Capital initial (fixe)</option><option value="remaining">Capital restant dû</option></select></div>
+    </div>
+    <div id="er-out"></div>
+    <div id="er-cmp-box">
+      <div class="t-section" style="margin:18px 0 6px">Rembourser ou placer ?</div>
+      <div class="form-row">
+        <div class="form-field"><div class="form-label">Rendement brut (%/an)</div><input class="form-input" id="er-ret" type="number" step="any" inputmode="decimal" placeholder="4"></div>
+        <div class="form-field"><div class="form-label">Frais (%/an)</div><input class="form-input" id="er-pfees" type="number" step="any" inputmode="decimal" placeholder="0"></div>
+        <div class="form-field"><div class="form-label">Impôt sur gains (%)</div><input class="form-input" id="er-tax" type="number" step="any" inputmode="decimal" placeholder="0"></div>
+      </div>
+      <div id="er-cmp"></div>
+    </div>
+  </div>
+</div>
+
 <!-- CRÉDIT (autres crédits : js/screens/credits.js) -->
 <div id="cr-bg" class="add-modal-bg"></div>
 <div id="cr-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
@@ -897,6 +931,7 @@
 <script src="js/core/app-update.js"></script>
 <script src="js/services/prices.js"></script>
 <script src="js/services/csv-import.js"></script>
+<script src="js/features/home-watch.js"></script>
 <script src="js/features/lock.js"></script>
 <script src="js/features/dca-calc.js"></script>
 <script src="js/features/dca-isin.js"></script>
@@ -907,6 +942,7 @@
 <script src="js/features/loan-calc.js"></script>
 <script src="js/features/loan-amort.js"></script>
 <script src="js/features/credits.js"></script>
+<script src="js/features/early-repay.js"></script>
 <script src="js/features/realestate-calc.js"></script>
 <script src="js/features/realestate-storage.js"></script>
 <script src="js/features/wealth.js"></script>
@@ -931,6 +967,7 @@
 <script src="js/modals/order.js"></script>
 <script src="js/modals/cashflow.js"></script>
 <script src="js/modals/cash-adjust.js"></script>
+<script src="js/screens/home-links.js"></script>
 <script src="js/screens/dashboard.js"></script>
 <script src="js/screens/accounts.js"></script>
 <script src="js/screens/search.js"></script>
@@ -944,6 +981,7 @@
 <script src="js/screens/orders.js"></script>
 <script src="js/screens/immo.js"></script>
 <script src="js/screens/credits.js"></script>
+<script src="js/screens/early-repay.js"></script>
 <script src="mon-patrimoine.js"></script>
 </body>
 </html>
