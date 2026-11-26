@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
-const { immoValid } = loadClassic('js/features/realestate-calc.js', { exports: ['immoValid'] });
+const { immoValid } = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoValid'] });
 const { createImmoStore } = loadClassic('js/features/realestate-storage.js', { globals: { immoValid }, exports: ['createImmoStore'] });
 
 function memoryStorage() {

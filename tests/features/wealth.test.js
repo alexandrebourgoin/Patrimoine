@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
-const calc = loadClassic('js/features/realestate-calc.js', { exports: ['immoCalc'] });
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoCalc'] });
 const W = loadClassic('js/features/wealth.js', {
   globals: calc,
   exports: ['wealthProperties', 'wealthBreakdown', 'accPocket', 'analysisData'],

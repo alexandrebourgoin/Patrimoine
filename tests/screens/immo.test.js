@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
 const CALC = ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoLoan', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'];
-const calc = loadClassic('js/features/realestate-calc.js', { exports: CALC });
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: CALC });
 const { createImmoStore } = loadClassic('js/features/realestate-storage.js', { globals: { immoValid: calc.immoValid }, exports: ['createImmoStore'] });
 
 function makeDom() {

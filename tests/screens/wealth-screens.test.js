@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import '../../utils.js';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
 // Accueil et Analyse : mêmes agrégats (js/features/wealth.js), chargés pour de vrai.
-const calc = loadClassic('js/features/realestate-calc.js', { exports: ['immoCalc'] });
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoCalc'] });
 const wealth = loadClassic('js/features/wealth.js', { globals: calc, exports: ['wealthBreakdown', 'analysisData'] });
 const TODAY = '2026-11-22';
 // Couleurs, segments et donut + légende : partagés par l'Analyse et l'Accueil (js/features/charts.js)
