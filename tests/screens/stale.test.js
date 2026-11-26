@@ -181,3 +181,14 @@ describe('finitions SPEC-01b', () => {
     expect(renderNav).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('accueil « À surveiller »', () => {
+  it('enregistre une alerte quand des positions ne sont pas synchronisées (si le registre existe)', () => {
+    const HOME_WATCH = {};
+    let n = 0;
+    loadClassic('js/screens/stale.js', { globals: { S, NAV_BADGES: {}, SCREEN_BIND: {}, HOME_WATCH, staleHoldings: () => Array(n).fill({}) }, exports: [] });
+    expect(HOME_WATCH.stale()).toEqual([]);
+    n = 2;
+    expect(HOME_WATCH.stale()).toEqual([{ level: 'alert', go: 'stale', text: '2 positions non synchronisées', sub: 'Cours inconnu ou trop ancien' }]);
+  });
+});

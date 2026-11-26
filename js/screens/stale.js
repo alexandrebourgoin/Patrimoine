@@ -3,6 +3,11 @@
 // L'ecran est declare dans mon-patrimoine.html (#s-stale).
 
 NAV_BADGES.stale = () => staleHoldings().length;
+// Accueil « À surveiller » (registre HOME_WATCH, js/features/home-watch.js), s'il est présent
+if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.stale = () => {
+  const n = staleHoldings().length;
+  return n ? [{ level: 'alert', go: 'stale', text: `${n} position${n > 1 ? 's' : ''} non synchronisée${n > 1 ? 's' : ''}`, sub: 'Cours inconnu ou trop ancien' }] : [];
+};
 
 // Un seuil peut être franchi sans aucune action : pastille et écran recalculés au retour sur l'app et toutes les 10 min.
 function refreshStaleBadge() {
