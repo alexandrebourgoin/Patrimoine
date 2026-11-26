@@ -1,6 +1,10 @@
 // Écran Réglages : toutes les sections + binding (thème, devise, sécurité, données, débogage…).
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
+// Accueil « À surveiller » (registre HOME_WATCH, js/features/home-watch.js), s'il est présent : sauvegarde en retard (règles : js/features/backup.js)
+if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.backup = () => (!S.isDemo && backupDue(localStorage)
+  ? [{ level: 'alert', go: 'settings', text: 'Sauvegarde à faire', sub: backupAgeLabel(localStorage) }] : []);
+
 // ── SETTINGS ──
 function fxSubText() { return PU.fxSubText(FX_RATES, S.currency || 'EUR', _fxUpdatedAt); }
 

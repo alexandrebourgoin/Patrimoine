@@ -162,3 +162,19 @@ describe('date de dernière sauvegarde visible dans le menu ☰', () => {
     expect(src).toContain("if (e.target.closest('#js-drawer-backup')) { closeDrawer(); runBackup(); return; }");
   });
 });
+
+describe('accueil « À surveiller » : sauvegarde en retard', () => {
+  it('signalée hors démo quand la sauvegarde est due, absente sinon', () => {
+    const HOME_WATCH = {}, S = { isDemo: false };
+    let due = true;
+    loadClassic('js/screens/settings.js', {
+      globals: { S, HOME_WATCH, SCREEN_BIND: {}, PU: {}, localStorage: {}, backupDue: () => due, backupAgeLabel: () => 'Dernière sauvegarde : il y a 12 jours' },
+      exports: [],
+    });
+    expect(HOME_WATCH.backup()).toEqual([{ level: 'alert', go: 'settings', text: 'Sauvegarde à faire', sub: 'Dernière sauvegarde : il y a 12 jours' }]);
+    S.isDemo = true;
+    expect(HOME_WATCH.backup()).toEqual([]);
+    S.isDemo = false; due = false;
+    expect(HOME_WATCH.backup()).toEqual([]);
+  });
+});
