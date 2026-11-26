@@ -132,6 +132,7 @@ function accBenchHTML(acc, perf, sum) {
 
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
+  if(savingsView(acc)) return renderSavingsAccount(acc);   // livret : solde, taux, mouvements, sans titres (js/screens/savings.js)
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
   const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
   const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
@@ -159,6 +160,7 @@ function renderAccount() {
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
+    ${isSavingsAccount(acc)?`<div class="t-sm" style="margin-top:4px;color:var(--loss)">Ce ${esc(acc.type)} contient des titres saisis auparavant : supprime-les pour passer à l'affichage livret (solde, taux, versements).</div>`:''}
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
@@ -327,7 +329,7 @@ function getAccountMoves(acc) {
   (acc.cashflows||[]).forEach(c => {
     mv.push({
       date: c.date, kind: c.type, cfId: c.id,
-      label: c.type==='WIT' ? 'Retrait' : 'Apport',
+      label: c.type==='WIT' ? 'Retrait' : c.type==='INT' ? 'Intérêts' : isSavingsAccount(acc) ? 'Versement' : 'Apport',
       detail: c.note || '', amount: +c.amount||0, ccy: PU.cfCcy(acc, c),
     });
   });
@@ -345,6 +347,7 @@ const MOVE_STYLE = {
   DIV:  { dot:'DIV', cls:'div',  type:'Dividende',  sign:'+', val:'t-gain' },
   DEP:  { dot:'AP',  cls:'buy',  type:'Apport',     sign:'+', val:'t-gain' },
   WIT:  { dot:'RE',  cls:'sell', type:'Retrait',    sign:'−', val:'t-loss' },
+  INT:  { dot:'INT', cls:'div',  type:'Intérêts',   sign:'+', val:'t-gain' },
 };
 
 function renderMovesHTML(acc) {
@@ -354,7 +357,7 @@ function renderMovesHTML(acc) {
   if(cnt) cnt.textContent=`${all.length} mouvement${all.length!==1?'s':''}`;
   if(!all.length){
     el.innerHTML=`<div style="text-align:center;padding:26px 20px;color:var(--text2);font-size:13px">
-      ${S.search?'Aucun mouvement pour cette recherche':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
+      ${S.search?'Aucun mouvement pour cette recherche':isSavingsAccount(acc)?'Aucun mouvement — ajoute un versement ou les intérêts reçus':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
     </div>`;
     return;
   }
@@ -371,7 +374,7 @@ function renderMovesHTML(acc) {
         </div>
         <div class="col right gap4" style="flex-shrink:0">
           <div style="font-size:13px;font-weight:800" class="${st.val} t-num">${st.sign}${maskedNative(m.amount,m.ccy)}</div>
-          <div class="t-sm">${st.type}</div>
+          <div class="t-sm">${m.kind==='DEP'&&isSavingsAccount(acc)?'Versement':st.type}</div>
         </div>
       </div>`;
     }).join('')+
@@ -497,7 +500,8 @@ SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     el.querySelector('#js-back')?.addEventListener('click',back);
 
-    if(acc) renderHoldsHTML(acc);
+    const savings=savingsView(acc);
+    if(acc) { if(savings) renderMovesHTML(acc); else renderHoldsHTML(acc); }
 
     el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
 
@@ -508,7 +512,7 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
     el.querySelectorAll('[data-pm]').forEach(b=>b.addEventListener('click',()=>{ _perfModeSet(b.dataset.pm); renderScreen('account'); }));
     // Indice de comparaison : téléchargement de la série si elle est absente ou ne remonte pas jusqu'à la date de début
-    if(acc && !S.isDemo){
+    if(acc && !savings && !S.isDemo){
       const {sum}=accPerfNow(acc), key=accBenchmarkKey(acc);
       if(sum && BENCHMARKS[key]){
         const ser=benchSeries(getHistorySeries('IDX:'+key),getHistorySeries('IDX:EURUSD'),benchNeedsFx(key,S.currency));
@@ -545,6 +549,7 @@ SCREEN_BIND.account = function (el, id) {
       if(acc) renderHoldsHTML(acc);
     }));
 
+    if(savings) return;   // livret : ni cours à actualiser, ni recherche, ni tri
     initPTR(el,async ()=>{
       if(!acc) return;
       await fetchLivePrices();

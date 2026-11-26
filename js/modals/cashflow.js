@@ -16,11 +16,11 @@ function renderCfList(){
   const accCcy=PU.cfCcy(acc,{});   // devise d'un apport ancien (sans ccy) : celle du compte
   el.innerHTML=`<div class="t-label" style="margin:14px 0 4px">Mouvements enregistrés</div>`+
     cfs.map(c=>{
-      const dep=c.type!=='WIT';
+      const dep=c.type!=='WIT', lab=_cfLabel(acc,c.type);
       return `<div class="tx-item" style="padding:10px 0">
-        <div class="tx-dot ${dep?'buy':'sell'}">${dep?'AP':'RE'}</div>
+        <div class="tx-dot ${c.type==='INT'?'div':dep?'buy':'sell'}">${c.type==='INT'?'INT':dep?'AP':'RE'}</div>
         <div class="flex1 col gap4" style="min-width:0">
-          <div style="font-size:13px;font-weight:700">${dep?'Apport':'Retrait'} · ${fmtDate(c.date)}</div>
+          <div style="font-size:13px;font-weight:700">${lab} · ${fmtDate(c.date)}</div>
           ${c.note?`<div class="t-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.note)}</div>`:''}
         </div>
         <div style="font-size:13px;font-weight:800" class="${dep?'t-gain':'t-loss'} t-num">${dep?'+':'−'}${maskedNative(+c.amount||0,PU.cfCcy(acc,c))}</div>
@@ -40,6 +40,21 @@ function renderCfList(){
   }));
 }
 
+// Libellé d'un mouvement : sur un livret, « Versement » ; les intérêts n'existent que sur les livrets (js/features/savings.js)
+function _cfLabel(acc,type){ return type==='WIT'?'Retrait':type==='INT'?'Intérêts':isSavingsAccount(acc)?'Versement':'Apport'; }
+// Livret : bouton « Intérêts », titre adapté et place restante sous le plafond de versements
+function _cfSyncSavings(acc){
+  const sv=isSavingsAccount(acc);
+  document.getElementById('cf-title').textContent=sv?'Versement / Retrait / Intérêts':'Apport / Retrait';
+  document.getElementById('cf-dep-btn').textContent=sv?'Versement':'Apport';
+  document.getElementById('cf-int-btn').classList.toggle('hidden',!sv);
+  const cap=document.getElementById('cf-cap'), max=sv&&savingsCeiling(acc.type);
+  if(max){
+    const left=Math.max(0,max-Math.max(0,savingsSummary(acc,(v,c)=>toRefCcy(v,c)).net));
+    cap.textContent=`Plafond de versements : ${masked(max)} · reste ${masked(left)} (intérêts non compris).`;
+  }
+  cap.classList.toggle('hidden',!max);
+}
 function openCfModal(accId){
   _cfAccId=accId; _cfType='DEP';
   document.getElementById('cf-amount').value='';
@@ -52,6 +67,7 @@ function openCfModal(accId){
   sel.innerHTML=[...new Set([base,...Object.keys(FX_RATES)])].map(c=>`<option value="${c}">${c}</option>`).join('');
   sel.value=base;
   document.querySelectorAll('[data-cftype]').forEach(b=>b.classList.toggle('on',b.dataset.cftype==='DEP'));
+  _cfSyncSavings(acc);
   renderCfList();
   document.getElementById('cf-modal-bg').classList.add('show');
   document.getElementById('cf-modal-sheet').classList.add('show');
@@ -77,13 +93,15 @@ document.getElementById('cf-submit').addEventListener('click',()=>{
   if(!acc) return;
   if(!acc.cashflows) acc.cashflows=[];
   const ccy=document.getElementById('cf-ccy').value||acc.currency||S.currency;
+  // Livret : un versement ne peut pas dépasser le plafond (les intérêts, eux, peuvent le dépasser)
+  if(_cfType==='DEP'){ const err=savingsDepositError(acc,toRefCcy(amount,ccy),(v,c)=>toRefCcy(v,c)); if(err){toast(err);return;} }
   acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,ccy,note});
   acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
   acc.value=accTotal(acc); // le solde intègre désormais les apports/retraits non investis
   closeCfModal();
   renderScreen('account');
   refreshMain(); // persiste le cashflow (saveData) — sans ça l'apport disparaissait au rechargement
-  toast((_cfType==='DEP'?'Apport':'Retrait')+' enregistré ✓');
+  toast(_cfLabel(acc,_cfType)+(_cfType==='INT'?' enregistrés ✓':' enregistré ✓'));
 });
 
 
