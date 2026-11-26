@@ -161,7 +161,7 @@ function openImportPreview(rows, format, unknownTickers) {
   const divs  = valid.filter(r => r.type === 'DIV').length;
 
   const accountOptions = S.accounts.map(a =>
-    `<option value="${a.id}">${a.icon||'🏦'} ${esc(a.name)}</option>`
+    `<option value="${a.id}">${esc(a.name)}</option>`
   ).join('');
 
   const preview = valid.slice(0, 8).map(r => {
@@ -224,7 +224,7 @@ function confirmImport() {
   const accIdVal = document.getElementById('csv-acc-select')?.value;
   const isNew = accIdVal === '__new__';
   const targetAcc = isNew
-    ? { id: 'csv_' + Date.now(), name: 'Compte importé', type: ACCOUNT_TYPES[0], icon: '📊', iconBg: 'rgba(245,158,11,.13)', value: 0, change1d: 0, holdings: [], cashflows: [] }
+    ? { id: 'csv_' + Date.now(), name: 'Compte importé', type: ACCOUNT_TYPES[0], value: 0, change1d: 0, holdings: [], cashflows: [] }
     : S.accounts.find(a => a.id === accIdVal);
   if (!targetAcc) { toast('Compte introuvable'); return; }
 

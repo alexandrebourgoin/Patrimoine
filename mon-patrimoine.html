@@ -427,6 +427,16 @@
   </div>
 </div>
 
+<!-- CHOIX DU TYPE DE COMPTE (js/modals/type-picker.js) : au-dessus des fenêtres de création et de modification -->
+<div id="tp-bg" class="add-modal-bg" style="z-index:226"></div>
+<div id="tp-sheet" class="add-modal-sheet" style="z-index:227;max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:4px"><div class="modal-title" style="margin-bottom:0">Type de compte</div><div id="tp-close" class="oa-x">✕</div></div>
+    <div id="tp-list"></div>
+  </div>
+</div>
+
 <!-- ADD ACCOUNT MODAL -->
 <div id="acc-modal-bg" class="add-modal-bg"></div>
 <div id="acc-modal-sheet" class="add-modal-sheet">
@@ -437,11 +447,6 @@
       <div id="acc-modal-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
     <div class="form-row">
-      <div class="form-field" style="flex:.4">
-        <div class="form-label">Icône</div>
-        <div class="form-input icon-pick tap" id="acc-icon-btn" title="Choisir une icône">📊</div>
-        <input type="hidden" id="acc-icon" value="📊">
-      </div>
       <div class="form-field">
         <div class="form-label">Nom du compte</div>
         <input class="form-input" type="text" id="acc-name" placeholder="Mon PEA" autocomplete="off">
@@ -450,7 +455,7 @@
     <div class="form-row">
       <div class="form-field">
         <div class="form-label">Type de compte</div>
-        <select class="form-input" id="acc-type" style="cursor:pointer"></select>
+        <select class="form-input tp-native" id="acc-type" tabindex="-1" aria-hidden="true"></select><button type="button" class="form-input tp-btn" id="acc-type-btn" aria-label="Type de compte"></button>
       </div>
       <div class="form-field">
         <div class="form-label">Devise</div>
@@ -461,12 +466,6 @@
           <option value="CHF">CHF ₣</option>
           <option value="JPY">JPY ¥</option>
         </select>
-      </div>
-    </div>
-    <div class="form-row hidden" id="acc-type-other-row">
-      <div class="form-field">
-        <div class="form-label">Préciser le type</div>
-        <input class="form-input" type="text" id="acc-type-other" placeholder="ex : Compte joint" autocomplete="off">
       </div>
     </div>
     <div class="form-row">
@@ -551,11 +550,6 @@
       <div id="rename-acc-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
     </div>
     <div class="form-row">
-      <div class="form-field" style="flex:.4">
-        <div class="form-label">Icône</div>
-        <div class="form-input icon-pick tap" id="rename-acc-icon-btn" title="Choisir une icône">📊</div>
-        <input type="hidden" id="rename-acc-icon" value="📊">
-      </div>
       <div class="form-field">
         <div class="form-label">Nom du compte</div>
         <input class="form-input" type="text" id="rename-acc-input" placeholder="Nom du compte" autocomplete="off">
@@ -564,7 +558,7 @@
     <div class="form-row">
       <div class="form-field">
         <div class="form-label">Type de compte</div>
-        <select class="form-input" id="rename-acc-type" style="cursor:pointer"></select>
+        <select class="form-input tp-native" id="rename-acc-type" tabindex="-1" aria-hidden="true"></select><button type="button" class="form-input tp-btn" id="rename-acc-type-btn" aria-label="Type de compte"></button>
       </div>
       <div class="form-field">
         <div class="form-label">Devise</div>
@@ -575,12 +569,6 @@
           <option value="CHF">CHF ₣</option>
           <option value="JPY">JPY ¥</option>
         </select>
-      </div>
-    </div>
-    <div class="form-row hidden" id="rename-acc-type-other-row">
-      <div class="form-field">
-        <div class="form-label">Préciser le type</div>
-        <input class="form-input" type="text" id="rename-acc-type-other" placeholder="ex : Compte joint" autocomplete="off">
       </div>
     </div>
     <div class="form-row">
@@ -599,28 +587,6 @@
     <div class="form-row hidden" id="rename-acc-type-sv"><div class="form-field"><div class="form-label">Taux annuel (%)</div><input class="form-input" id="rename-acc-type-rate" type="number" min="0" max="20" step="0.01" inputmode="decimal" placeholder="1.7"></div></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Ma part du compte (%) <span style="font-weight:400;color:var(--text3)">(compte joint)</span></div><input class="form-input" type="number" id="rename-acc-share" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div></div>
     <button class="form-submit" id="rename-acc-submit">Enregistrer</button>
-  </div>
-</div>
-
-<!-- ICON PICKER SHEET -->
-<div id="icon-picker-bg" class="icon-picker-bg"></div>
-<div id="icon-picker-sheet" class="icon-picker-sheet">
-  <div class="modal-drag"></div>
-  <div class="modal-body">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="modal-title" style="margin-bottom:0">Icône du compte</div>
-      <div id="icon-picker-close" style="width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:16px;flex-shrink:0">✕</div>
-    </div>
-    <div class="icon-grid" id="icon-picker-grid"></div>
-    <div class="form-row" style="margin-top:14px">
-      <div class="form-field">
-        <div class="form-label">Autre emoji</div>
-        <input class="form-input" type="text" id="icon-picker-free" placeholder="Collez un emoji" maxlength="8" autocomplete="off" style="text-align:center;font-size:20px">
-      </div>
-      <div class="form-field" style="flex:.5;justify-content:flex-end">
-        <button class="form-submit" id="icon-picker-ok" style="margin:0">Utiliser</button>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -975,8 +941,8 @@
 <script src="js/modals/changelog.js"></script>
 <script src="js/modals/confirm.js"></script>
 <script src="js/modals/watchlist.js"></script>
-<script src="js/modals/icon-picker.js"></script>
 <script src="js/modals/account.js"></script>
+<script src="js/modals/type-picker.js"></script>
 <script src="js/modals/position.js"></script>
 <script src="js/modals/order.js"></script>
 <script src="js/modals/cashflow.js"></script>

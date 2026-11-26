@@ -173,6 +173,16 @@ describe('quotes-parts dans le patrimoine (E04, E05)', () => {
   });
 });
 
+describe('part d un compte : seulement pour les types détenus à plusieurs', () => {
+  const rules = loadClassic('js/features/account-rules.js', { exports: ['accJointAllowed'] });
+  const W2 = loadClassic('js/features/wealth.js', { globals: { ...calc, ...rules }, exports: ['accShare'] });
+  it('compte-titres joint à 50 % : 0,5 ; PEA ou livret avec une part saisie avant : compté à 100 %', () => {
+    expect(W2.accShare({ type: 'Compte-Titres Ordinaire', share: 50 })).toBe(0.5);
+    expect(W2.accShare({ type: "Plan d'Épargne en Actions (PEA)", share: 50 })).toBe(1);
+    expect(W2.accShare({ type: 'Livret A', share: 50 })).toBe(1);
+  });
+});
+
 describe('grande classe « Fonds euros »', () => {
   const FE = loadClassic('js/features/wealth.js', { globals: calc, exports: ['analysisData', 'isFondsEuros'] });
   const av = { id: 'av', type: 'Assurance-Vie', value: 100, holdings: [

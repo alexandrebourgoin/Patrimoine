@@ -76,7 +76,7 @@ function _oaOrderCard(o, { acc, h }) {
       <div class="oa-title">${esc(h.name || h.ticker)} <span class="oa-tick">${esc(h.ticker)}</span></div>
       <div class="oa-total t-num">${maskedNative(o.qty * o.limit, h.currency)}</div>
     </div>
-    <div class="oa-line"><span class="oa-side ${buy ? 'buy' : 'sell'}">${buy ? 'Achat' : 'Vente'}</span> ${oaFmtQty(o.qty)} × ${maskedNative(o.limit, h.currency)} · ${esc(acc.icon || '')} ${esc(acc.name)}${date ? ' · ' + date : ''}</div>
+    <div class="oa-line"><span class="oa-side ${buy ? 'buy' : 'sell'}">${buy ? 'Achat' : 'Vente'}</span> ${oaFmtQty(o.qty)} × ${maskedNative(o.limit, h.currency)} · ${esc(acc.name)}${date ? ' · ' + date : ''}</div>
     <div class="oa-line t-sm">Cours ${maskedNative(h.currentPrice, h.currency)}${hint.hit ? '' : ` · limite à <b>${_oaGapText(h.currentPrice, o.limit)}</b>`}</div>
     ${hint.hit ? `<div class="oa-warn">⚠ ${_oaHintText(hint, h)}</div>` : ''}
     <div class="oa-actions">
@@ -197,7 +197,7 @@ function openOaOrder(editId) {
   if (editId && !o) { toast('Ordre introuvable'); return; }
   _oaEditId = o ? o.id : null;
   _oaSetType(o ? o.type : 'BUY');
-  _oaEl('oa-order-acc').innerHTML = accs.map(a => `<option value="${esc(String(a.id))}">${esc(a.icon || '')} ${esc(a.name)}</option>`).join('');
+  _oaEl('oa-order-acc').innerHTML = accs.map(a => `<option value="${esc(String(a.id))}">${esc(a.name)}</option>`).join('');
   if (o) _oaEl('oa-order-acc').value = String(o.accId);
   _oaFillHoldings();
   if (o) _oaEl('oa-order-hold').value = String(o.holdId);
@@ -248,7 +248,7 @@ function openOaExec(id) {
       <div id="oa-exec-close" class="oa-x">✕</div>
     </div>
     ${hint.hit ? `<div class="oa-warn" style="margin:0 0 10px">⚠ ${_oaHintText(hint, h)}</div>` : ''}
-    ${_oaRow('Compte', `${esc(acc.icon || '')} ${esc(acc.name)}${acc.type ? ' · ' + esc(acc.type) : ''}`)}
+    ${_oaRow('Compte', `${esc(acc.name)}${acc.type ? ' · ' + esc(acc.type) : ''}`)}
     ${_oaRow('Titre', `${esc(h.ticker)} — ${esc(h.name)}`)}
     ${_oaRow('Sens', o.type === 'BUY' ? 'Achat' : 'Vente')}
     ${_oaRow('Quantité', oaFmtQty(o.qty))}

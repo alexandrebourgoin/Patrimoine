@@ -2,7 +2,7 @@
 // Pas de totaux versé / retiré / intérêts en tête (demande de Julien, 26/11) : seul le solde actuel compte.
 // Pas de portefeuille ni de titres. Appelé par renderAccount() (js/screens/account.js) quand isSavingsAccount(acc).
 // Règles pures : js/features/savings.js ; plafond et fiscalité : accEnvelopeHTML (js/screens/account.js).
-// Dépend, À L'APPEL seulement, de S, masked, fmtDate, esc, backBarHTML, iconHtml, toRefCcy, accEnvelopeHTML.
+// Dépend, À L'APPEL seulement, de S, masked, fmtDate, esc, backBarHTML, accTypeBadgeHTML, toRefCcy, accEnvelopeHTML.
 
 function renderSavingsAccount(acc) {
   const sv = savingsSummary(acc, (v, c) => toRefCcy(v, c));
@@ -14,7 +14,7 @@ function renderSavingsAccount(acc) {
   return `${backBarHTML()}
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
-      <div style="font-size:26px">${iconHtml(acc.icon)}</div>
+      ${accTypeBadgeHTML(acc.type, 40)}
       <div class="col" style="gap:2px;flex:1;min-width:0">
         <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}</div>
         <div class="t-sm">${esc(acc.type || '')}${acc.bank ? ' · ' + esc(acc.bank) : ''}</div>

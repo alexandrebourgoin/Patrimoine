@@ -6,7 +6,9 @@
 // Une table de règles qui référencerait un libellé inconnu serait inopérante sans bruit : on le signale dès le démarrage.
 accountRulesProblems().forEach(p => console.warn('[règles de comptes] ' + p));
 taxEnvelopeProblems(ACCOUNT_TYPES).forEach(p => console.warn('[enveloppes fiscales] type inconnu : ' + p));
-const ACC_TYPE_OTHER = '__other__';
+// Accueil « À surveiller » (sous garde) : plus de comptes d'un type que permis (ex. deux Livret A)
+if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.accountLimits = () => accTypeLimitProblems(S.accounts)
+  .map(x => ({ level: 'alert', go: 'comptes', text: `${x.count} comptes « ${x.type} »`, sub: x.max === 1 ? 'Un seul autorisé par personne : supprime le doublon ou passe-le en « Compte observateur »' : `Au plus ${x.max} par personne` }));
 
 // Aligne le sélecteur de devise sur le type choisi (règle : accCurrencyForType). apply = true à la création, false pour un compte existant.
 function syncAccCurrency(typeSelId, curSelId, apply){
@@ -18,30 +20,40 @@ function syncAccCurrency(typeSelId, curSelId, apply){
   cur.title=r.reason;
 }
 
-// Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
-// « Préciser le type », affichée quand l'option « Autre… » est choisie.
+// Remplit un <select> de types, regroupés par catégorie (ACCOUNT_TYPE_GROUPS), et pré-sélectionne `value`.
+// Un type hors liste (données anciennes) est conservé dans une section « Type actuel ».
 // `curSelId` (optionnel) : sélecteur de devise à aligner sur le type ; `applyCurrency` : true à la création (la devise suit le type).
-function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId, applyCurrency){
+function fillAccTypeSelect(selId, value, curSelId, applyCurrency){
   const sel=document.getElementById(selId); if(!sel) return;
-  // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
-  const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
-  sel.innerHTML=types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')
-    +`<option value="${ACC_TYPE_OTHER}">Autre…</option>`;
+  const opt=t=>`<option value="${esc(t)}">${esc(t)}</option>`;
+  const legacy=value&&!ACCOUNT_TYPES.includes(value)?`<optgroup label="Type actuel">${opt(value)}</optgroup>`:'';
+  sel.innerHTML=legacy+ACCOUNT_TYPE_GROUPS.map(g=>`<optgroup label="${esc(g.label)}">${g.types.map(opt).join('')}</optgroup>`).join('');
   sel.value=value||ACCOUNT_TYPES[0];
-  const otherRow=document.getElementById(otherRowId);
-  const otherInp=document.getElementById(otherInpId);
-  if(otherInp) otherInp.value='';
-  if(otherRow) otherRow.classList.add('hidden');
   sel.onchange=()=>{
-    const isOther=sel.value===ACC_TYPE_OTHER;
-    if(otherRow) otherRow.classList.toggle('hidden',!isOther);
-    if(isOther && otherInp) otherInp.focus();
     if(curSelId) syncAccCurrency(selId,curSelId,!!applyCurrency);
     syncAccEnvHint(selId);
     syncAccSavings(selId,true);
+    syncAccShareRow(selId);
+    syncAccNamePlaceholder();
   };
   syncAccEnvHint(selId);
   syncAccSavings(selId,false);
+  syncAccShareRow(selId);
+  if(typeof syncTypePickerButton==='function') syncTypePickerButton(selId);   // bouton du choix du type (js/modals/type-picker.js)
+}
+
+// Part du compte (compte joint) : seulement pour les types qui peuvent être détenus à plusieurs (accJointAllowed)
+function syncAccShareRow(selId){
+  const sel=document.getElementById(selId), inp=document.getElementById(selId.replace(/-type$/,'-share'));
+  if(!sel||!inp) return;
+  const ok=accJointAllowed(sel.value);
+  inp.closest?.('.form-row')?.classList.toggle('hidden',!ok);
+  if(!ok) inp.value='';
+}
+// Nom proposé (création) : affiché en grisé, retenu si le champ reste vide
+function syncAccNamePlaceholder(){
+  const inp=document.getElementById('acc-name'); if(!inp) return;
+  inp.placeholder=accDefaultName(readAccType('acc-type',ACCOUNT_TYPES[0]),document.getElementById('acc-bank')?.value,S.accounts);
 }
 
 // Livret / compte d'épargne (js/features/savings.js) : champs solde et taux à la place des titres.
@@ -66,13 +78,8 @@ function syncAccEnvHint(selId){
   el.classList.toggle('hidden',!parts.length);
 }
 
-// Valeur retenue : le texte libre si « Autre… » est sélectionné, sinon l'option choisie.
-function readAccType(selId, otherInpId, fallback){
-  const sel=document.getElementById(selId);
-  const v=sel?.value||'';
-  if(v===ACC_TYPE_OTHER) return document.getElementById(otherInpId)?.value.trim()||fallback;
-  return v||fallback;
-}
+// Type choisi dans la liste (ou le type actuel conservé)
+function readAccType(selId, fallback){ return document.getElementById(selId)?.value||fallback; }
 
 // ═══════════════════════════════════════════════
 // ADD ACCOUNT MODAL
@@ -80,44 +87,41 @@ function readAccType(selId, otherInpId, fallback){
 let _accObserver=false;
 function openAccModal(){
   _accObserver=false;
-  setAccIcon('acc-icon','acc-icon-btn','📊');
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
   document.getElementById('acc-start').value='';
   document.getElementById('acc-share').value='';
   document.getElementById('acc-balance').value='';
   document.getElementById('acc-type-rate').value='';
-  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency',true);
+  fillAccTypeSelect('acc-type','','acc-currency',true);
   document.getElementById('acc-currency').value='EUR';
   syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
+  syncAccNamePlaceholder();
   setTimeout(()=>document.getElementById('acc-name').focus(),330);
 }
 function closeAccModal(){
-  closeIconPicker();
   document.getElementById('acc-modal-bg').classList.remove('show');
   document.getElementById('acc-modal-sheet').classList.remove('show');
 }
 document.getElementById('acc-modal-bg').addEventListener('click',closeAccModal);
 document.getElementById('acc-modal-close').addEventListener('click',closeAccModal);
+document.getElementById('acc-bank').addEventListener('input',syncAccNamePlaceholder);
 document.getElementById('acc-obs-tog').addEventListener('click',()=>{
   _accObserver=!_accObserver;
   document.getElementById('acc-obs-tog').classList.toggle('on',_accObserver);
 });
 document.getElementById('acc-submit').addEventListener('click',()=>{
-  const icon=document.getElementById('acc-icon').value.trim()||'📊';
-  const name=document.getElementById('acc-name').value.trim();
-  const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
+  const type=readAccType('acc-type',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
+  const name=document.getElementById('acc-name').value.trim()||accDefaultName(type,bank,S.accounts);   // nom proposé si vide
+  const limit=accTypeLimitError(S.accounts,type,null,_accObserver); if(limit){toast(limit);return;}
   const startDate=document.getElementById('acc-start').value||'';
-  const share=accShareInput('acc-share'); if(share===null) return;
-  if(!name){toast('Nom du compte requis');return;}
+  const share=accJointAllowed(type)?accShareInput('acc-share'):100; if(share===null) return;
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
   const id='acc_'+Date.now().toString(36);
-  const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
-  const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
   // Livret : taux et solde de départ (le solde au-delà du plafond est compté comme intérêts : savingsOpeningFlows)
   let rate=null, cashflows=[];
@@ -129,7 +133,7 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
     const day=startDate||_dayKey(Date.now());
     cashflows=savingsOpeningFlows(type,bal).map((f,i)=>({id:'cf_'+Date.now().toString(36)+i,date:day,type:f.type,amount:f.amount,ccy:currency,note:'Solde à la création'}));
   }
-  const acc={id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
+  const acc={id,name,type,bank,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
   acc.value=accTotal(acc);
   S.accounts.push(acc);
   closeAccModal();
@@ -217,7 +221,6 @@ function openRenameAcc(accId, currentName){
   const acc=S.accounts.find(a=>a.id===accId);
   const inp=document.getElementById('rename-acc-input');
   inp.value=currentName||'';
-  setAccIcon('rename-acc-icon','rename-acc-icon-btn',acc?.icon||'📊');
   const curSel=document.getElementById('rename-acc-currency');
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
@@ -225,14 +228,13 @@ function openRenameAcc(accId, currentName){
   document.getElementById('rename-acc-share').value=acc?.share??'';
   document.getElementById('rename-acc-type-rate').value=acc?.rate??'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
-  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency',false);
+  fillAccTypeSelect('rename-acc-type',acc?.type||'','rename-acc-currency',false);
   syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : sa devise n'est pas modifiée
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
   setTimeout(()=>{inp.focus();inp.select();},330);
 }
 function closeRenameAcc(){
-  closeIconPicker();
   document.getElementById('rename-acc-bg').classList.remove('show');
   document.getElementById('rename-acc-sheet').classList.remove('show');
   _renameAccId=null;
@@ -240,14 +242,14 @@ function closeRenameAcc(){
 document.getElementById('rename-acc-bg').addEventListener('click',closeRenameAcc);
 document.getElementById('rename-acc-close').addEventListener('click',closeRenameAcc);
 document.getElementById('rename-acc-submit').addEventListener('click',()=>{
-  const name=document.getElementById('rename-acc-input').value.trim();
-  if(!name){toast('Nom requis');return;}
   const renamedId=_renameAccId;
   const acc=S.accounts.find(a=>a.id===renamedId); if(!acc) return;
+  const newType0=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
+  const name=document.getElementById('rename-acc-input').value.trim()||accDefaultName(newType0,document.getElementById('rename-acc-bank').value,S.accounts.filter(a=>a.id!==acc.id));
+  if(newType0!==acc.type){ const limit=accTypeLimitError(S.accounts,newType0,acc.id,acc.observer); if(limit){toast(limit);return;} }
   acc.name=name;
-  acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
   // Changer de type ne doit pas rendre interdites des positions déjà saisies (un compte déjà non conforme reste modifiable sans changer de type)
-  const newType=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
+  const newType=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
   if(newType!==acc.type){
     const bad=accTypeViolations(acc,newType);
     if(bad.length){toast('Type incompatible avec : '+bad.map(h=>h.ticker).join(', '));return;}
@@ -256,7 +258,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   const startDate=document.getElementById('rename-acc-start').value||'';
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
-  const share=accShareInput('rename-acc-share'); if(share===null) return;
+  const share=accJointAllowed(newType)?accShareInput('rename-acc-share'):100; if(share===null) return;   // PEA, livrets… : 100 %
   const rt=isSavingsType(newType)?savingsRateInput(document.getElementById('rename-acc-type-rate').value):{rate:null};
   if(rt.error){toast(rt.error);return;}
   if(rt.rate!=null) acc.rate=rt.rate; else delete acc.rate;

@@ -166,7 +166,7 @@ function renderAccount() {
   return `${backBarHTML()}
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
-      <div style="font-size:26px">${iconHtml(acc.icon)}</div>
+      ${accTypeBadgeHTML(acc.type,40)}
       <div class="col" style="gap:2px;flex:1;min-width:0">
         <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
         <div class="t-sm">${esc(acc.type||'')}${acc.bank?' · '+esc(acc.bank):''}</div>

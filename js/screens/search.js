@@ -33,7 +33,7 @@ function srchResults(q, mode) {
       if(!acc.holdings.length) return '';
       const rows=acc.holdings.map(h=>srchRow(h,acc)).join('');
       return `<div style="margin-bottom:6px">
-        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3)">${iconHtml(acc.icon)} ${esc(acc.name)}</div>
+        <div style="padding:6px 20px 4px;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--text3);display:flex;align-items:center;gap:6px">${accTypeBadgeHTML(acc.type,18)} ${esc(acc.name)}</div>
         <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">${rows}</div>
       </div>`;
     }).join('');

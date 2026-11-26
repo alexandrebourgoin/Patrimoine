@@ -210,15 +210,10 @@ describe('Accueil', () => {
 });
 
 describe('Comptes : liste lisible', () => {
-  it('type abrégé (abréviation entre parenthèses), part du patrimoine légendée', async () => {
+  it('part du patrimoine légendée ; le type est porté par la pastille (sous-titre : tests/screens/accounts-sub.test.js)', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync('js/screens/accounts.js', 'utf8');
-    const { accTypeShort, accSubtitle } = loadClassic('js/screens/accounts.js', { globals: { SCREEN_BIND: {}, esc: s => String(s) }, exports: ['accTypeShort', 'accSubtitle'] });
-    expect(accSubtitle({ name: 'PEA', type: "Plan d'Épargne en Actions (PEA)", bank: 'Boursorama', holdings: [1, 2] })).toBe('2 valeurs · Boursorama');
-    expect(accSubtitle({ name: 'Mon épargne', type: 'Assurance-Vie', bank: '', holdings: [1] })).toBe('Assurance-Vie · 1 valeur');
-    expect(accTypeShort("Plan d'Épargne en Actions (PEA)")).toBe('PEA');
-    expect(accTypeShort('Assurance-Vie')).toBe('Assurance-Vie');
-    expect(accTypeShort('')).toBe('');
+    expect(src).toContain('accTypeBadgeHTML(a.type,40)');
     expect(src).toContain('% du patrimoine financier</span>');
   });
 });

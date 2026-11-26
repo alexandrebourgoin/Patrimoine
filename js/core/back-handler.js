@@ -33,8 +33,8 @@
     if (now - _lastBack < 250) { _lastBack = now; return; }
     _lastBack = now;
 
-    // Le sélecteur d'icône est empilé AU-DESSUS d'une autre feuille : il se ferme seul
-    if (iconPickerOpen()) { closeIconPicker(); return; }
+    // Le choix du type est empilé AU-DESSUS d'une fenêtre de compte : il se ferme seul
+    if (typeof typePickerOpen === 'function' && typePickerOpen()) { closeTypePicker(); return; }
 
     // Tiroir ☰ ouvert : le retour le ferme (ou revient au menu depuis l'édition des raccourcis)
     if (document.getElementById('drawer')?.classList.contains('show')) {
@@ -72,7 +72,7 @@
 document.addEventListener('keydown', e => {
   if (_lockState) return;   // l'overlay de verrouillage gère ses propres touches
   if (e.key === 'Escape') {
-    if (iconPickerOpen()) { closeIconPicker(); return; }
+    if (typeof typePickerOpen === 'function' && typePickerOpen()) { closeTypePicker(); return; }
     if (anyModalOpen()) {
       closeAllModals();
     } else if (S.stack.length > 1) {
