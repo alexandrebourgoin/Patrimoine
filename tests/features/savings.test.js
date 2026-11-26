@@ -7,7 +7,7 @@ const accPerf = loadClassic('js/features/account-perf.js', { globals: { PU: glob
 const R = loadClassic('js/features/account-rules.js', { exports: ['ACCOUNT_TYPES', 'assetTypeError', 'accTypeViolations', 'assetTypeOptions'] });
 const SV = loadClassic('js/features/savings.js', {
   globals: { ...taxEnv, ...accPerf },
-  exports: ['SAVINGS_TYPES', 'SAVINGS_RATES', 'isSavingsAccount', 'savingsView', 'savingsSummary', 'savingsCeiling', 'savingsDepositError', 'savingsOpeningFlows', 'savingsRateInput'],
+  exports: ['SAVINGS_TYPES', 'SAVINGS_RATES', 'isSavingsAccount', 'savingsView', 'savingsSummary', 'savingsCeiling', 'savingsDepositError', 'savingsRoomAt', 'savingsOpeningFlows', 'savingsRateInput'],
 });
 const cf = (type, amount, date = '2026-01-01') => ({ id: type + amount, type, amount, date, ccy: 'EUR' });
 const livret = (type, cashflows = [], o = {}) => ({ id: 'l', type, currency: 'EUR', value: 0, holdings: [], cashflows, ...o });
@@ -37,12 +37,26 @@ describe('livrets : types et règles', () => {
 });
 
 describe('livrets : plafond de versements', () => {
-  it('versements − retraits, intérêts exclus : 12 000 € versés au plus sur un LDDS, les intérêts au-delà', () => {
-    const a = livret('LDDS', [cf('DEP', 12000), cf('INT', 204)], { value: 12204 });
-    expect(SV.savingsDepositError(a, 1)).toMatch(/^Plafond de versements LDDS \(12.000 €\) : il reste 0 €/);
-    a.cashflows.push(cf('WIT', 500));
-    expect(SV.savingsDepositError(a, 500)).toBe('');
-    expect(SV.savingsDepositError(a, 500.01)).not.toBe('');
+  it('exemple de Julien : 22 000 € versés le 20/11, 200 € d intérêts le 21/11 → 750 € à verser à partir du 21/11', () => {
+    const a = livret('Livret A', [cf('DEP', 22000, '2026-11-20'), cf('INT', 200, '2026-11-21')]);
+    expect(SV.savingsRoomAt(a, '2026-11-20')).toBe(950);
+    expect(SV.savingsRoomAt(a, '2026-11-22')).toBe(750);
+    expect(SV.savingsDepositError(a, 750, v => v, '2026-11-22')).toBe('');
+    expect(SV.savingsDepositError(a, 751, v => v, '2026-11-22')).toMatch(/^Plafond Livret A \(22.950 €\) : au 22\/11\/2026, il reste 750 € à verser/);
+    expect(SV.savingsDepositError(a, 950, v => v, '2026-11-20')).toBe('');   // avant les intérêts : 950 € possibles ce jour-là
+  });
+  it('intérêts au-delà du plafond : plus aucun versement ; un retrait libère de la place', () => {
+    const a = livret('LDDS', [cf('DEP', 12000), cf('INT', 204)]);
+    expect(SV.savingsRoomAt(a, '2026-06-01')).toBe(0);
+    expect(SV.savingsDepositError(a, 1, v => v, '2026-06-01')).not.toBe('');
+    a.cashflows.push(cf('WIT', 704, '2026-07-01'));
+    expect(SV.savingsRoomAt(a, '2026-07-01')).toBe(500);
+    expect(SV.savingsDepositError(a, 500, v => v, '2026-07-02')).toBe('');
+    expect(SV.savingsDepositError(a, 500.01, v => v, '2026-07-02')).not.toBe('');
+  });
+  it('un versement antidaté qui ferait dépasser le plafond lors d un versement déjà saisi est refusé', () => {
+    const a = livret('LDDS', [cf('DEP', 6000, '2026-01-01'), cf('DEP', 6000, '2026-06-01')]);
+    expect(SV.savingsDepositError(a, 100, v => v, '2026-03-01')).toMatch(/versement déjà saisi le 01\/06\/2026/);
   });
   it('pas de plafond sur un compte courant ; pas de contrôle hors livrets (PEA : versements suivis à part)', () => {
     expect(SV.savingsDepositError(livret('Compte courant', [cf('DEP', 1e6)]), 1e6)).toBe('');

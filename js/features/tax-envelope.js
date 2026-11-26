@@ -6,7 +6,8 @@
 //   years   : durée de détention qui change la fiscalité (point de départ : date d'ouverture du compte, sinon 1er versement connu)
 //   ceiling : plafond des versements (€), hors intérêts / plus-values
 //   shared  : plafond commun avec d'autres types (PEA + PEA-PME : 225 000 € au total)
-//   basis   : 'deposits' = versements cumulés (PEA : un retrait ne libère pas de plafond) ; 'net' = versements − retraits (livrets)
+//   basis   : 'deposits' = versements cumulés (PEA : un retrait ne libère pas de plafond) ; 'balance' = solde, intérêts compris (livrets : plus aucun versement dès que le solde atteint le plafond ;
+//             les intérêts capitalisés peuvent, eux, le dépasser)
 const TAX_ENVELOPES = {
   "Plan d'Épargne en Actions (PEA)": {
     short: 'PEA', years: 5, ceiling: 150000, basis: 'deposits',
@@ -26,10 +27,10 @@ const TAX_ENVELOPES = {
   "Plan d'Épargne Retraite (PER)": {
     short: 'PER', note: 'Épargne bloquée jusqu\'à la retraite, sauf cas de déblocage anticipé prévus par la loi.',
   },
-  "Livret A": { short: 'Livret A', ceiling: 22950, basis: 'net', note: 'Intérêts exonérés d\'impôt et de prélèvements sociaux ; les intérêts capitalisés peuvent dépasser le plafond.' },
-  "LDDS": { short: 'LDDS', ceiling: 12000, basis: 'net', note: 'Intérêts exonérés d\'impôt et de prélèvements sociaux ; les intérêts capitalisés peuvent dépasser le plafond.' },
-  "LEP": { short: 'LEP', ceiling: 10000, basis: 'net', note: 'Réservé sous conditions de revenus ; intérêts exonérés.' },
-  "Livret Jeune": { short: 'Livret Jeune', ceiling: 1600, basis: 'net', note: 'Réservé aux 12-25 ans ; intérêts exonérés.' },
+  "Livret A": { short: 'Livret A', ceiling: 22950, basis: 'balance', note: 'Intérêts exonérés d\'impôt et de prélèvements sociaux ; les intérêts capitalisés peuvent dépasser le plafond.' },
+  "LDDS": { short: 'LDDS', ceiling: 12000, basis: 'balance', note: 'Intérêts exonérés d\'impôt et de prélèvements sociaux ; les intérêts capitalisés peuvent dépasser le plafond.' },
+  "LEP": { short: 'LEP', ceiling: 10000, basis: 'balance', note: 'Réservé sous conditions de revenus ; intérêts exonérés.' },
+  "Livret Jeune": { short: 'Livret Jeune', ceiling: 1600, basis: 'balance', note: 'Réservé aux 12-25 ans ; intérêts exonérés.' },
 };
 
 // Types de la table absents de la liste des comptes (faute de frappe) → [] si tout va bien
@@ -41,10 +42,10 @@ function taxEnvelopeProblems(types) {
 
 // Dépend (à l'appel) de loanAddMonths (js/features/loan-calc.js) et accFlows, _apDay (js/features/account-perf.js), chargés avant.
 function _teUsed(acc, rule, conv) {
+  if (rule.basis === 'balance') return Math.max(0, acc.value || 0);
   const fl = accFlows(acc, conv);
-  if (!fl.length) return rule.basis === 'net' ? Math.max(0, acc.value || 0) : null;   // livret sans apports saisis : le solde sert d'estimation
-  const dep = fl.filter(f => f.amt > 0).reduce((s, f) => s + f.amt, 0);
-  return rule.basis === 'net' ? Math.max(0, fl.reduce((s, f) => s + f.amt, 0)) : dep;
+  if (!fl.length) return null;
+  return fl.filter(f => f.amt > 0).reduce((s, f) => s + f.amt, 0);
 }
 
 // Informations fiscales d'un compte, ou null s'il n'a pas d'enveloppe.
@@ -78,7 +79,7 @@ function taxEnvelopeInfo(acc, ctx) {
         sharedNote = `Plafond commun PEA + PEA-PME : ${rule.shared.total.toLocaleString('fr-FR')} €${others > 0 ? ' (déjà versé sur le PEA déduit)' : ''}`;
       }
       const left = Math.max(0, amount - used);
-      ceiling = { amount, used, left, pct: amount > 0 ? Math.min(100, used / amount * 100) : 100, over: used > amount + 0.005, sharedNote };
+      ceiling = { amount, used, left, pct: amount > 0 ? Math.min(100, used / amount * 100) : 100, over: used > amount + 0.005, sharedNote, basis: rule.basis };
     }
   }
   return { short: rule.short, note: rule.note || '', milestone, ceiling };

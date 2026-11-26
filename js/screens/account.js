@@ -91,7 +91,7 @@ function accEnvelopeHTML(acc) {
       + `<div class="t-sm" style="margin-top:4px">${esc(m.text)}</div>`;
   }
   if (c) {
-    h += `<div class="t-sm" style="margin-top:8px;display:flex;justify-content:space-between;gap:8px"><span>Versements <b class="t-num">${masked(c.used)}</b> / ${masked(c.amount)}</span><span>${c.over ? '<b style="color:var(--loss)">Plafond dépassé</b>' : `Reste <b class="t-num">${masked(c.left)}</b>`}</span></div>
+    h += `<div class="t-sm" style="margin-top:8px;display:flex;justify-content:space-between;gap:8px"><span>${c.basis === 'balance' ? 'Plafond' : 'Versements <b class="t-num">' + masked(c.used) + '</b> /'} ${masked(c.amount)}</span><span>${c.basis === 'balance' ? (c.left > 0.005 ? `Encore <b class="t-num">${masked(c.left)}</b> à verser` : '<b>Plus de versement possible</b>') : c.over ? '<b style="color:var(--loss)">Plafond dépassé</b>' : `Reste <b class="t-num">${masked(c.left)}</b>`}</span></div>
     <div style="height:6px;border-radius:3px;background:rgba(127,127,127,.18);margin-top:4px;overflow:hidden"><div style="height:100%;width:${c.pct.toFixed(1)}%;background:${c.over ? 'var(--loss)' : 'var(--accent)'}"></div></div>`
       + (c.sharedNote ? `<div class="t-sm" style="margin-top:4px">${esc(c.sharedNote)}</div>` : '');
   }

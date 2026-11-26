@@ -5,7 +5,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 // Règles des livrets (vrais modules) : plafond de versements, intérêts
 const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES'] });
 const accPerf = loadClassic('js/features/account-perf.js', { globals: { PU: globalThis.PU }, exports: ['accFlows'] });
-const SAV = loadClassic('js/features/savings.js', { globals: { ...taxEnv, ...accPerf }, exports: ['isSavingsAccount', 'savingsCeiling', 'savingsSummary', 'savingsDepositError'] });
+const SAV = loadClassic('js/features/savings.js', { globals: { ...taxEnv, ...accPerf }, exports: ['isSavingsAccount', 'savingsCeiling', 'savingsSummary', 'savingsDepositError', 'savingsRoomAt'] });
 
 function makeDom() {
   const els = {}, handlers = {}, base = fakeDocument();
@@ -77,12 +77,12 @@ describe('Apports / retraits : devise par mouvement', () => {
       api.openCfModal('a1');
       expect(dom.els['cf-title'].textContent).toBe('Versement / Retrait / Intérêts');
       expect(dom.els['cf-int-btn'].classList.on.has('hidden')).toBe(false);
-      expect(dom.els['cf-cap'].textContent).toBe('Plafond de versements : 12000 · reste 1000 (intérêts non compris).');
+      expect(dom.els['cf-cap'].textContent).toMatch(/^Plafond 12000 · encore 1000 à verser au \d\d\/\d\d\/\d{4} \(solde, intérêts compris\)\.$/);
     });
     it('un versement au-delà du plafond est refusé, sans rien enregistrer', () => {
       submit({ amount: '1500' });
       expect(acc.cashflows).toHaveLength(1);
-      expect(toasts.at(-1)).toMatch(/^Plafond de versements LDDS \(12.000 €\) : il reste 1.000 €/);
+      expect(toasts.at(-1)).toMatch(/^Plafond LDDS \(12.000 €\) : au .*, il reste 1.000 € à verser/);
       submit({ amount: '1000' });
       expect(acc.cashflows).toHaveLength(2);
       expect(toasts.at(-1)).toBe('Versement enregistré ✓');

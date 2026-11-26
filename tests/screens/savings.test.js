@@ -14,12 +14,10 @@ const screen = rate => loadClassic('js/screens/savings.js', {
   cashflows: [{ type: 'DEP', amount: 10000, date: '2026-01-01' }, { type: 'INT', amount: 150, date: '2026-12-31' }] });
 
 describe('écran livret', () => {
-  it('solde, taux, intérêts estimés, versé / retiré / intérêts reçus, enveloppe ; ni portefeuille ni ajout de titre', () => {
+  it('solde, taux, intérêts estimés, enveloppe ; pas de totaux versé / retiré ; ni portefeuille ni ajout de titre', () => {
     const html = screen(1.7);
     expect(html).toContain("Taux 1,7 % · ≈ 172.55 d'intérêts par an au solde actuel");
-    expect(html).toContain('Versé</div><div style="font-size:15px;font-weight:800" class="t-num">10000.00');
-    expect(html).toContain('Retiré</div><div style="font-size:15px;font-weight:800" class="t-num">0.00');
-    expect(html).toContain('Intérêts reçus</div><div style="font-size:15px;font-weight:800" class="t-num">150.00');
+    for (const k of ['Versé<', 'Retiré<', 'Intérêts reçus<']) expect(html.includes(k)).toBe(false);
     expect(html).toContain('<ENV/>');
     expect(html).toContain('id="js-moves"');
     for (const id of ['js-add-hold', 'js-holds', 'js-search', 'Portefeuille']) expect(html.includes(id)).toBe(false);

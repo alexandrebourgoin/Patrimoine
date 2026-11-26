@@ -50,8 +50,9 @@ function _cfSyncSavings(acc){
   document.getElementById('cf-int-btn').classList.toggle('hidden',!sv);
   const cap=document.getElementById('cf-cap'), max=sv&&savingsCeiling(acc.type);
   if(max){
-    const left=Math.max(0,max-Math.max(0,savingsSummary(acc,(v,c)=>toRefCcy(v,c)).net));
-    cap.textContent=`Plafond de versements : ${masked(max)} · reste ${masked(left)} (intérêts non compris).`;
+    const day=document.getElementById('cf-date').value||_dayKey(Date.now());
+    const left=savingsRoomAt(acc,day,(v,c)=>toRefCcy(v,c));
+    cap.textContent=`Plafond ${masked(max)} · encore ${masked(left)} à verser au ${day.split('-').reverse().join('/')} (solde, intérêts compris).`;
   }
   cap.classList.toggle('hidden',!max);
 }
@@ -84,6 +85,8 @@ document.querySelectorAll('[data-cftype]').forEach(b=>b.addEventListener('click'
   b.classList.add('on');
   _cfType=b.dataset.cftype;
 }));
+// Livret : la place restante sous le plafond dépend de la date choisie
+document.getElementById('cf-date').addEventListener('change',()=>{ const acc=S.accounts.find(a=>a.id===_cfAccId); if(acc) _cfSyncSavings(acc); });
 document.getElementById('cf-submit').addEventListener('click',()=>{
   const amount=parseFloat(document.getElementById('cf-amount').value);
   const date=document.getElementById('cf-date').value||_dayKey(Date.now());
@@ -94,7 +97,7 @@ document.getElementById('cf-submit').addEventListener('click',()=>{
   if(!acc.cashflows) acc.cashflows=[];
   const ccy=document.getElementById('cf-ccy').value||acc.currency||S.currency;
   // Livret : un versement ne peut pas dépasser le plafond (les intérêts, eux, peuvent le dépasser)
-  if(_cfType==='DEP'){ const err=savingsDepositError(acc,toRefCcy(amount,ccy),(v,c)=>toRefCcy(v,c)); if(err){toast(err);return;} }
+  if(_cfType==='DEP'){ const err=savingsDepositError(acc,toRefCcy(amount,ccy),(v,c)=>toRefCcy(v,c),date); if(err){toast(err);return;} }
   acc.cashflows.push({id:'cf_'+Date.now().toString(36),date,type:_cfType,amount,ccy,note});
   acc.cashflows.sort((a,b)=>a.date.localeCompare(b.date));
   acc.value=accTotal(acc); // le solde intègre désormais les apports/retraits non investis

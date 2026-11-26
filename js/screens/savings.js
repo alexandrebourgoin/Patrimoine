@@ -1,4 +1,5 @@
-// Écran d'un livret ou compte d'épargne : solde, taux, intérêts estimés, plafond de versements, mouvements.
+// Écran d'un livret ou compte d'épargne : solde, taux, intérêts estimés, place restante sous le plafond, mouvements.
+// Pas de totaux versé / retiré / intérêts en tête (demande de Julien, 26/11) : seul le solde actuel compte.
 // Pas de portefeuille ni de titres. Appelé par renderAccount() (js/screens/account.js) quand isSavingsAccount(acc).
 // Règles pures : js/features/savings.js ; plafond et fiscalité : accEnvelopeHTML (js/screens/account.js).
 // Dépend, À L'APPEL seulement, de S, masked, fmtDate, esc, backBarHTML, iconHtml, toRefCcy, accEnvelopeHTML.
@@ -10,7 +11,6 @@ function renderSavingsAccount(acc) {
     : 'Taux non renseigné : indique-le dans « Modifier » pour estimer les intérêts';
   const reg = SAVINGS_RATES[acc.type] != null && sv.rate != null && Math.abs(SAVINGS_RATES[acc.type] - sv.rate) > 1e-9
     ? `<div class="t-sm" style="margin-top:2px">Taux réglementé en vigueur depuis le ${fmtDate(SAVINGS_RATES_DATE)} : ${String(SAVINGS_RATES[acc.type]).replace('.', ',')} %.</div>` : '';
-  const stat = (k, v) => `<div class="stat-box"><div class="t-label">${k}</div><div style="font-size:15px;font-weight:800" class="t-num">${v}</div></div>`;
   return `${backBarHTML()}
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
@@ -22,7 +22,6 @@ function renderSavingsAccount(acc) {
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
     <div class="t-sm" style="margin-top:4px" id="js-sv-rate">${rateTxt}</div>${reg}
-    <div class="stat-row">${stat('Versé', masked(sv.dep))}${stat('Retiré', masked(sv.wit))}${stat('Intérêts reçus', masked(sv.interest))}</div>
     ${accEnvelopeHTML(acc)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
       <div id="js-cf-btn" class="tap" style="${_CHIP}">+ Versement / Retrait / Intérêts</div>
