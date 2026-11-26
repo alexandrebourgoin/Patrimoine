@@ -88,7 +88,7 @@ describe('écran « Non synchro »', () => {
     vi.useFakeTimers(); vi.setSystemTime(NOW);
     S.accounts = [{ id: 'a', name: 'PEA <b>', holdings: [h({ quoteAt: NOW - 6 * DAY })] }];
     const html = screen.renderStale();
-    expect(html).toContain('<div class="t-title">Non synchro</div>');
+    expect(html).toContain('<div class="top-bar-title">Non synchro</div>');
     expect(html).toContain('il y a 6 j');
     expect(html).toContain('PEA &#60;b&#62;');
     expect(NAV_BADGES.stale()).toBe(1);
