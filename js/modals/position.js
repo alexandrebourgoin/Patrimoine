@@ -210,6 +210,12 @@ function closeEditHolding(){
 }
 document.getElementById('edit-holding-bg').addEventListener('click',closeEditHolding);
 document.getElementById('edit-holding-close').addEventListener('click',closeEditHolding);
+// Supprimer la position (avec confirmation) : l'action a quitté les lignes de l'écran Compte pour la fiche du titre
+document.getElementById('eh-delete').addEventListener('click',()=>{
+  const accId=_ehAccId, holdId=_ehHoldId;
+  closeEditHolding();
+  deleteHolding(accId,holdId);
+});
 document.getElementById('eh-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_ehAccId);
   const h=acc?.holdings.find(h=>h.id===_ehHoldId); if(!h) return;
