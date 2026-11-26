@@ -129,3 +129,10 @@ describe('eToro : réseau, erreurs et clés', () => {
     expect(E.etoroDue(list, now).map(a => a.id)).toEqual([2, 3]);
   });
 });
+
+describe('eToro : clé publique', () => {
+  it('clé publique commune pré-remplie (affichée par eToro dans Gestion des clés API)', () => {
+    const K = loadClassic('js/services/etoro.js', { globals: { localStorage: { getItem: () => null, setItem() {} } }, exports: ['ETORO_PUBLIC_KEY'] });
+    expect(K.ETORO_PUBLIC_KEY).toBe('sdgdskldFPLGfjHn1421dgnlxdGTbngdflg6290bRjslfihsjhSDsdgGHH25hjf');
+  });
+});

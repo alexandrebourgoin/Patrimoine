@@ -52,9 +52,9 @@ function openEtoroSheet(accId) {
   document.getElementById('et-title').textContent = acc ? 'Réglages eToro' : 'Connecter un compte eToro';
   document.getElementById('et-name-row').classList.toggle('hidden', !!acc);
   document.getElementById('et-name').value = acc ? acc.name : 'eToro';
-  document.getElementById('et-api').value = '';
+  document.getElementById('et-api').value = keys ? '' : ETORO_PUBLIC_KEY;   // clé publique commune, pré-remplie
   document.getElementById('et-user').value = '';
-  document.getElementById('et-api').placeholder = keys ? 'Actuelle : ' + etoroMask(keys.apiKey) : 'Clé publique (API key)';
+  document.getElementById('et-api').placeholder = keys ? 'Actuelle : ' + etoroMask(keys.apiKey) : ETORO_PUBLIC_KEY;
   document.getElementById('et-user').placeholder = keys ? 'Actuelle : ' + etoroMask(keys.userKey) : 'Clé utilisateur (User key)';
   document.getElementById('et-proxy').value = (acc && acc.sync && acc.sync.proxy) || '';
   document.getElementById('et-del').classList.toggle('hidden', !keys);

@@ -13,6 +13,9 @@
 
 const ETORO_BASE = 'https://public-api.etoro.com/api/v1';
 const ETORO_KEYS_STORE = 'mp-api-keys';        // { [accountId]: { apiKey, userKey } } — volontairement hors « patrimoine-* »
+// Clé publique (x-api-key) : identique pour tous les utilisateurs, affichée par eToro dans Paramètres → Trading → Gestion des clés API
+// et publiée par eToro (www.etoro.com/wp-content/uploads/agent-portfolios/SKILL.md). Pré-remplie : seule la clé utilisateur est à saisir.
+const ETORO_PUBLIC_KEY = 'sdgdskldFPLGfjHn1421dgnlxdGTbngdflg6290bRjslfihsjhSDsdgGHH25hjf';
 const ETORO_SYNC_EVERY_MS = 3600 * 1000;       // synchro automatique si la dernière date de plus d'1 h
 // Types d'instruments eToro (instrumentTypeID) → type de position de l'app
 const ETORO_TYPES = { 5: 'Action', 6: 'ETF', 10: 'Crypto' };

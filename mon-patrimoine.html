@@ -219,10 +219,10 @@
   <div class="modal-drag"></div>
   <div class="modal-body">
     <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="et-title">Connecter un compte eToro</div><div id="et-close" class="oa-x">✕</div></div>
-    <div class="t-sm" style="margin-bottom:12px">Lecture seule : l'app lit ton solde et tes positions, sans jamais passer d'ordre. Crée les clés dans eToro : Paramètres → Trading → Gestion des clés API, environnement <b>Réel</b>, permission <b>Lecture</b> seulement. La clé utilisateur n'est affichée qu'une fois.</div>
+    <div class="t-sm" style="margin-bottom:12px">Lecture seule : l'app lit ton solde et tes positions, sans jamais passer d'ordre. Crée une clé sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b> seulement, puis copie la clé utilisateur tout de suite (elle n'est affichée qu'une fois).</div>
     <div class="form-row" id="et-name-row"><div class="form-field"><div class="form-label">Nom du compte</div><input class="form-input" id="et-name" type="text" autocomplete="off"></div></div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Clé publique (API key)</div><input class="form-input" id="et-api" type="password" autocomplete="off" spellcheck="false"></div></div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur (User key)</div><input class="form-input" id="et-user" type="password" autocomplete="off" spellcheck="false"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Clé publique <span style="font-weight:400;color:var(--text3)">(pré-remplie, la même pour tous)</span></div><input class="form-input" id="et-api" type="text" autocomplete="off" spellcheck="false" style="font-size:12px"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur <span style="font-weight:400;color:var(--text3)">(affichée une seule fois par eToro)</span></div><input class="form-input" id="et-user" type="password" autocomplete="off" spellcheck="false"></div></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Relais (optionnel)</div><input class="form-input" id="et-proxy" type="url" placeholder="https://mon-relais.workers.dev" autocomplete="off" spellcheck="false"></div></div>
     <div class="t-sm" style="margin:-4px 0 12px">À renseigner seulement si eToro refuse l'appel direct depuis le navigateur : voir etoro-proxy-worker.js. Les clés restent sur cet appareil : elles ne sont ni sauvegardées ni exportées.</div>
     <button class="form-submit" id="et-submit">Connecter</button>
