@@ -39,7 +39,7 @@ describe('barre « Retour » des écrans secondaires', () => {
   });
   it.each([
     ['orders', 'js/screens/orders.js'], ['immo', 'js/screens/immo.js'], ['dca', 'js/features/dca.js'],
-    ['assistant', 'js/screens/assistant.js'], ['settings', 'js/screens/settings.js'],
+    ['assistant', 'js/screens/assistant.js'], ['settings', 'js/screens/settings.js'], ['credits', 'js/screens/credits.js'],
   ])('écran de module %s : nom du module + burger, sans « Retour » (moduleBarHTML)', (key, f) => {
     const src = readFileSync(f, 'utf8');
     expect(src).toContain(`moduleBarHTML('${key}'`);

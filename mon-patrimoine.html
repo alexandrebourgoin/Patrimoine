@@ -78,6 +78,8 @@
   <div id="s-orders"     class="screen no-nav"></div>
   <div id="s-immo"       class="screen no-nav"></div>
   <div id="s-immodetail" class="screen no-nav"></div>
+  <div id="s-credits"     class="screen no-nav"></div>
+  <div id="s-creditdetail" class="screen no-nav"></div>
 
   <!-- Barre par défaut : remplacée par renderNav() (raccourcis personnalisés) dès que le JS tourne.
        Elle reste en filet de sécurité si un ancien JS en cache est servi avec ce HTML. -->
@@ -245,6 +247,33 @@
     <button class="oa-add" id="im-loan-add" type="button" style="margin:2px 0 10px">+ Ajouter un crédit</button>
     <div id="im-prev" class="t-sm" style="margin:2px 0 12px"></div>
     <button class="form-submit" id="im-save">Enregistrer</button>
+  </div>
+</div>
+<!-- CRÉDIT (autres crédits : js/screens/credits.js) -->
+<div id="cr-bg" class="add-modal-bg"></div>
+<div id="cr-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:14px"><div class="modal-title" id="cr-title" style="margin-bottom:0">Nouveau crédit</div><div id="cr-close" class="oa-x">✕</div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Nom</div><input class="form-input" id="cr-name" type="text" placeholder="Voiture, cuisine…"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Type</div><select class="form-input" id="cr-kind" style="cursor:pointer">
+      <option value="conso">Crédit à la consommation</option><option value="auto">Crédit auto</option><option value="works">Crédit travaux</option>
+      <option value="student">Prêt étudiant</option><option value="personal">Prêt personnel</option><option value="other">Autre crédit</option></select></div></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Montant emprunté</div><input class="form-input" id="cr-amount" type="number" min="0" step="any" inputmode="decimal" placeholder="15000"></div>
+      <div class="form-field"><div class="form-label">Taux annuel (%)</div><input class="form-input" id="cr-rate" type="number" min="0" step="0.01" inputmode="decimal" placeholder="4.5"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Durée (années)</div><input class="form-input" id="cr-years" type="number" min="0" step="any" inputmode="decimal" placeholder="5"></div>
+      <div class="form-field"><div class="form-label">Assurance (€/mois)</div><input class="form-input" id="cr-ins" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Date de signature</div><input class="form-input" id="cr-sign" type="date"></div>
+      <div class="form-field"><div class="form-label">1re échéance (si différente)</div><input class="form-input" id="cr-first" type="date"></div>
+    </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Ma part de la dette (%)</div><input class="form-input" id="cr-share" type="number" min="1" max="100" step="any" inputmode="decimal" placeholder="100"><div class="t-sm">Crédit à deux : 50 %. Le patrimoine ne déduit que votre part.</div></div></div>
+    <div id="cr-prev" class="t-sm" style="margin:2px 0 12px"></div>
+    <button class="form-submit" id="cr-save">Enregistrer</button>
   </div>
 </div>
 <div id="ima-bg" class="add-modal-bg"></div>
@@ -863,6 +892,8 @@
 <script src="js/features/order-alert-rules.js"></script>
 <script src="js/features/transaction-check.js"></script>
 <script src="js/features/loan-calc.js"></script>
+<script src="js/features/loan-amort.js"></script>
+<script src="js/features/credits.js"></script>
 <script src="js/features/realestate-calc.js"></script>
 <script src="js/features/realestate-storage.js"></script>
 <script src="js/features/wealth.js"></script>
@@ -896,6 +927,7 @@
 <script src="js/screens/watch.js"></script>
 <script src="js/screens/orders.js"></script>
 <script src="js/screens/immo.js"></script>
+<script src="js/screens/credits.js"></script>
 <script src="mon-patrimoine.js"></script>
 </body>
 </html>

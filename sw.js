@@ -42,6 +42,8 @@ const SHELL = [
   './js/features/order-alert-rules.js',
   './js/features/transaction-check.js',
   './js/features/loan-calc.js',
+  './js/features/loan-amort.js',
+  './js/features/credits.js',
   './js/features/realestate-calc.js',
   './js/features/realestate-storage.js',
   './js/features/wealth.js',
@@ -75,6 +77,7 @@ const SHELL = [
   './js/screens/watch.js',
   './js/screens/orders.js',
   './js/screens/immo.js',
+  './js/screens/credits.js',
   './manifest.json',
   './icon.svg'
 ];

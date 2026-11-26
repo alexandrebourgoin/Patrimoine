@@ -27,7 +27,7 @@ describe('wealthProperties', () => {
 describe('wealthBreakdown', () => {
   it('sans bien : patrimoine net = patrimoine brut = comptes financiers', () => {
     const w = W.wealthBreakdown([acc({ value: 5000 })], [], TODAY);
-    expect(w).toEqual({ financial: 5000, property: 0, debt: 0, count: 0, gross: 5000, net: 5000 });
+    expect(w).toEqual({ financial: 5000, property: 0, debt: 0, otherDebt: 0, count: 0, credits: 0, gross: 5000, net: 5000 });
   });
   it('exclut les comptes observateurs', () => {
     expect(W.wealthBreakdown([acc({ value: 5000 }), acc({ id: 'o', value: 999, observer: true })], [], TODAY).financial).toBe(5000);
@@ -135,5 +135,20 @@ describe('cas de référence des captures : comptes financiers 102 738,83 € + 
     expect(w.financial).toBeCloseTo(102738.83, 2);
     expect(w.net).toBeCloseTo(133273.96, 2);
     expect(W.analysisData(accounts, [p], TODAY, noCash).tot).toBeCloseTo(133273.96, 2);
+  });
+});
+
+describe('autres crédits dans le patrimoine', () => {
+  const LOAN = loadClassic('js/features/loan-calc.js', { exports: ['loanSchedule', 'loanAddMonths'] });
+  const CR = loadClassic('js/features/credits.js', { globals: LOAN, exports: ['creditTotals', 'creditSchedule'] });
+  const W2 = loadClassic('js/features/wealth.js', { globals: { ...calc, ...CR }, exports: ['wealthBreakdown'] });
+  const credit = (o = {}) => ({ id: 'c1', name: 'Auto', kind: 'auto', amount: 12000, rate: 0, years: 4, signDate: '2026-10-22', ...o });
+  it('seule ma part du capital restant dû est déduite du patrimoine net ; le brut ne change pas', () => {
+    const full = W2.wealthBreakdown([acc({ value: 20000 })], [], TODAY, [credit()]);
+    expect(full.otherDebt).toBe(12000 - 250);         // 1 échéance passée (22/11) sur 48
+    expect(full.net).toBe(20000 - 11750);
+    expect(full.gross).toBe(20000);
+    const half = W2.wealthBreakdown([acc({ value: 20000 })], [], TODAY, [credit({ debtShare: 50 })]);
+    expect(half.otherDebt).toBe(11750 / 2);
   });
 });

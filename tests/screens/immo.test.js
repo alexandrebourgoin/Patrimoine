@@ -31,9 +31,14 @@ describe('Écrans Immobilier', () => {
     S = { isDemo: false, screen: 'immo', immoId: null };
     dom = makeDom(); storage = memoryStorage();
     toasts = []; calls = { render: [], go: [], back: 0, confirm: null };
+    // Tableau d'amortissement : module partagé js/features/loan-amort.js, chargé pour de vrai sur le même faux DOM
+    const amort = loadClassic('js/features/loan-amort.js', {
+      globals: { document: dom.document, masked: v => v.toFixed(2), fmtDate: d => d, esc: s => String(s), registerModal() {} },
+      exports: ['openLoanAmort'],
+    });
     api = loadClassic('js/screens/immo.js', {
       globals: {
-        ...calc, createImmoStore, document: dom.document, S, localStorage: storage, SCREEN_BIND: {}, registerModal() {},
+        ...calc, ...amort, createImmoStore, document: dom.document, S, localStorage: storage, SCREEN_BIND: {}, registerModal() {},
         toast: m => toasts.push(m), esc: s => String(s), masked: v => v.toFixed(2), fmtDate: d => d, _dayKey: () => '2026-11-22',
         renderScreen: id => calls.render.push(id), go: id => calls.go.push(id), back() { calls.back++; },
         openConfirm: (m, cb) => { calls.confirm = { m, cb }; },
