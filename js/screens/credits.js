@@ -9,6 +9,15 @@ function crSave(list) {
 }
 const _crToday = () => _dayKey(Date.now());
 function _crRefresh() { ['credits', 'creditdetail', 'dashboard', 'analysis'].forEach(id => { if (document.getElementById('s-' + id)) renderScreen(id); }); }
+// Accueil « À surveiller » : échéances des 10 prochains jours (autres crédits et crédits immobiliers)
+HOME_WATCH.credits = () => {
+  const today = _crToday();
+  const loans = [
+    ...crRead().map(c => ({ name: c.name || CREDIT_KINDS[c.kind], schedule: creditSchedule(c, today), go: 'credits' })),
+    ...imRead().flatMap(p => immoLoanSchedules(p, today).map(({ L, s }) => ({ name: L.label || p.name, schedule: s, go: 'immo' }))),
+  ];
+  return homeWatchLoanDue(loans, today, 10).map(l => ({ level: 'soon', when: l.date, go: l.go, text: `Échéance « ${l.name} » le ${fmtDate(l.date)}`, sub: masked(l.amount) + ' assurance comprise' }));
+};
 
 function renderCredits() {
   const list = crRead(), today = _crToday(), T = creditTotals(list, today);
