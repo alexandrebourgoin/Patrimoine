@@ -104,6 +104,7 @@ describe('Accueil', () => {
     expect(html).toContain('<span class="leg-name">Bourse</span>');
     expect(html).toContain('<span class="leg-name">Immobilier</span>');   // immobilier net compris, comme l'Analyse
     expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('Patrimoine net'));
+    expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('hist-card'));   // après l'évolution
   });
   it('sans aucune valeur : pas de camembert vide', () => {
     S.accounts = [];
