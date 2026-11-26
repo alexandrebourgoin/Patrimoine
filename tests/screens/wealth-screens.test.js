@@ -200,3 +200,12 @@ describe('Accueil', () => {
     expect(html.includes('Évolution du patrimoine')).toBe(false);
   });
 });
+
+describe('Comptes : liste lisible', () => {
+  it('part du patrimoine légendée ; le type est porté par la pastille (sous-titre : tests/screens/accounts-sub.test.js)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('js/screens/accounts.js', 'utf8');
+    expect(src).toContain('accTypeBadgeHTML(a.type,40)');
+    expect(src).toContain('% du patrimoine financier</span>');
+  });
+});

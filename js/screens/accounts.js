@@ -49,7 +49,7 @@ function renderComptes() {
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
-          <div class="t-sm">${esc(accListSub(a))}</div>
+          <div class="t-sm acc-sub">${esc(accListSub(a))}</div>
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
@@ -59,7 +59,7 @@ function renderComptes() {
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </div>
       </div>
-      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%${accTypeTone(a.type)?`;background:var(--tp-${accTypeTone(a.type)})`:""}"></div></div>`:''}
+      ${!a.observer?`<div class="acc-share tap" data-acc="${a.id}"><div class="acc-bar"><div class="acc-bar-fill" style="width:${pct}%${accTypeTone(a.type)?`;background:var(--tp-${accTypeTone(a.type)})`:""}"></div></div><span>${pct.replace('.', ',')} % du patrimoine financier</span></div>`:''}
     </div>`;
   }).join('');
   const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">
