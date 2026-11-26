@@ -74,6 +74,7 @@ function fmtCur(v) {
   return PU.fmtCur(v, S.currency);
 }
 function fmtPct(v) { return PU.fmtPct(v); }
+function pctClass(v) { return PU.pctClass(v); }
 function fmtDate(s) { return PU.fmtDate(s); }
 function initials(n) { return PU.initials(n); }
 // Observer accounts excluded from total wealth
