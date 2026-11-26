@@ -39,34 +39,7 @@ function renderTargetsBlock(byType, tot) {
 
 // ── ANALYSIS ──
 // Calculs : analysisData() (js/features/wealth.js, pur). Ici : rendu uniquement.
-const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
-const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
-const POCKET_C={'Liquidités':'#F59E0B','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
-const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
-
-function buildSegs(obj, colors) {
-  // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
-  // donut — la garder faisait planter le dessin des tranches (voir donutSvg).
-  const entries=Object.entries(obj).filter(([,v])=>v>0);
-  const tot=entries.reduce((s,[,v])=>s+v,0);
-  return entries.sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
-    name, value,
-    color: colors[name]||colors[i%colors.length],
-    pct: tot>0?(value/tot*100).toFixed(1):'0.0'
-  }));
-}
-// Donut + légende : le nom a sa propre ligne (avec le pourcentage), le montant passe dessous. Ainsi rien n'est tronqué
-// (« Obligati… », « ETF / Fo… » en largeur de téléphone) ; un nom vraiment trop long reste coupé par une ellipse.
-function donutBlock(title, segs) {
-  const legend=segs.map(s=>`<div class="legend-row legend-2l">
-    <div class="leg-dot" style="background:${s.color}"></div>
-    <div class="leg-txt"><div class="leg-line"><span class="leg-name">${esc(s.name)}</span><span class="leg-pct" style="color:${s.color}">${s.pct}%</span></div><div class="t-sm t-num">${masked(s.value)}</div></div>
-  </div>`).join('');
-  return `<div class="donut-block anim">
-    ${donutSvg(segs,108,16)}
-    <div class="legend">${legend}</div>
-  </div>`;
-}
+// Couleurs, buildSegs et donutBlock : js/features/charts.js (partagés avec l'Accueil).
 // Liste en barres (géographie, secteurs) : 7 premières lignes + « Autres », pourcentage et montant alignés à droite
 function barList(obj) {
   const entries=Object.entries(obj).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
@@ -89,7 +62,7 @@ function wealthCardHTML(d) {
   return `<div class="wl-card">
     <div class="t-label">Patrimoine net</div>
     <div class="wl-amount t-num">${masked(d.tot)}</div>
-    ${w.count?`${row('Patrimoine brut',w.gross)}${row('Crédits immobiliers restants',w.debt)}${row('Dont immobilier brut',w.property)}`:''}
+    ${(w.count||w.otherDebt)?`${row('Patrimoine brut',w.gross)}${w.count?row('Crédits immobiliers restants',w.debt):''}${w.otherDebt?row('Autres crédits restants',w.otherDebt):''}${w.count?row('Dont immobilier brut',w.property):''}`:''}
     ${row('Dont comptes financiers',w.financial)}
     <div class="t-sm" style="margin-top:8px">${parts} · comment le patrimoine est placé aujourd'hui</div>
     <div id="js-go-proj" class="tap wl-chip">DCA et projection →</div>
@@ -98,13 +71,13 @@ function wealthCardHTML(d) {
 
 function renderAnalysis() {
   const d=analysisNow();
-  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar()}</div>
+  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
     </div>`;
   const sec=t=>`<div class="t-section px" style="padding-bottom:10px">${t}</div>`;
-  return `<div class="analysis-top anim">${renderTopBar()}</div>
+  return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
   ${wealthCardHTML(d)}
   ${sec('Grandes classes')}
   ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}

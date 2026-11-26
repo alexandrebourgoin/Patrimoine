@@ -4,9 +4,13 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 
 // Modales de compte et de position avec les VRAIES règles (js/features/account-rules.js).
 const rules = loadClassic('js/features/account-rules.js', {
-  exports: ['ACCOUNT_TYPES', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions'],
+  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions', 'accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName'],
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
+const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });
+const accPerf = loadClassic('js/features/account-perf.js', { globals: { PU: globalThis.PU }, exports: ['accFlows'] });
+const savings = loadClassic('js/features/savings.js', { globals: { ...taxEnv, ...accPerf },
+  exports: ['SAVINGS_RATES', 'isSavingsType', 'isSavingsAccount', 'savingsRateInput', 'savingsOpeningFlows', 'savingsSummary', 'savingsCeiling', 'savingsDepositError'] });
 const PEA = "Plan d'Épargne en Actions (PEA)", CTO = 'Compte-Titres Ordinaire';
 
 const opts = (...values) => values.map(value => ({ value, disabled: false }));
@@ -27,7 +31,7 @@ describe('modale de compte : devise et type', () => {
     for (const id of ['acc-currency', 'rename-acc-currency']) dom.els[id] = { ...dom.document.getElementById(id), options: opts('EUR', 'USD', 'CHF', 'GBP', 'JPY') };
     api = loadClassic('js/modals/account.js', {
       globals: {
-        ...rules, ...cashPockets, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
+        ...rules, ...cashPockets, ...taxEnv, ...savings, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
         refreshMain() { calls.main++; }, saveAccounts() { calls.saved++; }, accTotal: () => 1, renderScreen() {}, _dayKey: () => '2026-11-24',
         registerModal() {}, openConfirm() {}, back() {}, go() {}, iconHtml: s => s,
       },
@@ -36,6 +40,14 @@ describe('modale de compte : devise et type', () => {
   };
   const chooseType = (selId, type) => { dom.els[selId].value = type; dom.els[selId].onchange(); };
 
+  it('rappel de l enveloppe fiscale sous la date d ouverture, selon le type choisi', () => {
+    setup(); api.openAccModal();
+    expect(dom.els['acc-type-env'].textContent).toBe('');
+    chooseType('acc-type', PEA);
+    expect(dom.els['acc-type-env'].textContent).toMatch(/^PEA : fiscalité allégée après 5 ans, comptés depuis la date d'ouverture \(1er versement\) · plafond de versements 150.000 €\.$/);
+    chooseType('acc-type', 'Livret A');
+    expect(dom.els['acc-type-env'].textContent).toMatch(/^Livret A : plafond de versements 22.950 €\.$/);
+  });
   it('création : par défaut compte-titres en euros, devise modifiable', () => {
     setup(); api.openAccModal();
     expect(dom.els['acc-currency'].value).toBe('EUR');
@@ -56,10 +68,18 @@ describe('modale de compte : devise et type', () => {
     chooseType('acc-type', CTO);
     expect(dom.els['acc-currency']).toMatchObject({ value: 'EUR', disabled: false, title: '' });
   });
-  it('création : un type libre (« Autre… ») ne verrouille rien', () => {
+  it('création : types regroupés par catégorie, sans « Autre… » ni SCPI / métaux / compte courant / compte à terme', () => {
     setup(); api.openAccModal();
-    chooseType('acc-type', '__other__');
-    expect(dom.els['acc-currency'].disabled).toBe(false);
+    const html = dom.els['acc-type'].innerHTML;
+    expect([...html.matchAll(/<optgroup label="([^"]+)">/g)].map(m => m[1])).toEqual(['Bourse et crypto', 'Assurance-vie et retraite', 'Livrets et épargne logement']);
+    for (const gone of ['Autre…', 'SCPI', 'Métaux', 'Compte courant', 'Compte à terme']) expect(html.includes(gone)).toBe(false);
+    expect(html.indexOf('LDDS')).toBeGreaterThan(html.indexOf('Épargne disponible'));
+  });
+  it('modification d un compte d un type retiré : son type est conservé dans « Type actuel »', () => {
+    setup([{ id: 'a1', name: 'SCPI', type: 'SCPI / Immobilier', currency: 'EUR', holdings: [], cashflows: [] }]);
+    api.openRenameAcc('a1', 'SCPI');
+    expect(dom.els['rename-acc-type'].innerHTML.startsWith('<optgroup label="Type actuel"><option value="SCPI / Immobilier">')).toBe(true);
+    expect(dom.els['rename-acc-type'].value).toBe('SCPI / Immobilier');
   });
   it('modification : la devise du compte n\'est jamais changée par le type, et seulement verrouillée si elle est déjà imposée', () => {
     setup([{ id: 'a1', name: 'PEA', type: CTO, currency: 'USD', holdings: [], cashflows: [] }]);
@@ -133,6 +153,36 @@ describe('modale de compte : devise et type', () => {
       expect(S.accounts).toEqual([]);
       expect(toasts.at(-1)).toBe("La date d'ouverture ne peut pas être dans le futur");
     });
+    it('sans nom : nom proposé selon le type et la banque, numéroté s il existe déjà', () => {
+      setup([{ id: 'x', name: 'Compte-titres Boursorama', type: CTO, holdings: [], cashflows: [] }]); api.openAccModal();
+      dom.els['acc-bank'].value = 'Boursorama';
+      dom.handlers['acc-bank'].input();
+      expect(dom.els['acc-name'].placeholder).toBe('Compte-titres Boursorama 2');
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts[1].name).toBe('Compte-titres Boursorama 2');
+    });
+    it('un seul PEA et un seul Livret A : le second est refusé ; un compte observateur n est pas compté', () => {
+      setup([{ id: 'p', name: 'PEA', type: PEA, holdings: [], cashflows: [] }]); api.openAccModal();
+      chooseType('acc-type', PEA);
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts).toHaveLength(1);
+      expect(toasts.at(-1)).toBe(`Un seul compte « ${PEA} » par personne : tu en as déjà un`);
+      dom.handlers['acc-obs-tog'].click();   // compte observateur (le PEA de quelqu'un d'autre)
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts).toHaveLength(2);
+    });
+    it('PEA, livret : pas de part (compte joint impossible) ; compte-titres : part enregistrée', () => {
+      setup(); api.openAccModal();
+      chooseType('acc-type', PEA);
+      dom.els['acc-share'].value = '50';
+      dom.handlers['acc-submit'].click();
+      expect('share' in S.accounts[0]).toBe(false);
+      api.openAccModal();
+      chooseType('acc-type', CTO);
+      dom.els['acc-share'].value = '50';
+      dom.handlers['acc-submit'].click();
+      expect(S.accounts[1].share).toBe(50);
+    });
     it('sans date : pas de champ startDate', () => {
       setup(); api.openAccModal();
       dom.els['acc-name'].value = 'X';
@@ -172,7 +222,7 @@ describe('modale de position : types d\'actifs du compte', () => {
     expect(dom.els['pos-type'].value).toBe('Action');
   });
   it('sur un compte sans restriction : rien n\'est grisé', () => {
-    acc.type = 'Compte courant';
+    acc.type = 'SCPI / Immobilier';
     api.openPosModal('a1');
     expect(dom.els['pos-type'].options.some(o => o.disabled)).toBe(false);
   });

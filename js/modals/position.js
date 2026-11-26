@@ -212,6 +212,12 @@ function closeEditHolding(){
 }
 document.getElementById('edit-holding-bg').addEventListener('click',closeEditHolding);
 document.getElementById('edit-holding-close').addEventListener('click',closeEditHolding);
+// Supprimer la position (avec confirmation) : l'action a quitté les lignes de l'écran Compte pour la fiche du titre
+document.getElementById('eh-delete').addEventListener('click',()=>{
+  const accId=_ehAccId, holdId=_ehHoldId;
+  closeEditHolding();
+  deleteHolding(accId,holdId);
+});
 document.getElementById('eh-manual-tog').addEventListener('click',()=>{
   _ehManual=!_ehManual;
   document.getElementById('eh-manual-tog').classList.toggle('on',_ehManual);

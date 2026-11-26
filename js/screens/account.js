@@ -13,8 +13,10 @@ function accNative(acc, v) {
 }
 // Bloc valeur du hero : devise du compte en gros, contre-valeur en devise appli dessous
 function accHeroValHTML(acc) {
-  if ((acc.currency || S.currency) === S.currency) return masked(acc.value);
-  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
+  // Compte détenu en partie (compte joint) : valeur à 100 %, puis MA PART, seule comptée dans le patrimoine
+  const part = accShare(acc) < 1 ? `<div class="t-sm" style="font-size:13px;font-weight:700;margin-top:2px">Ma part (${acc.share} %) : ${masked(acc.value * accShare(acc))}</div>` : '';
+  if ((acc.currency || S.currency) === S.currency) return masked(acc.value) + part;
+  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>${part}`;
 }
 
 // ── Performance : le calcul est pur (js/features/account-perf.js) ; ici seulement le contexte de l'appli ──
@@ -56,8 +58,8 @@ function accPerfCardHTML(acc, perf, sum) {
       <div style="display:flex;gap:2px;padding:2px;border-radius:20px;background:rgba(127,127,127,.15)">${modeBtn('ytd', 'YTD')}${modeBtn('all', 'Historique')}</div>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap">
-      ${cur ? `<div style="font-size:26px;font-weight:800" class="${cur.pct >= 0 ? 't-gain' : 't-loss'} t-num">${fmtPct(cur.pct)}</div>
-      <div style="font-size:14px;font-weight:700" class="${cur.gain >= 0 ? 't-gain' : 't-loss'} t-num">${cur.gain >= 0 ? '+' : ''}${accNative(acc, cur.gain)}</div>`
+      ${cur ? `<div style="font-size:26px;font-weight:800" class="${pctClass(cur.pct)} t-num">${fmtPct(cur.pct)}</div>
+      <div style="font-size:14px;font-weight:700" class="${Math.round(cur.gain * 100) === 0 ? '' : cur.gain > 0 ? 't-gain' : 't-loss'} t-num">${Math.round(cur.gain * 100) > 0 ? '+' : ''}${accNative(acc, Math.round(cur.gain * 100) === 0 ? 0 : cur.gain)}</div>`
         : '<div style="font-size:26px;font-weight:800" class="t-num">—</div>'}
     </div>
     <div class="t-sm" style="margin-top:4px">${sub}</div>
@@ -74,6 +76,32 @@ function accCashDetailHTML(acc, perf) {
     h += `<div class="t-sm" style="margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap"><span>Apports cumulés <b class="t-num">${accNative(acc, perf.dep)}</b></span><span>Retraits cumulés <b class="t-num">${accNative(acc, perf.wit)}</b></span></div>`;
   return h;
 }
+// Enveloppe fiscale (E11) : jalon de durée (PEA 5 ans, assurance-vie 8 ans) et plafond de versements. Règles pures : js/features/tax-envelope.js
+function accEnvelopeHTML(acc) {
+  const info = taxEnvelopeInfo(acc, { today: _dayKey(Date.now()), conv: (v, c) => toRefCcy(v, c), accounts: S.accounts });
+  if (!info) return '';
+  const m = info.milestone, c = info.ceiling;
+  let h = '';
+  if (m) {
+    const when = !m.date ? `Saisis la date d'ouverture du compte pour suivre les ${m.years} ans`
+      : m.reached ? `✓ ${m.years} ans atteints le ${fmtDate(m.date)}`
+      : `${m.years} ans le ${fmtDate(m.date)} · encore ${m.daysLeft > 60 ? Math.round(m.daysLeft / 30.44) + ' mois' : m.daysLeft + ' j'}`;
+    h += `<div style="font-size:14px;font-weight:800;margin-top:4px${m.reached ? ';color:var(--gain)' : ''}">${when}</div>`
+      + (m.date && m.auto ? `<div class="t-sm">Compté depuis le 1er versement connu (${fmtDate(m.start)}) : précise la date d'ouverture dans « Modifier ».</div>` : '')
+      + `<div class="t-sm" style="margin-top:4px">${esc(m.text)}</div>`;
+  }
+  if (c) {
+    h += `<div class="t-sm" style="margin-top:8px;display:flex;justify-content:space-between;gap:8px"><span>${c.basis === 'balance' ? 'Plafond' : 'Versements <b class="t-num">' + masked(c.used) + '</b> /'} ${masked(c.amount)}</span><span>${c.basis === 'balance' ? (c.left > 0.005 ? `Encore <b class="t-num">${masked(c.left)}</b> à verser` : '<b>Plus de versement possible</b>') : c.over ? '<b style="color:var(--loss)">Plafond dépassé</b>' : `Reste <b class="t-num">${masked(c.left)}</b>`}</span></div>
+    <div style="height:6px;border-radius:3px;background:rgba(127,127,127,.18);margin-top:4px;overflow:hidden"><div style="height:100%;width:${c.pct.toFixed(1)}%;background:${c.over ? 'var(--loss)' : 'var(--accent)'}"></div></div>`
+      + (c.sharedNote ? `<div class="t-sm" style="margin-top:4px">${esc(c.sharedNote)}</div>` : '');
+  }
+  if (info.note) h += `<div class="t-sm" style="margin-top:6px">${esc(info.note)}</div>`;
+  return `<div id="js-acc-env" style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)"><div class="t-label">Enveloppe fiscale · ${esc(info.short)}</div>${h}</div>`;
+}
+// Accueil « À surveiller » : jalon fiscal (PEA 5 ans, assurance-vie 8 ans) dans les 90 jours
+HOME_WATCH.taxEnvelope = () => taxMilestonesSoon(S.accounts, { today: _dayKey(Date.now()), conv: (v, c) => toRefCcy(v, c) }, 90)
+  .map(({ acc, info }) => ({ level: 'info', when: info.milestone.date, go: 'account', accountId: acc.id,
+    text: `${info.short} « ${acc.name} » : ${info.milestone.years} ans le ${fmtDate(info.milestone.date)}`, sub: 'Fiscalité allégée à partir de cette date' }));
 // Comparaison à l'indice : tableau Période / Compte / Indice / Écart, depuis la même date de début que le compte
 function accBenchHTML(acc, perf, sum) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
@@ -87,7 +115,7 @@ function accBenchHTML(acc, perf, sum) {
   if (!covers && !_benchTried[key + '|' + t0]) return wait("chargement de l'indice…");   // le chargement est lancé par le binding de l'écran
   if (!ser) return wait('indice indisponible pour le moment');
   const g = 'display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:6px;align-items:baseline;font-size:12px';
-  const cell = v => v == null ? '<span class="t-sm">—</span>' : `<b class="${v < 0 ? 't-loss' : 't-gain'} t-num">${fmtPct(v)}</b>`;
+  const cell = v => v == null ? '<span class="t-sm">—</span>' : `<b class="${pctClass(v)} t-num">${fmtPct(v)}</b>`;
   const bAll = benchRet(ser.series, t0), sameYtd = t0 > sum.pye, bYtd = sameYtd ? bAll : benchRet(ser.series, sum.pye);
   const row = (lbl, a, r) => {
     const x = (a == null || r == null) ? null : a - r;
@@ -108,6 +136,7 @@ function accBenchHTML(acc, perf, sum) {
 
 function renderAccount() {
   const acc=S.accounts.find(a=>a.id===S.accountId); if(!acc) return '';
+  if(savingsView(acc)) return renderSavingsAccount(acc);   // livret : solde, taux, mouvements, sans titres (js/screens/savings.js)
   _movesAll=false; // le relevé repart replié à chaque ouverture de l'écran
   const totPnl=acc.holdings.reduce((s,h)=>s+(h.pnlRef??h.pnl??0),0);
   const secVal=accSum(acc.holdings);          // titres seuls (devise appli)
@@ -125,19 +154,17 @@ function renderAccount() {
   const tracked=cfs.length>0||!!adj;           // liquidités suivies (apports saisis ou régularisation)
   const {perf,sum}=accPerfNow(acc);
   const netCf=accFlows(acc,(v,c)=>toRefCcy(v,c)).reduce((s,f)=>s+f.amt,0);   // apports − retraits, devise appli
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
+  return `${backBarHTML()}
   <div class="acc-hero">
     <div class="row gap10" style="margin-bottom:6px;align-items:center">
-      <div style="font-size:26px">${iconHtml(acc.icon)}</div>
+      ${accTypeBadgeHTML(acc.type,40)}
       <div class="col" style="gap:2px;flex:1;min-width:0">
         <div style="font-size:20px;font-weight:800;letter-spacing:-.5px">${esc(acc.name)}${acc.observer?` <span class="obs-tag" style="font-size:10px;vertical-align:middle">Obs.</span>`:''}</div>
         <div class="t-sm">${esc(acc.type||'')}${acc.bank?' · '+esc(acc.bank):''}</div>
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
+    ${isSavingsAccount(acc)?`<div class="t-sm" style="margin-top:4px;color:var(--loss)">Ce ${esc(acc.type)} contient des titres saisis auparavant : supprime-les pour passer à l'affichage livret (solde, taux, versements).</div>`:''}
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
@@ -149,6 +176,7 @@ function renderAccount() {
     </div>
     ${accPerfCardHTML(acc,perf,sum)}
     ${accBenchHTML(acc,perf,sum)}
+    ${accEnvelopeHTML(acc)}
     ${tracked?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>
@@ -213,7 +241,6 @@ function renderHoldsHTML(acc) {
   if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;renderMovesHTML(acc);return;}
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
-      const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
       const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
       const stale   = priceStale(h);   // cours trop ancien ou date de cotation inconnue (js/services/prices.js)
       return `
@@ -229,59 +256,16 @@ function renderHoldsHTML(acc) {
           </div>
           <div class="hold-item-bot">
             <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${stale?';color:var(--loss);font-weight:700':''}"${stale?` title="Cours non synchronisé (${esc(priceAgeLabel(h.quoteAt))})"`:''}>${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${esc(h.type)}${stale?' · ⚠ cours obsolète':''}</div>
-            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
-            <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            </div>
-            <div class="hold-add-btn" data-add="${h.id}" style="width:26px;height:26px;border-radius:7px">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-            </div>
-            <div class="hold-del-btn" data-del="${h.id}" style="width:26px;height:26px;border-radius:7px">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </div>
+            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${pctClass(h.pnlPct)}">${fmtPct(h.pnlPct)}</div>
           </div>
         </div>
       </div>`;
     }).join('')+
   `</div>`;
-  // Navigate on row click (excluding action buttons)
+  // Toucher une ligne ouvre la fiche du titre, où se trouvent toutes les actions : favori ⭐, mouvement, modifier, supprimer
   el.querySelectorAll('.hold-item').forEach(item=>{
-    item.addEventListener('click',e=>{
-      if(e.target.closest('.hold-del-btn')||e.target.closest('.hold-add-btn')||e.target.closest('.hold-watch-btn')) return;
-      S.holdingId=item.dataset.hid; go('stock');
-    });
+    item.addEventListener('click',()=>{ S.holdingId=item.dataset.hid; go('stock'); });
   });
-  // Étoile : toggle watchlist
-  el.querySelectorAll('.hold-watch-btn').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    const h = acc.holdings.find(h => h.id === b.dataset.watchHid);
-    if (!h) return;
-    const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
-    haptic(idx >= 0 ? 6 : 12);
-    if (idx >= 0) {
-      S.watchlist.splice(idx, 1);
-      toast(`${h.ticker} retiré des favoris`);
-    } else {
-      S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
-      toast(`${h.ticker} ajouté aux favoris ⭐`);
-      // Animation pop sur le bouton étoile
-      const starBtn = b.closest('.hold-watch-btn') || b;
-      starBtn.classList.remove('star-pop');
-      void starBtn.offsetWidth;
-      starBtn.classList.add('star-pop');
-    }
-    saveAccounts();
-    refreshMain();
-    renderHoldsHTML(acc);
-  }));
-  el.querySelectorAll('.hold-add-btn[data-add]').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    openAddOrder(S.accountId, b.dataset.add);
-  }));
-  el.querySelectorAll('.hold-del-btn').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    deleteHolding(S.accountId,b.dataset.del);
-  }));
   renderMovesHTML(acc); // le relevé suit toujours l'état des positions
 }
 
@@ -306,7 +290,7 @@ function getAccountMoves(acc) {
   (acc.cashflows||[]).forEach(c => {
     mv.push({
       date: c.date, kind: c.type, cfId: c.id,
-      label: c.type==='WIT' ? 'Retrait' : 'Apport',
+      label: c.type==='WIT' ? 'Retrait' : c.type==='INT' ? 'Intérêts' : isSavingsAccount(acc) ? 'Versement' : 'Apport',
       detail: c.note || '', amount: +c.amount||0, ccy: PU.cfCcy(acc, c),
     });
   });
@@ -324,6 +308,7 @@ const MOVE_STYLE = {
   DIV:  { dot:'DIV', cls:'div',  type:'Dividende',  sign:'+', val:'t-gain' },
   DEP:  { dot:'AP',  cls:'buy',  type:'Apport',     sign:'+', val:'t-gain' },
   WIT:  { dot:'RE',  cls:'sell', type:'Retrait',    sign:'−', val:'t-loss' },
+  INT:  { dot:'INT', cls:'div',  type:'Intérêts',   sign:'+', val:'t-gain' },
 };
 
 function renderMovesHTML(acc) {
@@ -333,7 +318,7 @@ function renderMovesHTML(acc) {
   if(cnt) cnt.textContent=`${all.length} mouvement${all.length!==1?'s':''}`;
   if(!all.length){
     el.innerHTML=`<div style="text-align:center;padding:26px 20px;color:var(--text2);font-size:13px">
-      ${S.search?'Aucun mouvement pour cette recherche':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
+      ${S.search?'Aucun mouvement pour cette recherche':isSavingsAccount(acc)?'Aucun mouvement — ajoute un versement ou les intérêts reçus':'Aucun mouvement — ajoutez un apport ou passez un ordre'}
     </div>`;
     return;
   }
@@ -350,7 +335,7 @@ function renderMovesHTML(acc) {
         </div>
         <div class="col right gap4" style="flex-shrink:0">
           <div style="font-size:13px;font-weight:800" class="${st.val} t-num">${st.sign}${maskedNative(m.amount,m.ccy)}</div>
-          <div class="t-sm">${st.type}</div>
+          <div class="t-sm">${m.kind==='DEP'&&isSavingsAccount(acc)?'Versement':st.type}</div>
         </div>
       </div>`;
     }).join('')+
@@ -377,7 +362,8 @@ function deleteHolding(accId,holdId) {
   openConfirm(`Supprimer ${h.name} ?`, ()=>{
     acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
     acc.value=accTotal(acc);
-    renderHoldsHTML(acc);
+    if (S.screen==='stock') back();   // suppression depuis la fiche du titre : retour au compte
+    else renderHoldsHTML(acc);
     refreshMain();
     toast('Position supprimée');
   });
@@ -476,7 +462,8 @@ SCREEN_BIND.account = function (el, id) {
     const acc=S.accounts.find(a=>a.id===S.accountId);
     el.querySelector('#js-back')?.addEventListener('click',back);
 
-    if(acc) renderHoldsHTML(acc);
+    const savings=savingsView(acc);
+    if(acc) { if(savings) renderMovesHTML(acc); else renderHoldsHTML(acc); }
 
     el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
 
@@ -487,7 +474,7 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-bm-btn')?.addEventListener('click',()=>{ if(acc) openBenchSheet(acc); });
     el.querySelectorAll('[data-pm]').forEach(b=>b.addEventListener('click',()=>{ _perfModeSet(b.dataset.pm); renderScreen('account'); }));
     // Indice de comparaison : téléchargement de la série si elle est absente ou ne remonte pas jusqu'à la date de début
-    if(acc && !S.isDemo){
+    if(acc && !savings && !S.isDemo){
       const {sum}=accPerfNow(acc), key=accBenchmarkKey(acc);
       if(sum && BENCHMARKS[key]){
         const ser=benchSeries(getHistorySeries('IDX:'+key),getHistorySeries('IDX:EURUSD'),benchNeedsFx(key,S.currency));
@@ -524,6 +511,7 @@ SCREEN_BIND.account = function (el, id) {
       if(acc) renderHoldsHTML(acc);
     }));
 
+    if(savings) return;   // livret : ni cours à actualiser, ni recherche, ni tri
     initPTR(el,async ()=>{
       if(!acc) return;
       await fetchLivePrices();

@@ -1,17 +1,24 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import '../../utils.js';
 import { loadClassic } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
 // Accueil et Analyse : mêmes agrégats (js/features/wealth.js), chargés pour de vrai.
-const calc = loadClassic('js/features/realestate-calc.js', { exports: ['immoCalc'] });
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoCalc'] });
 const wealth = loadClassic('js/features/wealth.js', { globals: calc, exports: ['wealthBreakdown', 'analysisData'] });
 const TODAY = '2026-11-22';
+// Couleurs, segments et donut + légende : partagés par l'Analyse et l'Accueil (js/features/charts.js)
+const charts = loadClassic('js/features/charts.js', {
+  globals: { esc: s => globalThis.PU.esc(s), masked: v => v.toFixed(2) },
+  exports: ['buildSegs', 'donutBlock', 'POCKET_C', 'ASSET_C', 'ACCTYPE_C', 'SEC_C'],
+});
 
 const prop = (over = {}) => ({ id: 'im1', name: 'Appart', kind: 'main', buyDate: '2025-09-11', price: 100000, notary: 0, works: 0, otherFees: 0, growth: 0, loan: { amount: 90000, rate: 0, years: 10, payment: 0, first: '' }, ...over });
 const hold = (over = {}) => ({ ticker: 'MC', type: 'Action', country: 'France', sector: 'Luxe', value: 1000, valueRef: 1000, pnlRef: 100, avgBuyPrice: 100, quantity: 10, currency: 'EUR', ...over });
 
 let S, props;
 const globals = () => ({
+  ...charts,
   S,
   imRead: () => props,
   _dayKey: () => TODAY,
@@ -88,7 +95,30 @@ describe('Analyse', () => {
 });
 
 describe('Accueil', () => {
-  const render = () => loadClassic('js/screens/dashboard.js', { globals: globals(), exports: ['renderDash'] }).renderDash();
+  // Lignes cliquables et bloc « À surveiller » : vrais modules (js/features/home-watch.js, js/screens/home-links.js)
+  let HW;
+  const links = () => {
+    const hw = loadClassic('js/features/home-watch.js', { exports: ['HOME_WATCH', 'homeWatchItems'] });
+    Object.assign(hw.HOME_WATCH, HW);
+    return loadClassic('js/screens/home-links.js', { globals: { ...globals(), ...hw }, exports: ['homeWealthRowsHTML', 'homeWatchHTML', 'bindHomeLinks'] });
+  };
+  beforeEach(() => { HW = {}; });
+  const render = () => loadClassic('js/screens/dashboard.js', { globals: { ...globals(), ...links() }, exports: ['renderDash'] }).renderDash();
+
+  it('camembert des grandes classes d\'actifs (mêmes chiffres que l\'Analyse), qui ouvre l\'Analyse', () => {
+    props = [prop()];
+    const html = render();
+    expect(html).toContain('Grandes classes d\'actifs');
+    expect(html).toContain('id="js-pocket-card"');
+    expect(html).toContain('<span class="leg-name">Bourse</span>');
+    expect(html).toContain('<span class="leg-name">Immobilier</span>');   // immobilier net compris, comme l'Analyse
+    expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('Patrimoine net'));
+    expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('hist-card'));   // après l'évolution
+  });
+  it('sans aucune valeur : pas de camembert vide', () => {
+    S.accounts = [];
+    expect(render()).not.toContain('Grandes classes');
+  });
 
   it('affiche le patrimoine NET (comptes + immobilier − crédits)', () => {
     props = [prop()];
@@ -97,18 +127,53 @@ describe('Accueil', () => {
     expect(html).toContain('Patrimoine net');
     expect(html).toContain(net.toFixed(2) + ' €');
   });
-  it('sans bien : le montant est celui des comptes, sans détail brut / crédits', () => {
+  it('sans bien : le montant est celui des comptes ; lignes Comptes / Immobilier / Autres crédits cliquables, pas de crédits immobiliers', () => {
     const html = render();
     expect(html).toContain('1000.00 €');
     expect(html.includes('Crédits immobiliers')).toBe(false);
+    expect(html).toContain('data-wgo="comptes"');
+    expect(html).toContain('data-wgo="immo"');
+    expect(html).toContain('data-wgo="credits"');
   });
-  it('avec un bien : brut, crédits et immobilier brut', () => {
+  it('avec un bien : comptes, immobilier (ma part) et crédits immobiliers, chacun vers son module', () => {
     props = [prop()];
     const html = render();
-    expect(html).toContain('Patrimoine brut');
-    expect(html).toContain('Crédits immobiliers restants');
-    expect(html).toContain('Dont immobilier brut');
+    expect(html).toMatch(/data-wgo="comptes"[^>]*><span>Comptes financiers<\/span><span class="t-num">1000.00/);
+    expect(html).toMatch(/data-wgo="immo"[^>]*><span>Immobilier \(ma part\)<\/span><span class="t-num">100000.00/);
+    expect(html).toMatch(/data-wgo="immo"[^>]*><span>Crédits immobiliers<\/span><span class="t-num">−/);
     expect(html).toContain('1 bien immobilier');
+  });
+  it('« À surveiller » : absent sans élément ; trié alerte > échéance proche > info ; une source en erreur est ignorée', () => {
+    expect(render().includes('À surveiller')).toBe(false);
+    HW = {
+      a: () => [{ level: 'info', text: 'Info', go: 'dca' }],
+      b: () => { throw new Error('panne'); },
+      c: () => [{ level: 'soon', when: '2026-12-05', text: 'Échéance B', go: 'credits' }, { level: 'soon', when: '2026-12-01', text: 'Échéance A', go: 'immo' }],
+      d: () => [{ level: 'alert', text: 'Alerte <b>', go: 'orders' }],
+    };
+    const html = render();
+    expect(html).toContain('À surveiller');
+    const order = ['Alerte &lt;b&gt;', 'Échéance A', 'Échéance B', 'Info'].map(t => html.indexOf(t));
+    expect(order.every(i => i > 0)).toBe(true);
+    expect([...order].sort((x, y) => x - y)).toEqual(order);
+    // ordre de l'accueil : patrimoine, évolution, puis « À surveiller »
+    expect(html.indexOf('Patrimoine net')).toBeLessThan(html.indexOf('hist-card'));
+    expect(html.indexOf('hist-card')).toBeLessThan(html.indexOf('À surveiller'));
+  });
+  it('toucher une ligne ou un élément ouvre son module ; un compte précis s ouvre directement', () => {
+    HW = { t: () => [{ level: 'info', text: 'PEA 5 ans', go: 'account', accountId: 'a' }] };
+    const calls = [];
+    const L = loadClassic('js/screens/home-links.js', {
+      globals: { ...globals(), ...(() => { const hw = loadClassic('js/features/home-watch.js', { exports: ['HOME_WATCH', 'homeWatchItems'] }); Object.assign(hw.HOME_WATCH, HW); return hw; })(),
+        runShortcut: k => calls.push(['module', k]), go: k => calls.push(['go', k, S.accountId]) },
+      exports: ['bindHomeLinks'],
+    });
+    const mk = data => { const o = { dataset: data, on: null, addEventListener: (t, f) => { o.on = f; } }; return o; };
+    const rows = [mk({ wgo: 'immo' })], items = [mk({ hw: '0' })];
+    L.bindHomeLinks({ querySelectorAll: sel => (sel === '[data-wgo]' ? rows : items) });
+    S.accountId = null;
+    rows[0].on(); items[0].on();
+    expect(calls).toEqual([['module', 'immo'], ['go', 'account', 'a']]);
   });
   it('conserve la variation du jour et le P&L avec son pourcentage (rien de supprimé)', () => {
     const html = render();
@@ -133,5 +198,14 @@ describe('Accueil', () => {
     const html = render();
     expect(html).toContain('Évolution des comptes financiers');
     expect(html.includes('Évolution du patrimoine')).toBe(false);
+  });
+});
+
+describe('Comptes : liste lisible', () => {
+  it('part du patrimoine légendée ; le type est porté par la pastille (sous-titre : tests/screens/accounts-sub.test.js)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('js/screens/accounts.js', 'utf8');
+    expect(src).toContain('accTypeBadgeHTML(a.type,40)');
+    expect(src).toContain('% du patrimoine financier</span>');
   });
 });
