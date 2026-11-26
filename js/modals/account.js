@@ -6,7 +6,6 @@
 // Une table de règles qui référencerait un libellé inconnu serait inopérante sans bruit : on le signale dès le démarrage.
 accountRulesProblems().forEach(p => console.warn('[règles de comptes] ' + p));
 taxEnvelopeProblems(ACCOUNT_TYPES).forEach(p => console.warn('[enveloppes fiscales] type inconnu : ' + p));
-const ACC_TYPE_OTHER = '__other__';
 
 // Aligne le sélecteur de devise sur le type choisi (règle : accCurrencyForType). apply = true à la création, false pour un compte existant.
 function syncAccCurrency(typeSelId, curSelId, apply){
@@ -18,24 +17,16 @@ function syncAccCurrency(typeSelId, curSelId, apply){
   cur.title=r.reason;
 }
 
-// Remplit un <select> de types et pré-sélectionne `value`. `otherRowId` est la ligne
-// « Préciser le type », affichée quand l'option « Autre… » est choisie.
+// Remplit un <select> de types, regroupés par catégorie (ACCOUNT_TYPE_GROUPS), et pré-sélectionne `value`.
+// Un type hors liste (données anciennes) est conservé dans une section « Type actuel ».
 // `curSelId` (optionnel) : sélecteur de devise à aligner sur le type ; `applyCurrency` : true à la création (la devise suit le type).
-function fillAccTypeSelect(selId, otherRowId, otherInpId, value, curSelId, applyCurrency){
+function fillAccTypeSelect(selId, value, curSelId, applyCurrency){
   const sel=document.getElementById(selId); if(!sel) return;
-  // Un type hors liste (donnée ancienne, saisie « Autre ») est conservé et ajouté à la liste
-  const types=ACCOUNT_TYPES.includes(value)||!value ? ACCOUNT_TYPES : [...ACCOUNT_TYPES, value];
-  sel.innerHTML=types.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')
-    +`<option value="${ACC_TYPE_OTHER}">Autre…</option>`;
+  const opt=t=>`<option value="${esc(t)}">${esc(t)}</option>`;
+  const legacy=value&&!ACCOUNT_TYPES.includes(value)?`<optgroup label="Type actuel">${opt(value)}</optgroup>`:'';
+  sel.innerHTML=legacy+ACCOUNT_TYPE_GROUPS.map(g=>`<optgroup label="${esc(g.label)}">${g.types.map(opt).join('')}</optgroup>`).join('');
   sel.value=value||ACCOUNT_TYPES[0];
-  const otherRow=document.getElementById(otherRowId);
-  const otherInp=document.getElementById(otherInpId);
-  if(otherInp) otherInp.value='';
-  if(otherRow) otherRow.classList.add('hidden');
   sel.onchange=()=>{
-    const isOther=sel.value===ACC_TYPE_OTHER;
-    if(otherRow) otherRow.classList.toggle('hidden',!isOther);
-    if(isOther && otherInp) otherInp.focus();
     if(curSelId) syncAccCurrency(selId,curSelId,!!applyCurrency);
     syncAccEnvHint(selId);
     syncAccSavings(selId,true);
@@ -66,13 +57,8 @@ function syncAccEnvHint(selId){
   el.classList.toggle('hidden',!parts.length);
 }
 
-// Valeur retenue : le texte libre si « Autre… » est sélectionné, sinon l'option choisie.
-function readAccType(selId, otherInpId, fallback){
-  const sel=document.getElementById(selId);
-  const v=sel?.value||'';
-  if(v===ACC_TYPE_OTHER) return document.getElementById(otherInpId)?.value.trim()||fallback;
-  return v||fallback;
-}
+// Type choisi dans la liste (ou le type actuel conservé)
+function readAccType(selId, fallback){ return document.getElementById(selId)?.value||fallback; }
 
 // ═══════════════════════════════════════════════
 // ADD ACCOUNT MODAL
@@ -87,7 +73,7 @@ function openAccModal(){
   document.getElementById('acc-share').value='';
   document.getElementById('acc-balance').value='';
   document.getElementById('acc-type-rate').value='';
-  fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency',true);
+  fillAccTypeSelect('acc-type','','acc-currency',true);
   document.getElementById('acc-currency').value='EUR';
   syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
@@ -109,7 +95,7 @@ document.getElementById('acc-obs-tog').addEventListener('click',()=>{
 document.getElementById('acc-submit').addEventListener('click',()=>{
   const icon=document.getElementById('acc-icon').value.trim()||'📊';
   const name=document.getElementById('acc-name').value.trim();
-  const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
+  const type=readAccType('acc-type',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
   const startDate=document.getElementById('acc-start').value||'';
   const share=accShareInput('acc-share'); if(share===null) return;
@@ -225,7 +211,7 @@ function openRenameAcc(accId, currentName){
   document.getElementById('rename-acc-share').value=acc?.share??'';
   document.getElementById('rename-acc-type-rate').value=acc?.rate??'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
-  fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency',false);
+  fillAccTypeSelect('rename-acc-type',acc?.type||'','rename-acc-currency',false);
   syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : sa devise n'est pas modifiée
   document.getElementById('rename-acc-bg').classList.add('show');
   document.getElementById('rename-acc-sheet').classList.add('show');
@@ -247,7 +233,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.name=name;
   acc.icon=document.getElementById('rename-acc-icon')?.value.trim()||acc.icon||'📊';
   // Changer de type ne doit pas rendre interdites des positions déjà saisies (un compte déjà non conforme reste modifiable sans changer de type)
-  const newType=readAccType('rename-acc-type','rename-acc-type-other',acc.type||ACCOUNT_TYPES[0]);
+  const newType=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
   if(newType!==acc.type){
     const bad=accTypeViolations(acc,newType);
     if(bad.length){toast('Type incompatible avec : '+bad.map(h=>h.ticker).join(', '));return;}

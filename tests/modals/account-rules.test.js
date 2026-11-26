@@ -4,7 +4,7 @@ import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
 
 // Modales de compte et de position avec les VRAIES règles (js/features/account-rules.js).
 const rules = loadClassic('js/features/account-rules.js', {
-  exports: ['ACCOUNT_TYPES', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions'],
+  exports: ['ACCOUNT_TYPES', 'ACCOUNT_TYPE_GROUPS', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions'],
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
 const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });
@@ -68,10 +68,18 @@ describe('modale de compte : devise et type', () => {
     chooseType('acc-type', CTO);
     expect(dom.els['acc-currency']).toMatchObject({ value: 'EUR', disabled: false, title: '' });
   });
-  it('création : un type libre (« Autre… ») ne verrouille rien', () => {
+  it('création : types regroupés par catégorie, sans « Autre… » ni SCPI / métaux / compte courant / compte à terme', () => {
     setup(); api.openAccModal();
-    chooseType('acc-type', '__other__');
-    expect(dom.els['acc-currency'].disabled).toBe(false);
+    const html = dom.els['acc-type'].innerHTML;
+    expect([...html.matchAll(/<optgroup label="([^"]+)">/g)].map(m => m[1])).toEqual(['Bourse et crypto', 'Assurance-vie et retraite', 'Épargne disponible (livrets)']);
+    for (const gone of ['Autre…', 'SCPI', 'Métaux', 'Compte courant', 'Compte à terme']) expect(html.includes(gone)).toBe(false);
+    expect(html.indexOf('LDDS')).toBeGreaterThan(html.indexOf('Épargne disponible'));
+  });
+  it('modification d un compte d un type retiré : son type est conservé dans « Type actuel »', () => {
+    setup([{ id: 'a1', name: 'SCPI', type: 'SCPI / Immobilier', currency: 'EUR', holdings: [], cashflows: [] }]);
+    api.openRenameAcc('a1', 'SCPI');
+    expect(dom.els['rename-acc-type'].innerHTML.startsWith('<optgroup label="Type actuel"><option value="SCPI / Immobilier">')).toBe(true);
+    expect(dom.els['rename-acc-type'].value).toBe('SCPI / Immobilier');
   });
   it('modification : la devise du compte n\'est jamais changée par le type, et seulement verrouillée si elle est déjà imposée', () => {
     setup([{ id: 'a1', name: 'PEA', type: CTO, currency: 'USD', holdings: [], cashflows: [] }]);

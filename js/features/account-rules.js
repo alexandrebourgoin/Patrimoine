@@ -1,29 +1,17 @@
 // Règles des comptes : types de compte, devise de référence par type, types d'actifs autorisés. Fonctions PURES (aucun accès à S ni au DOM).
 // Les clés des tables sont les libellés EXACTS de ACCOUNT_TYPES : une faute de frappe désactiverait une règle sans rien dire,
 // accountRulesProblems() la détecte (vérifié par les tests ET signalé dans la console au démarrage, voir js/modals/account.js).
-// Un type absent des tables ou saisi librement (« Autre… ») n'a ni devise présélectionnée ni restriction.
+// Un type absent des tables (données anciennes) n'a ni devise présélectionnée ni restriction.
 
-// Liste proposée à la création ET à la modification. Un type hors liste (données anciennes, saisie « Autre ») reste conservé :
-// il est ajouté à la volée comme option supplémentaire.
-const ACCOUNT_TYPES = [
-  "Compte-Titres Ordinaire",
-  "Plan d'Épargne en Actions (PEA)",
-  "PEA-PME",
-  "Assurance-Vie",
-  "Plan d'Épargne Retraite (PER)",
-  "Épargne salariale (PEE / PERCO)",
-  "Pilier 3a",
-  "Livret A",
-  "LDDS",
-  "LEP",
-  "Livret Jeune",
-  "Compte à terme",
-  "Compte courant",
-  "PEL / CEL",
-  "SCPI / Immobilier",
-  "Crypto / Exchange",
-  "Métaux précieux",
+// Types proposés à la création ET à la modification, regroupés par grande catégorie (listes déroulantes à sections).
+// Un type hors liste (données anciennes : SCPI, compte courant, saisie libre…) reste conservé : il est ajouté à la volée
+// dans une section « Type actuel » et garde son comportement.
+const ACCOUNT_TYPE_GROUPS = [
+  { label: 'Bourse et crypto', types: ["Compte-Titres Ordinaire", "Plan d'Épargne en Actions (PEA)", "PEA-PME", "Crypto / Exchange"] },
+  { label: 'Assurance-vie et retraite', types: ["Assurance-Vie", "Plan d'Épargne Retraite (PER)", "Épargne salariale (PEE / PERCO)", "Pilier 3a"] },
+  { label: 'Épargne disponible (livrets)', types: ["Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
 ];
+const ACCOUNT_TYPES = ACCOUNT_TYPE_GROUPS.flatMap(g => g.types);
 
 // Devise de référence par type : [devise, imposée].
 // Imposée : le produit n'existe que dans cette devise (PEA, Livret A, Pilier 3a…). Sinon, simple valeur par défaut modifiable.
@@ -40,9 +28,6 @@ const ACC_TYPE_CCY = {
   "Pilier 3a": ['CHF', true],
   "Assurance-Vie": ['EUR', false],
   "Compte-Titres Ordinaire": ['EUR', false],
-  "Compte à terme": ['EUR', false],
-  "Compte courant": ['EUR', false],
-  "SCPI / Immobilier": ['EUR', false],
 };
 
 // Types d'actifs acceptés par type de compte. Absent = aucune restriction.
@@ -57,7 +42,7 @@ const ACC_ASSET_TYPES = {
   "Épargne salariale (PEE / PERCO)": _ACC_MARKET_ASSETS,
   "Pilier 3a": _ACC_MARKET_ASSETS,
   // Livrets et comptes d'épargne : un solde et un taux, aucun titre (voir js/features/savings.js)
-  "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [], "Compte à terme": [], "Compte courant": [],
+  "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [],
 };
 // Comptes dont les actions doivent appartenir à l'Espace économique européen
 const ACC_PEA_TYPES = ["Plan d'Épargne en Actions (PEA)", "PEA-PME"];

@@ -6,7 +6,7 @@
 // Les intérêts entrent dans le solde mais PAS dans les versements : ils peuvent faire dépasser le plafond
 // (ex. LDDS : 12 000 € versés au plus, intérêts capitalisés au-delà).
 
-const SAVINGS_TYPES = ['Livret A', 'LDDS', 'LEP', 'Livret Jeune', 'PEL / CEL', 'Compte à terme', 'Compte courant'];
+const SAVINGS_TYPES = ['Livret A', 'LDDS', 'LEP', 'Livret Jeune', 'PEL / CEL'];
 // Taux réglementés en vigueur (Livret A et LDDS : 1,7 % depuis le 1er août 2026 ; LEP : 2,5 %), vérifiés en novembre 2026.
 // Proposés à la saisie seulement : chaque compte garde SON taux (acc.rate), modifiable (révision au 1er février et au 1er août).
 const SAVINGS_RATES = { 'Livret A': 1.7, 'LDDS': 1.7, 'LEP': 2.5 };
