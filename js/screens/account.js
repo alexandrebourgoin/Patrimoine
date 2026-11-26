@@ -199,7 +199,6 @@ function renderHoldsHTML(acc) {
   if(!hs.length){el.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text2);font-size:14px">Aucun résultat</div>`;renderMovesHTML(acc);return;}
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
-      const watched = !!S.watchlist.find(w => w.ticker === h.ticker);
       const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
       return `
       <div class="hold-item" data-hid="${h.id}">
@@ -215,58 +214,15 @@ function renderHoldsHTML(acc) {
           <div class="hold-item-bot">
             <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
             <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${pctClass(h.pnlPct)}">${fmtPct(h.pnlPct)}</div>
-            <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-            </div>
-            <div class="hold-add-btn" data-add="${h.id}" style="width:26px;height:26px;border-radius:7px">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-            </div>
-            <div class="hold-del-btn" data-del="${h.id}" style="width:26px;height:26px;border-radius:7px">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </div>
           </div>
         </div>
       </div>`;
     }).join('')+
   `</div>`;
-  // Navigate on row click (excluding action buttons)
+  // Toucher une ligne ouvre la fiche du titre, où se trouvent toutes les actions : favori ⭐, mouvement, modifier, supprimer
   el.querySelectorAll('.hold-item').forEach(item=>{
-    item.addEventListener('click',e=>{
-      if(e.target.closest('.hold-del-btn')||e.target.closest('.hold-add-btn')||e.target.closest('.hold-watch-btn')) return;
-      S.holdingId=item.dataset.hid; go('stock');
-    });
+    item.addEventListener('click',()=>{ S.holdingId=item.dataset.hid; go('stock'); });
   });
-  // Étoile : toggle watchlist
-  el.querySelectorAll('.hold-watch-btn').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    const h = acc.holdings.find(h => h.id === b.dataset.watchHid);
-    if (!h) return;
-    const idx = S.watchlist.findIndex(w => w.ticker === h.ticker);
-    haptic(idx >= 0 ? 6 : 12);
-    if (idx >= 0) {
-      S.watchlist.splice(idx, 1);
-      toast(`${h.ticker} retiré des favoris`);
-    } else {
-      S.watchlist.push({ ticker: h.ticker, name: h.name, price: h.currentPrice, change1d: acc.change1d || 0, currency: h.currency || 'EUR' });
-      toast(`${h.ticker} ajouté aux favoris ⭐`);
-      // Animation pop sur le bouton étoile
-      const starBtn = b.closest('.hold-watch-btn') || b;
-      starBtn.classList.remove('star-pop');
-      void starBtn.offsetWidth;
-      starBtn.classList.add('star-pop');
-    }
-    saveAccounts();
-    refreshMain();
-    renderHoldsHTML(acc);
-  }));
-  el.querySelectorAll('.hold-add-btn[data-add]').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    openAddOrder(S.accountId, b.dataset.add);
-  }));
-  el.querySelectorAll('.hold-del-btn').forEach(b=>b.addEventListener('click',e=>{
-    e.stopPropagation();
-    deleteHolding(S.accountId,b.dataset.del);
-  }));
   renderMovesHTML(acc); // le relevé suit toujours l'état des positions
 }
 
@@ -362,7 +318,8 @@ function deleteHolding(accId,holdId) {
   openConfirm(`Supprimer ${h.name} ?`, ()=>{
     acc.holdings=acc.holdings.filter(h=>h.id!==holdId);
     acc.value=accTotal(acc);
-    renderHoldsHTML(acc);
+    if (S.screen==='stock') back();   // suppression depuis la fiche du titre : retour au compte
+    else renderHoldsHTML(acc);
     refreshMain();
     toast('Position supprimée');
   });
