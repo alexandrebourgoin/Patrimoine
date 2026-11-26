@@ -552,3 +552,7 @@ select.form-input.hidden{display:none}
 .tp-group[open] .tp-cur{display:none}
 .tp-opt{padding:10px 14px;border-top:1px solid var(--border);font-size:14px;cursor:pointer;display:flex;justify-content:space-between}
 .tp-opt.on{color:var(--accent);font-weight:700;background:var(--accent-dim)}
+/* bouton « Intérêts » réservé aux livrets (il apparaissait sur tous les comptes) */
+.type-btn.hidden{display:none}
+/* lignes d'aide masquées quand elles sont vides (.hidden n'avait d'effet que sur .form-row) */
+.t-sm.hidden{display:none}
