@@ -541,8 +541,8 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
 
 /* Choix du type de compte en catégories repliables (js/modals/account.js : renderAccTypePicker) */
-select.form-input.hidden{display:none}
-.tp{display:flex;flex-direction:column;gap:6px}
+select.form-input.hidden,.form-field.hidden{display:none}
+.tp{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .tp-group{border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden}
 .tp-group>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 14px;font-size:13px;font-weight:800;cursor:pointer}
 .tp-group>summary::-webkit-details-marker{display:none}

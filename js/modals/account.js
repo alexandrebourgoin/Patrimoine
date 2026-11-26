@@ -47,12 +47,17 @@ function fillAccTypeSelect(selId, value, curSelId, applyCurrency){
 // À l'ouverture, seule la catégorie du type choisi est dépliée ; chaque catégorie se replie / déplie d'un toucher.
 function renderAccTypePicker(selId, reset){
   const sel=document.getElementById(selId); if(!sel) return;
-  sel.classList.add('hidden');
+  // Pleine largeur : le champ d'origine (étiquette + <select>, à côté de la devise) est masqué, la liste vient sous sa ligne
+  const field=sel.closest?.('.form-field'), row=sel.closest?.('.form-row');
+  (field||sel).classList.add('hidden');
   let box=document.getElementById(selId+'-picker');
-  if(!box){ box=document.createElement('div'); box.id=selId+'-picker'; box.className='tp'; sel.insertAdjacentElement?.('afterend',box); }
+  if(!box){
+    box=document.createElement('div'); box.id=selId+'-picker'; box.className='tp form-row';
+    (row||sel).insertAdjacentElement?.(row?'beforebegin':'afterend',box);
+  }
   const open=reset?null:new Set([...(box.querySelectorAll?.('details[open]')||[])].map(d=>d.dataset.group));
   const groups=[...(ACCOUNT_TYPES.includes(sel.value)?[]:[{label:'Type actuel',types:[sel.value]}]),...ACCOUNT_TYPE_GROUPS];
-  box.innerHTML=groups.map(g=>{
+  box.innerHTML='<div class="form-label">Type de compte</div>'+groups.map(g=>{
     const has=g.types.includes(sel.value), isOpen=open?open.has(g.label)||has:has;
     return `<details class="tp-group" data-group="${esc(g.label)}"${isOpen?' open':''}><summary><span>${esc(g.label)}</span>${has?`<span class="tp-cur">${esc(sel.value)}</span>`:''}</summary>
       ${g.types.map(t=>`<div class="tp-opt tap${t===sel.value?' on':''}" data-type="${esc(t)}">${esc(t)}${t===sel.value?' <span class="tp-chk">✓</span>':''}</div>`).join('')}
