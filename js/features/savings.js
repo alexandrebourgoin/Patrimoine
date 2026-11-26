@@ -32,15 +32,46 @@ function savingsSummary(acc, conv = v => v) {
 // Plafond de versements du type (€) ou null
 function savingsCeiling(type) { return (TAX_ENVELOPES[type] && TAX_ENVELOPES[type].ceiling) || null; }
 
-// Message d'erreur si un versement de `amount` dépasse le plafond (versements − retraits, intérêts exclus) ; '' sinon
-function savingsDepositError(acc, amount, conv = v => v) {
+// Règle du plafond d'un livret : aucun versement ne peut porter le solde (intérêts compris) au-delà du plafond.
+// Les intérêts, eux, peuvent le dépasser ; un retrait libère de la place.
+// Ex. Livret A : 22 000 € versés le 20/11, 200 € d'intérêts le 21/11 → il ne reste que 750 € à verser à partir du 21/11.
+const _svFmt = v => Math.max(0, Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €';
+const _svSign = t => (t === 'WIT' ? -1 : 1);
+// Mouvements du livret triés par date (à date égale, dans l'ordre de saisie), montants en devise appli
+function _svFlows(acc, conv) {
+  return (acc.cashflows || []).filter(c => c && c.date && ['DEP', 'WIT', 'INT'].includes(c.type))
+    .map((c, i) => ({ date: c.date, type: c.type, amt: conv(+c.amount || 0, c.ccy || acc.currency), i }))
+    .sort((x, y) => x.date.localeCompare(y.date) || x.i - y.i);
+}
+// Solde du livret à une date (mouvements datés de ce jour compris)
+function savingsBalanceAt(acc, date, conv = v => v) {
+  return _svFlows(acc, conv).filter(f => f.date <= date).reduce((s, f) => s + _svSign(f.type) * f.amt, 0);
+}
+// Place restante sous le plafond à une date (null si pas de plafond)
+function savingsRoomAt(acc, date, conv = v => v) {
+  const cap = isSavingsAccount(acc) && savingsCeiling(acc.type);
+  return cap ? Math.max(0, cap - savingsBalanceAt(acc, date, conv)) : null;
+}
+// Message d'erreur si un versement de `amount` à la date `date` ferait dépasser le plafond, maintenant ou pour un versement
+// déjà saisi après cette date ; '' sinon
+function savingsDepositError(acc, amount, conv = v => v, date) {
   if (!isSavingsAccount(acc)) return '';
   const cap = savingsCeiling(acc.type);
   if (!cap || !(amount > 0)) return '';
-  const left = cap - Math.max(0, savingsSummary(acc, conv).net);
-  if (amount <= left + 0.005) return '';
-  const fmt = v => Math.max(0, Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' €';
-  return `Plafond de versements ${TAX_ENVELOPES[acc.type].short} (${fmt(cap)}) : il reste ${fmt(left)}. Les intérêts se saisissent à part.`;
+  date = date || '9999-12-31';
+  const flows = _svFlows(acc, conv), at = flows.filter(f => f.date <= date).length;
+  flows.splice(at, 0, { date, type: 'DEP', amt: amount, isNew: true });
+  let bal = 0;
+  for (const f of flows) {
+    if (f.type === 'DEP' && bal + f.amt > cap + 0.005) {
+      const short = TAX_ENVELOPES[acc.type].short;
+      return f.isNew
+        ? `Plafond ${short} (${_svFmt(cap)}) : au ${f.date.split('-').reverse().join('/')}, il reste ${_svFmt(cap - bal)} à verser (intérêts compris dans le solde).`
+        : `Ce versement ferait dépasser le plafond ${short} (${_svFmt(cap)}) lors du versement déjà saisi le ${f.date.split('-').reverse().join('/')}.`;
+    }
+    bal += _svSign(f.type) * f.amt;
+  }
+  return '';
 }
 
 // Mouvements de départ d'un livret créé avec un solde : ce qui dépasse le plafond ne peut être que des intérêts capitalisés.
