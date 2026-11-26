@@ -55,8 +55,8 @@ function renderImmo() {
     return `<button type="button" class="acc-card tap im-tile" data-imopen="${esc(p.id)}">
       <div class="row gap12">
         <div class="acc-icon" style="background:var(--card2)">⌂</div>
-        <div class="flex1" style="min-width:0"><div class="im-name">${esc(p.name)}</div><div class="t-sm">${esc(IMMO_KINDS[p.kind])}</div></div>
-        <div class="col right gap4"><span class="t-num" style="font-weight:800">${masked(c.equity)}</span><span class="t-sm">Valeur nette</span></div>
+        <div class="flex1" style="min-width:0"><div class="im-name">${esc(p.name)}</div><div class="t-sm">${esc(IMMO_KINDS[p.kind])}${c.share < 1 ? ` · ma part ${p.share} %` : ''}</div></div>
+        <div class="col right gap4"><span class="t-num" style="font-weight:800">${masked(c.myEquity)}</span><span class="t-sm">Valeur nette${c.share < 1 || c.myDebt !== c.debt ? ' (ma part)' : ''}</span></div>
       </div>
       ${c.loan ? `<div class="acc-bar" style="margin-top:12px"><div class="acc-bar-fill" style="width:${Math.max(0, Math.min(100, c.loan.pct))}%"></div></div>
       <div class="t-sm" style="margin-top:4px">Crédit remboursé : ${c.loan.pct.toFixed(1)} %</div>` : ''}
@@ -73,6 +73,8 @@ function renderImmo() {
   <div class="col gap12 px" style="padding-bottom:100px">${tiles || '<div class="t-sm" style="text-align:center;padding:20px">Aucun bien. Ajoute ta résidence principale ou un bien locatif.</div>'}</div>`;
 }
 
+// Bien détenu en partie, ou crédit supporté en partie : on affiche aussi « ma part »
+const _imPartial = c => c.share < 1 || Math.abs(c.myDebt - c.debt) > 0.005;
 // Un bloc par crédit (libellé, remboursé, restant dû, mensualité, fin), puis le total si le bien en a plusieurs
 function _imOneLoanHTML(L, s, idx, many) {
   const hasIns = s.ins > 0.005;
@@ -83,6 +85,7 @@ function _imOneLoanHTML(L, s, idx, many) {
     ${_imRow('Capital restant dû', masked(s.remaining))}
     ${_imRow('Mensualité', `${masked(s.pmt + s.ins)}${hasIns ? ` <span class="t-sm">dont assurance ${masked(s.ins)}</span>` : ''}`)}
     ${_imRow('Taux · durée', `${String(L.rate || 0).replace('.', ',')} % · ${L.years} an${L.years > 1 ? 's' : ''}`)}
+    ${L.debtShare !== undefined && L.debtShare < 100 ? _imRow(`Ma part de cette dette (${L.debtShare} %)`, masked(s.remaining * L.debtShare / 100)) : ''}
     ${_imRow('Intérêts payés' + (hasIns ? ' + assurance' : ''), masked(s.interestPaid + s.insPaid))}
     ${s.next ? _imRow('Prochaine échéance', fmtDate(s.next.date)) : ''}
     ${_imRow('Fin du prêt', fmtDate(s.end))}
@@ -123,7 +126,10 @@ function renderImmoDetail() {
     ${_imRow('Écart valeur − coût', _imSigned(c.gap))}
     ${L ? _imLoanBlock(p, c) : ''}
     <div class="im-sep"></div>
-    ${_imRow('Patrimoine net du bien' + (L ? ' <span class="t-sm">(valeur − capital restant dû)</span>' : ''), masked(c.equity), true)}
+    ${_imRow('Patrimoine net du bien' + (L ? ' <span class="t-sm">(valeur − capital restant dû)</span>' : ''), masked(c.equity), !_imPartial(c))}
+    ${_imPartial(c) ? `${_imRow(`Ma part de propriété (${p.share ?? 100} %)`, masked(c.myValue))}
+    ${L ? _imRow('Ma part des crédits', masked(c.myDebt)) : ''}
+    ${_imRow('Mon patrimoine net dans ce bien', masked(c.myEquity), true)}` : ''}
     <div class="im-actions">
       <button class="confirm-cancel im-btn" data-imedit="1">Modifier</button>
       <button class="confirm-cancel im-btn" data-imdel="1" style="color:var(--loss)">Supprimer</button>
@@ -179,20 +185,23 @@ function imReadForm() {
   return {
     name: _imEl('im-name').value.trim(), kind: _imEl('im-kind').value, buyDate: _imEl('im-date').value,
     price: _imNum('im-price'), notary: _imNum('im-notary'), works: _imNum('im-works'), otherFees: _imNum('im-other'), growth: _imNum('im-growth'),
-    loans: _imReadLoans(),
+    share: _imPctOf(_imEl('im-share').value), loans: _imReadLoans(),
   };
 }
+// Pourcentage saisi : vide → non renseigné (100 % implicite) ; sinon le nombre lu (validé ensuite : 1 à 100)
+function _imPctOf(v) { const s = String(v ?? '').trim(); if (!s) return undefined; const n = parseFloat(s.replace(',', '.')); return Number.isFinite(n) ? n : -1; }
 // ── Crédits du formulaire : un bloc par crédit (libellé, montant, taux, durée, 1re échéance, assurance €/mois) ──
 const _IM_LOAN_FIELDS = [
   ['label', 'Libellé', 'text', 'Prêt principal, PTZ…'], ['amount', 'Montant emprunté', 'number', '90000'],
   ['rate', 'Taux annuel (%)', 'number', '3.5'], ['years', 'Durée (années)', 'number', '20'],
   ['insurance', 'Assurance (€/mois)', 'number', '0'], ['first', 'Première échéance (si différente)', 'date', ''],
+  ['debtShare', 'Ma part de cette dette (%)', 'number', 'comme le bien'],
 ];
 function _imLoanFieldsHTML(L, i) {
   const v = k => (L && L[k] !== undefined && L[k] !== null && L[k] !== 0) ? esc(String(L[k])) : '';
   const f = ([k, label, type, ph]) => `<div class="form-field"><div class="form-label">${label}</div><input class="form-input" data-lf="${k}" type="${type}"${type === 'number' ? ' min="0" step="any" inputmode="decimal"' : ''} placeholder="${ph}" value="${v(k)}"></div>`;
   const rows = [];
-  for (let k = 0; k < _IM_LOAN_FIELDS.length; k += 2) rows.push(`<div class="form-row">${f(_IM_LOAN_FIELDS[k])}${f(_IM_LOAN_FIELDS[k + 1])}</div>`);
+  for (let k = 0; k < _IM_LOAN_FIELDS.length; k += 2) rows.push(`<div class="form-row">${f(_IM_LOAN_FIELDS[k])}${_IM_LOAN_FIELDS[k + 1] ? f(_IM_LOAN_FIELDS[k + 1]) : ''}</div>`);
   return `<div class="im-loan-form" data-loan="${i}" data-lid="${esc((L && L.id) || '')}">
     <div class="im-loan-form-head"><b>Crédit ${i + 1}</b><span class="tap" data-loan-del="${i}">Retirer</span></div>${rows.join('')}</div>`;
 }
@@ -204,6 +213,8 @@ function _imReadLoans() {
     const g = k => b.querySelector(`[data-lf="${k}"]`).value;
     const n = k => parseFloat(String(g(k)).replace(',', '.')) || 0;
     const L = { id: b.dataset.lid || 'l' + Date.now().toString(36) + i, label: g('label').trim(), amount: n('amount'), rate: n('rate'), years: n('years'), insurance: n('insurance'), first: g('first') || '' };
+    const ds = _imPctOf(g('debtShare'));
+    if (ds !== undefined) L.debtShare = ds;   // vide : la part du bien s'applique
     return L;
   }).filter(L => L.amount > 0);
 }
@@ -234,6 +245,7 @@ function openImmoForm(id) {
   set('im-name', p ? p.name : ''); set('im-date', p ? p.buyDate : ''); set('im-price', p ? p.price : '');
   set('im-notary', p ? p.notary : ''); set('im-other', p ? p.otherFees : ''); set('im-works', p ? p.works : '');
   _imEl('im-growth').value = p ? (p.growth ?? '') : 2;
+  _imEl('im-share').value = p && p.share !== undefined ? p.share : '';
   // Ancienne saisie « mensualité totale » : convertie en assurance mensuelle (mensualité − mensualité calculée)
   const loans = p ? immoLoanSchedules(p, _imToday()).map(({ L, s }) => ({ ...L, insurance: L.insurance > 0 ? L.insurance : +s.ins.toFixed(2) })) : [];
   _imRenderLoans(loans);
@@ -253,9 +265,10 @@ function saveImmoForm() {
   const err = immoFormError(p, others);
   if (err) { toast(err); return; }
   if (!p.name) p.name = IMMO_KINDS[p.kind];
-  p.loans = p.loans.map(({ payment, ...L }) => L);   // format « loans » : l'ancienne mensualité totale est remplacée par l'assurance
+  p.loans = p.loans.map(({ payment, ...L }) => L);
+  if (p.share === undefined || p.share === 100) delete p.share;   // 100 % : rien à enregistrer   // format « loans » : l'ancienne mensualité totale est remplacée par l'assurance
   const i = _imEditId ? all.findIndex(x => x.id === _imEditId) : -1;
-  if (i >= 0) { const { loan, ...prev } = all[i]; all[i] = { ...prev, ...p, id: _imEditId }; }
+  if (i >= 0) { const { loan, share, ...prev } = all[i]; all[i] = { ...prev, ...p, id: _imEditId }; }
   else all.push({ id: 'im' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...p });
   if (!imSave(all)) return;
   closeImmoForm();

@@ -218,3 +218,26 @@ describe('plusieurs crédits par bien', () => {
     expect(R.immoFormError(p, [])).toBe('Crédit 2 (PTZ) : indique la durée du crédit');
   });
 });
+
+describe('quote-part d\'un bien (E05) : propriété et dette distinctes', () => {
+  const loans = [{ id: 'a', label: 'Prêt', amount: 100000, rate: 0, years: 10 }, { id: 'b', label: 'Prêt employeur', amount: 20000, rate: 0, years: 10, debtShare: 100 }];
+  it('60 % du bien ; la dette suit la part du bien par défaut, ou la part saisie pour chaque crédit', () => {
+    const p = prop({ price: 200000, growth: 0, buyDate: '2026-01-01', share: 60, loans });
+    const c = R.immoCalc(p, '2026-01-01');
+    expect(c.value).toBe(200000);
+    expect(c.myValue).toBe(120000);
+    expect(c.debt).toBe(120000);
+    expect(c.myDebt).toBe(100000 * 0.6 + 20000);   // 2e crédit supporté à 100 %
+    expect(c.myEquity).toBe(120000 - 80000);
+  });
+  it('sans quote-part : 100 % (comportement inchangé)', () => {
+    const c = R.immoCalc(prop({ price: 100000, growth: 0, buyDate: '2026-01-01' }), '2026-01-01');
+    expect([c.share, c.myValue, c.myDebt]).toEqual([1, 100000, 0]);
+  });
+  it('validation des parts (1 à 100 %)', () => {
+    expect(R.immoValid(prop({ share: 0 }))).toBe(false);
+    expect(R.immoValid(prop({ share: 150 }))).toBe(false);
+    expect(R.immoValid(prop({ loans: [{ ...loans[0], debtShare: 0 }] }))).toBe(false);
+    expect(R.immoFormError(prop({ share: 0 }), [])).toBe('La part de propriété doit être comprise entre 1 et 100 %');
+  });
+});
