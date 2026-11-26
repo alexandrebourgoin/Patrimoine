@@ -348,6 +348,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .ptr-spin{display:inline-block;animation:ptr-spin .7s linear infinite}
 
 /* ─── HISTORY CHART ─── */
+.pocket-card{margin:14px 0 0;cursor:pointer}
+.pocket-head{display:flex;justify-content:space-between;align-items:center;margin:0 20px 8px;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--text2)}
+.pocket-more{color:var(--accent);text-transform:none;letter-spacing:0;font-size:12px}
+.pocket-card .donut-block{margin-bottom:0}
 .hist-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:14px 20px 0;padding:16px 16px 12px;position:relative}
 .hist-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .hist-periods{display:flex;gap:5px}
