@@ -5,11 +5,14 @@
 // TOAST
 // ═══════════════════════════════════════════════
 let toastTimer;
+// Durée d'affichage : 2,4 s, + 50 ms par caractère au-delà de 40, au plus 8 s
+function toastDuration(msg) { return Math.min(8000, 2400 + Math.max(0, String(msg ?? '').length - 40) * 50); }
 function toast(msg) {
   const el=document.getElementById('toast');
   el.textContent=msg; el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
+  // Message long (sur plusieurs lignes) : affiché plus longtemps pour avoir le temps de le lire
+  toastTimer=setTimeout(()=>el.classList.remove('show'),toastDuration(msg));
 }
 
 function timeSince(ts) { return PU.timeSince(ts); }
