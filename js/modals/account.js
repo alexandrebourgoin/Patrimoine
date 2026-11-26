@@ -102,6 +102,7 @@ function deleteAccount(accId){
   const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
   openConfirm(`Supprimer le compte "${acc.name}" ?`,()=>{
     S.accounts=S.accounts.filter(a=>a.id!==accId);
+    etoroKeysDelete(accId);   // clés d'un compte eToro synchronisé : effacées de l'appareil avec le compte
     if(S.screen==='account'&&S.accountId===accId) back();
     refreshMain();
     toast('Compte supprimé');

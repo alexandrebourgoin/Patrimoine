@@ -532,3 +532,6 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .bg-shield-logo svg{width:34px;height:34px}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
+
+/* Compte synchronisé (eToro, js/screens/etoro.js) : pas d'ajout ni de suppression de position */
+.acc-synced .hold-add-btn,.acc-synced .hold-del-btn{display:none!important}

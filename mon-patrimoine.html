@@ -213,6 +213,23 @@
   </div>
 </div>
 
+<!-- COMPTE eTORO SYNCHRONISÉ (js/screens/etoro.js, appels : js/services/etoro.js) -->
+<div id="et-bg" class="add-modal-bg"></div>
+<div id="et-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="et-title">Connecter un compte eToro</div><div id="et-close" class="oa-x">✕</div></div>
+    <div class="t-sm" style="margin-bottom:12px">Lecture seule : l'app lit ton solde et tes positions, sans jamais passer d'ordre. Crée les clés dans eToro : Paramètres → Trading → Gestion des clés API, environnement <b>Réel</b>, permission <b>Lecture</b> seulement. La clé utilisateur n'est affichée qu'une fois.</div>
+    <div class="form-row" id="et-name-row"><div class="form-field"><div class="form-label">Nom du compte</div><input class="form-input" id="et-name" type="text" autocomplete="off"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Clé publique (API key)</div><input class="form-input" id="et-api" type="password" autocomplete="off" spellcheck="false"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur (User key)</div><input class="form-input" id="et-user" type="password" autocomplete="off" spellcheck="false"></div></div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Relais (optionnel)</div><input class="form-input" id="et-proxy" type="url" placeholder="https://mon-relais.workers.dev" autocomplete="off" spellcheck="false"></div></div>
+    <div class="t-sm" style="margin:-4px 0 12px">À renseigner seulement si eToro refuse l'appel direct depuis le navigateur : voir etoro-proxy-worker.js. Les clés restent sur cet appareil : elles ne sont ni sauvegardées ni exportées.</div>
+    <button class="form-submit" id="et-submit">Connecter</button>
+    <div id="et-del" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--loss);cursor:pointer">Supprimer les clés de cet appareil</div>
+  </div>
+</div>
+
 <!-- IMMOBILIER (écrans : js/screens/immo.js) -->
 <div id="im-bg" class="add-modal-bg"></div>
 <div id="im-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
@@ -418,6 +435,7 @@
       <div class="toggle" id="acc-obs-tog"><div class="toggle-thumb"></div></div>
     </div>
     <button class="form-submit" id="acc-submit">Créer le compte</button>
+    <div id="acc-etoro-link" class="tap" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer">Ou connecter un compte eToro (synchronisé) →</div>
   </div>
 </div>
 
@@ -869,6 +887,7 @@
 <script src="js/core/back-handler.js"></script>
 <script src="js/core/app-update.js"></script>
 <script src="js/services/prices.js"></script>
+<script src="js/services/etoro.js"></script>
 <script src="js/services/csv-import.js"></script>
 <script src="js/features/lock.js"></script>
 <script src="js/features/dca-calc.js"></script>
@@ -903,6 +922,7 @@
 <script src="js/screens/accounts.js"></script>
 <script src="js/screens/search.js"></script>
 <script src="js/screens/account.js"></script>
+<script src="js/screens/etoro.js"></script>
 <script src="js/screens/stock.js"></script>
 <script src="js/screens/analysis.js"></script>
 <script src="js/screens/assistant.js"></script>

@@ -141,6 +141,8 @@ bioAvailable().then(v => {
 });
 if (lockArmed()) lockApp();
 else document.documentElement.classList.remove('locked');
+// Comptes eToro : synchro automatique si la dernière date de plus d'1 h (js/services/etoro.js)
+etoroSyncDue();
 // Suivre les changements du thème système (uniquement en mode auto)
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{
   if(S.theme==='auto') applyTheme('auto');

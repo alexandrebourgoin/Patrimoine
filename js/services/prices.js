@@ -396,7 +396,7 @@ async function fetchLivePrices() {
   const btnSvg = document.querySelector('#js-refresh-btn svg');
   if (btnSvg) btnSvg.classList.add('spin');
 
-  const allH = S.accounts.flatMap(a => a.holdings).filter(h => !isManualPrice(h));   // cours saisis à la main : jamais écrasés
+  const allH = S.accounts.flatMap(a => a.holdings).filter(h => !priceLocked(h));   // cours saisis à la main ou synchronisés : jamais écrasés
   // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
   if (!allH.length && !S.watchlist.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
   try {
@@ -563,7 +563,7 @@ async function fetchLivePrices() {
 function applyPrices(priceData) {
   if(!priceData?.prices) return;
   S.accounts.flatMap(a=>a.holdings).forEach(h=>{
-    if(isManualPrice(h)) return;   // le cours saisi à la main fait foi
+    if(priceLocked(h)) return;   // le cours saisi à la main ou synchronisé fait foi
     const p=priceData.prices[h.ticker];
     if(p!=null){ h.currentPrice=p; recalcHolding(h); }
   });
@@ -591,8 +591,10 @@ function quoteTime(seconds) {
 }
 // Cours saisi à la main (interrupteur de la fiche « Modifier », js/modals/position.js).
 function isManualPrice(h) { return !!h && h.manualPrice === true; }
+// Cours imposé hors Yahoo / CoinGecko : saisi à la main, ou fourni par un compte synchronisé (eToro : js/services/etoro.js)
+function priceLocked(h) { return isManualPrice(h) || !!(h && h.sync); }
 function priceStale(h, now=Date.now()) {
-  if (S.isDemo || !h || isManualPrice(h) || h.type==='Cash' || !(h.quantity>0)) return false;
+  if (S.isDemo || !h || priceLocked(h) || h.type==='Cash' || !(h.quantity>0)) return false;   // compte synchronisé : suivi par sa date de synchro
   const limit = h.type==='Crypto' ? STALE_MS_CRYPTO : STALE_MS_DEFAULT;
   return !validQuoteTime(h.quoteAt, now) || (now - h.quoteAt) > limit;
 }
