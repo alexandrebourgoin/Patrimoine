@@ -40,10 +40,7 @@ function renderFxModalRows() {
 
 function renderSettings() {
   const demo=S.isDemo;
-  return `${backBarHTML()}
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">${navLabel('settings')}</div>
-  </div>
+  return `${moduleBarHTML('settings')}
   <div class="s-section">Profil</div>
   <div class="s-group">
     <div class="s-item">

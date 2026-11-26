@@ -31,11 +31,41 @@ describe('barre « Retour » des écrans secondaires', () => {
     S.assistantEnabled = false;
   });
   it.each([
-    'js/screens/orders.js', 'js/screens/immo.js', 'js/features/dca.js', 'js/screens/assistant.js',
-    'js/screens/settings.js', 'js/screens/account.js', 'js/screens/stock.js', 'js/screens/watch.js',
-  ])('%s passe par backBarHTML (aucun lien retour sans burger)', (f) => {
+    'js/screens/account.js', 'js/screens/stock.js', 'js/screens/watch.js', 'js/screens/immo.js',
+  ])('écran de détail %s : barre « Retour » + burger (backBarHTML)', (f) => {
     const src = readFileSync(f, 'utf8');
     expect(src).toContain('backBarHTML(');
     expect(src).not.toContain('class="back tap"');
+  });
+  it.each([
+    ['orders', 'js/screens/orders.js'], ['immo', 'js/screens/immo.js'], ['dca', 'js/features/dca.js'],
+    ['assistant', 'js/screens/assistant.js'], ['settings', 'js/screens/settings.js'],
+  ])('écran de module %s : nom du module + burger, sans « Retour » (moduleBarHTML)', (key, f) => {
+    const src = readFileSync(f, 'utf8');
+    expect(src).toContain(`moduleBarHTML('${key}'`);
+    expect(src).not.toContain('class="back tap"');
+  });
+  it('moduleBarHTML : titre du module et burger, aucun lien retour', () => {
+    const sh = loadClassic('js/core/shell.js', { globals: { S, assistantAlertCount: () => 0 }, exports: ['moduleBarHTML'] });
+    const html = sh.moduleBarHTML('immo', 'Sous-titre');
+    expect(html).toContain('<div class="top-bar-title">Immobilier</div>');
+    expect(html).toContain('id="js-burger-btn"');
+    expect(html).toContain('<div class="module-sub">Sous-titre</div>');
+    expect(html).not.toContain('js-back');
+  });
+});
+
+describe('barre du bas sur les écrans de module', () => {
+  const S2 = { assistantEnabled: true, navItems: ['dashboard', 'comptes', 'orders'] };
+  const sh = loadClassic('js/core/shell.js', {
+    globals: { S: S2, assistantAlertCount: () => 0, NAV_SCREENS: ['dashboard', 'comptes', 'recherche', 'analysis'] },
+    exports: ['navVisibleFor'],
+  });
+  it('visible sur un module même absent des raccourcis (DCA, Immobilier, Réglages…)', () => {
+    for (const k of ['dca', 'immo', 'settings', 'assistant', 'orders']) expect(sh.navVisibleFor(k)).toBe(true);
+  });
+  it('visible sur les écrans principaux, masquée sur les écrans de détail', () => {
+    expect(sh.navVisibleFor('dashboard')).toBe(true);
+    for (const k of ['account', 'stock', 'watchstock', 'immodetail']) expect(sh.navVisibleFor(k)).toBe(false);
   });
 });

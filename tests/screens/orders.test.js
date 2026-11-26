@@ -66,7 +66,7 @@ describe('Écran Ordres et alertes', () => {
     });
 
     it('le titre de l\'écran reprend le libellé unique « Ordres »', () => {
-      expect(api.renderOrders()).toContain('<div class="t-title">Ordres</div>');
+      expect(api.renderOrders()).toContain('<div class="top-bar-title">Ordres</div>');
     });
 
     it('signale les alertes déclenchées et les trie en premier', () => {

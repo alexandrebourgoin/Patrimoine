@@ -175,6 +175,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 /* BACK BUTTON */
 .back{display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:14px 20px 6px;min-height:44px}
 .back svg{width:20px;height:20px}
+.module-sub{font-size:13px;color:var(--text2);margin:-4px 20px 8px}
 .back-bar{display:flex;align-items:center;justify-content:space-between;padding-right:20px}
 .back-bar .top-btn{margin-top:8px}
 
