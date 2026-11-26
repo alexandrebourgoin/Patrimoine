@@ -242,7 +242,11 @@
     </div>
     <div class="t-sm" style="margin:-4px 0 10px">Frais de notaire : environ 7,5 à 8 % dans l'ancien, 2 à 3 % dans le neuf. <span id="im-notary-est" class="tap" style="color:var(--accent);font-weight:700;cursor:pointer">Estimer à 8 %</span></div>
     <div class="form-row"><div class="form-field"><div class="form-label">Autres frais</div><input class="form-input" id="im-other" type="number" min="0" step="any" inputmode="decimal" placeholder="0"><div class="t-sm">Frais bancaires, de dossier ou de garantie. Hors intérêts et assurance.</div></div></div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Prise de valeur annuelle estimée (%/an)</div><input class="form-input" id="im-growth" type="number" step="0.1" inputmode="decimal" placeholder="2"></div></div>
+    <div class="form-row">
+      <div class="form-field"><div class="form-label">Prise de valeur annuelle estimée (%/an)</div><input class="form-input" id="im-growth" type="number" step="0.1" inputmode="decimal" placeholder="2"></div>
+      <div class="form-field"><div class="form-label">Ma part du bien (%)</div><input class="form-input" id="im-share" type="number" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div>
+    </div>
+    <div class="t-sm" style="margin:-4px 0 10px">Bien détenu à plusieurs (60 / 40…) : le patrimoine ne compte que votre part. La part de chaque crédit peut être différente (champ dans le crédit).</div>
     <div class="t-label" style="margin:10px 0 6px">Crédits immobiliers <span class="t-sm">(facultatif : prêt principal, PTZ, prêt employeur…)</span></div>
     <div id="im-loans"></div>
     <button class="oa-add" id="im-loan-add" type="button" style="margin:2px 0 10px">+ Ajouter un crédit</button>
@@ -443,6 +447,7 @@
         <input class="form-input" type="date" id="acc-start">
       </div>
     </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Ma part du compte (%) <span style="font-weight:400;color:var(--text3)">(compte joint)</span></div><input class="form-input" type="number" id="acc-share" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
         <div style="font-size:14px;font-weight:600">Compte observateur</div>
@@ -553,6 +558,7 @@
         <input class="form-input" type="date" id="rename-acc-start">
       </div>
     </div>
+    <div class="form-row"><div class="form-field"><div class="form-label">Ma part du compte (%) <span style="font-weight:400;color:var(--text3)">(compte joint)</span></div><input class="form-input" type="number" id="rename-acc-share" min="1" max="100" step="any" inputmode="decimal" placeholder="100"></div></div>
     <button class="form-submit" id="rename-acc-submit">Enregistrer</button>
   </div>
 </div>

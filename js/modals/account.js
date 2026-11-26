@@ -57,6 +57,7 @@ function openAccModal(){
   document.getElementById('acc-name').value='';
   document.getElementById('acc-bank').value='';
   document.getElementById('acc-start').value='';
+  document.getElementById('acc-share').value='';
   fillAccTypeSelect('acc-type','acc-type-other-row','acc-type-other','','acc-currency',true);
   document.getElementById('acc-currency').value='EUR';
   syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
@@ -82,13 +83,14 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   const type=readAccType('acc-type','acc-type-other',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
   const startDate=document.getElementById('acc-start').value||'';
+  const share=accShareInput('acc-share'); if(share===null) return;
   if(!name){toast('Nom du compte requis');return;}
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
   const id='acc_'+Date.now().toString(36);
   const bgs=['rgba(79,142,247,.13)','rgba(0,194,203,.13)','rgba(0,214,143,.13)','rgba(245,158,11,.13)','rgba(167,139,250,.13)'];
   const iconBg=bgs[S.accounts.length%bgs.length];
   const currency=document.getElementById('acc-currency').value||'EUR';
-  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver,...(startDate?{startDate}:{})});
+  S.accounts.push({id,name,type,bank,icon,iconBg,currency,value:0,change1d:0,holdings:[],cashflows:[],observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{})});
   closeAccModal();
   refreshMain();
   toast(`Compte "${name}" créé ✓`);
@@ -156,6 +158,15 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 });
 
 
+// Part détenue saisie (compte joint) : vide → 100 ; refus (toast, null) hors de 1 à 100 %
+function accShareInput(id){
+  const raw=String(document.getElementById(id).value||'').trim();
+  if(!raw) return 100;
+  const v=parseFloat(raw.replace(',','.'));
+  if(!(v>=1&&v<=100)){toast('Ma part du compte : entre 1 et 100 %');return null;}
+  return v;
+}
+
 // ═══════════════════════════════════════════════
 // EDIT ACCOUNT (nom, icône, type, devise)
 // ═══════════════════════════════════════════════
@@ -170,6 +181,7 @@ function openRenameAcc(accId, currentName){
   if(curSel) curSel.value=acc?.currency||'EUR';
   document.getElementById('rename-acc-bank').value=acc?.bank||'';
   document.getElementById('rename-acc-start').value=acc?.startDate||'';
+  document.getElementById('rename-acc-share').value=acc?.share??'';
   // Un type hors liste (données anciennes) est ajouté comme option pour ne pas être perdu
   fillAccTypeSelect('rename-acc-type','rename-acc-type-other-row','rename-acc-type-other',acc?.type||'','rename-acc-currency',false);
   syncAccCurrency('rename-acc-type','rename-acc-currency',false);   // compte existant : sa devise n'est pas modifiée
@@ -202,6 +214,8 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   acc.bank=document.getElementById('rename-acc-bank').value.trim();
   const startDate=document.getElementById('rename-acc-start').value||'';
   if(startDate&&startDate>_dayKey(Date.now())){toast("La date d'ouverture ne peut pas être dans le futur");return;}
+  const share=accShareInput('rename-acc-share'); if(share===null) return;
+  if(share<100) acc.share=share; else delete acc.share;
   if(startDate) acc.startDate=startDate; else delete acc.startDate;
   cfStampCcy(acc); // les apports anciens gardent leur devise : changer la devise du compte ne les réinterprète pas
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';

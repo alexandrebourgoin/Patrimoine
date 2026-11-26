@@ -83,6 +83,13 @@ describe('Analyse', () => {
     expect((html.match(/class="bar-name"/g) || []).length).toBeGreaterThanOrEqual(8);   // géographie : 7 + Autres (+ secteurs)
     expect(html).toContain('<span class="bar-name">Autres</span>');
   });
+  it('patrimoine net négatif (crédits supérieurs aux actifs) : l\'analyse reste affichée, la classe négative est signalée', () => {
+    props = [prop({ loan: { amount: 300000, rate: 2, years: 20, payment: 0, first: '' } })];
+    const html = render();
+    expect(html.includes('Aucune donnée</div>\n    </div>')).toBe(false);
+    expect(html).toContain('Grandes classes');
+    expect(html).toMatch(/Immobilier : -?−?\d.*net \(crédits supérieurs à la valeur\)/);
+  });
   it('aucune donnée : message vide avec la barre du haut', () => {
     S.accounts = [];
     const html = render();

@@ -68,9 +68,15 @@ function wealthCardHTML(d) {
   </div>`;
 }
 
+// Classe nette négative (ex. immobilier dont les crédits dépassent la valeur) : absente du camembert, signalée en clair
+function _anNegativeNote(obj) {
+  const neg=Object.entries(obj).filter(([,v])=>v<-0.005);
+  return neg.length?`<div class="t-sm px" style="padding-bottom:10px">${neg.map(([n,v])=>`${esc(n)} : ${masked(v)} net (crédits supérieurs à la valeur)`).join(' · ')} — non représenté dans le graphique.</div>`:'';
+}
 function renderAnalysis() {
   const d=analysisNow();
-  if(!(d.tot>0)) return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
+  // Vide seulement sans aucun actif : un patrimoine net négatif (crédits supérieurs aux actifs) s'analyse quand même
+  if(!(d.wealth.gross>0)) return `<div class="analysis-top anim">${renderTopBar('', navLabel('analysis'))}</div>
     <div style="text-align:center;padding:60px 20px;color:var(--text2)">
       <div style="font-size:40px;margin-bottom:12px">📈</div>
       <div style="font-size:15px;font-weight:600">Aucune donnée</div>
@@ -80,6 +86,7 @@ function renderAnalysis() {
   ${wealthCardHTML(d)}
   ${sec('Grandes classes')}
   ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}
+  ${_anNegativeNote(d.byPocket)}
   ${sec("Par type d'actif")}
   ${donutBlock('',buildSegs(d.byAsset,ASSET_C))}
   ${sec('Par type de compte')}

@@ -1,9 +1,13 @@
 // Patrimoine : agrégats de l'Accueil et de l'Analyse, fonctions PURES (comptes, biens et date sont passés en paramètres).
-//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants − autres crédits (ma part)
+//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants − autres crédits
+//   (toujours MA PART : quote-part des comptes, des biens et de chaque dette)
 //   Patrimoine brut = comptes financiers + immobilier brut
 // UNE seule règle décide quels biens comptent (wealthProperties) : l'Accueil et l'Analyse affichent donc toujours le même total.
 // Les snapshots de l'historique (totalWealth, storage.js) et les performances de compte restent FINANCIERS : l'immobilier n'y entre pas.
 // Dépend de immoCalc (realestate-calc.js, chargé avant). wealthNow() est le seul accès à l'état (S, biens, date), utilisé À L APPEL.
+
+// Part détenue d'un compte (0 à 1) : acc.share en % (compte joint à 50 %…), 100 % par défaut. Les montants du compte restent à 100 %.
+function accShare(acc) { const s = +acc.share; return s > 0 && s <= 100 ? s / 100 : 1; }
 
 // Biens pris en compte : date d'achat renseignée et passée, prix > 0, valeurs calculables. → [{ p, c }]
 function wealthProperties(properties, today) {
@@ -14,10 +18,11 @@ function wealthProperties(properties, today) {
 
 // credits : autres crédits (consommation, auto…) ; seule la part de dette supportée est déduite (creditTotals, credits.js)
 function wealthBreakdown(accounts, properties, today, credits = []) {
-  const financial = accounts.filter(a => !a.observer).reduce((s, a) => s + (+a.value || 0), 0);
+  // Toujours MA PART : comptes × part détenue, biens × part de propriété, crédits × part de dette (E04, E05)
+  const financial = accounts.filter(a => !a.observer).reduce((s, a) => s + (+a.value || 0) * accShare(a), 0);
   const list = wealthProperties(properties, today);
-  const property = list.reduce((s, x) => s + x.c.value, 0);
-  const debt = list.reduce((s, x) => s + x.c.debt, 0);
+  const property = list.reduce((s, x) => s + x.c.myValue, 0);
+  const debt = list.reduce((s, x) => s + x.c.myDebt, 0);
   const otherDebt = credits.length ? creditTotals(credits, today).myRemaining : 0;
   return { financial, property, debt, otherDebt, count: list.length, credits: credits.length, gross: financial + property, net: financial + property - debt - otherDebt };
 }
@@ -54,16 +59,16 @@ function analysisData(accounts, properties, today, cashOf, credits = []) {
   const accs = accounts.filter(a => !a.observer);
   const byPocket = {}, byAsset = {}, byAccType = {}, byRaw = {}, byGeo = {}, bySec = {};
   accs.forEach(a => {
-    const pk = accPocket(a);
+    const pk = accPocket(a), k = accShare(a);   // toutes les répartitions comptent MA PART du compte
     // Les supports en fonds euros forment leur propre grande classe ; le reste du compte garde sa classe
-    const fe = (a.holdings || []).filter(isFondsEuros).reduce((s, h) => s + (h.valueRef ?? h.value ?? 0), 0);
-    _wAdd(byPocket, pk, (a.value || 0) - fe);
+    const fe = (a.holdings || []).filter(isFondsEuros).reduce((s, h) => s + (h.valueRef ?? h.value ?? 0), 0) * k;
+    _wAdd(byPocket, pk, (a.value || 0) * k - fe);
     if (fe) _wAdd(byPocket, 'Fonds euros', fe);
-    _wAdd(byAccType, a.type || 'Autre', a.value || 0);
-    const cash = cashOf(a);
+    _wAdd(byAccType, a.type || 'Autre', (a.value || 0) * k);
+    const cash = cashOf(a) * k;
     if (cash) { _wAdd(byAsset, 'Cash', cash); _wAdd(byRaw, 'Cash', cash); }
     (a.holdings || []).forEach(h => {
-      const hv = h.valueRef ?? h.value;
+      const hv = (h.valueRef ?? h.value) * k;
       const crypto = h.type === 'Crypto' || pk === 'Crypto';
       _wAdd(byAsset, pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : isFondsEuros(h) ? 'Fonds euros' : (ASSET_LABEL[h.type] || h.type || 'Autres'), hv);
       _wAdd(byRaw, h.type, hv);

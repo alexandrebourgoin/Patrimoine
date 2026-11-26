@@ -13,8 +13,10 @@ function accNative(acc, v) {
 }
 // Bloc valeur du hero : devise du compte en gros, contre-valeur en devise appli dessous
 function accHeroValHTML(acc) {
-  if ((acc.currency || S.currency) === S.currency) return masked(acc.value);
-  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>`;
+  // Compte détenu en partie (compte joint) : valeur à 100 %, puis MA PART, seule comptée dans le patrimoine
+  const part = accShare(acc) < 1 ? `<div class="t-sm" style="font-size:13px;font-weight:700;margin-top:2px">Ma part (${acc.share} %) : ${masked(acc.value * accShare(acc))}</div>` : '';
+  if ((acc.currency || S.currency) === S.currency) return masked(acc.value) + part;
+  return `${accNative(acc, acc.value)}<div class="t-sm" style="font-size:13px;font-weight:600;margin-top:2px">≈ ${masked(acc.value)}</div>${part}`;
 }
 
 // ── Performance : le calcul est pur (js/features/account-perf.js) ; ici seulement le contexte de l'appli ──

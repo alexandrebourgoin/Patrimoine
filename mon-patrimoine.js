@@ -78,7 +78,8 @@ function pctClass(v) { return PU.pctClass(v); }
 function fmtDate(s) { return PU.fmtDate(s); }
 function initials(n) { return PU.initials(n); }
 // Observer accounts excluded from total wealth
-function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value,0); }
+// Comptes financiers, MA PART (accShare : compte joint) ; base de l'historique à partir de la saisie d'une quote-part
+function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value*accShare(a),0); }
 
 // Approximate FX rates for P/L produit display only
 const FX_RATES = { EUR:1, USD:1.08, GBP:1.16, CHF:1.05, JPY:163 };

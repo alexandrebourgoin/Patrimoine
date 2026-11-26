@@ -153,6 +153,26 @@ describe('autres crédits dans le patrimoine', () => {
   });
 });
 
+describe('quotes-parts dans le patrimoine (E04, E05)', () => {
+  it('compte joint à 50 % : la moitié de sa valeur dans le patrimoine et dans toutes les répartitions', () => {
+    const joint = acc({ value: 10000, share: 50, holdings: [{ type: 'ETF', valueRef: 8000, country: 'France', sector: 'Tech' }] });
+    const w = W.wealthBreakdown([joint, acc({ id: 'b', value: 2000 })], [], TODAY);
+    expect(w.financial).toBe(7000);
+    const d = W.analysisData([joint], [], TODAY, () => 2000);
+    expect(d.byPocket.Bourse).toBe(5000);
+    expect(d.byAsset['ETF / Fonds']).toBe(4000);
+    expect(d.byAsset.Cash).toBe(1000);
+    expect(d.byGeo.France).toBe(4000);
+  });
+  it('bien à 60 % : ma part de la valeur, ma part de la dette', () => {
+    const p = { id: 'p', name: 'A', kind: 'main', buyDate: '2026-01-01', price: 200000, growth: 0, share: 60, loans: [{ id: 'l', amount: 100000, rate: 0, years: 10 }] };
+    const w = W.wealthBreakdown([], [p], '2026-01-01');
+    expect(w.property).toBe(120000);
+    expect(w.debt).toBe(60000);
+    expect(w.net).toBe(60000);
+  });
+});
+
 describe('grande classe « Fonds euros »', () => {
   const FE = loadClassic('js/features/wealth.js', { globals: calc, exports: ['analysisData', 'isFondsEuros'] });
   const av = { id: 'av', type: 'Assurance-Vie', value: 100, holdings: [

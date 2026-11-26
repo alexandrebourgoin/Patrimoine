@@ -196,6 +196,21 @@ describe('Écrans Immobilier', () => {
       expect(p.loans[0]).toMatchObject({ label: 'Prêt principal', amount: 90000, rate: 3.5, years: 20, insurance: 25, first: '' });
       expect(p.loan).toBeFalsy();
     });
+    it('quote-part : 60 % du bien, 50 % de la dette du crédit ; 100 % ou vide → rien d\'enregistré', () => {
+      fillForm({ 'im-share': '60', loans: [{ amount: '100000', rate: '1', years: '20', debtShare: '50' }] }); save();
+      const p = store().read()[0];
+      expect(p.share).toBe(60);
+      expect(p.loans[0].debtShare).toBe(50);
+      S.immoId = p.id;
+      const html = api.renderImmoDetail();
+      expect(html).toContain('Ma part de propriété (60 %)');
+      expect(html).toContain('Ma part de cette dette (50 %)');
+      expect(html).toContain('Mon patrimoine net dans ce bien');
+    });
+    it('quote-part invalide refusée', () => {
+      fillForm({ 'im-share': '0' }); save();
+      expect(toasts.at(-1)).toBe('La part de propriété doit être comprise entre 1 et 100 %');
+    });
     it('plusieurs crédits pour un même bien (prêt principal + PTZ)', () => {
       fillForm({ loans: [{ label: 'Prêt principal', amount: '150000', rate: '3.2', years: '25' }, { label: 'PTZ', amount: '40000', rate: '0', years: '20' }] }); save();
       expect(store().read()[0].loans.map(L => L.label)).toEqual(['Prêt principal', 'PTZ']);
