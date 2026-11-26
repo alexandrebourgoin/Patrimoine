@@ -7,12 +7,18 @@ import { LOAN } from '../helpers/loan.js';
 const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: ['immoCalc'] });
 const wealth = loadClassic('js/features/wealth.js', { globals: calc, exports: ['wealthBreakdown', 'analysisData'] });
 const TODAY = '2026-11-22';
+// Couleurs, segments et donut + légende : partagés par l'Analyse et l'Accueil (js/features/charts.js)
+const charts = loadClassic('js/features/charts.js', {
+  globals: { esc: s => globalThis.PU.esc(s), masked: v => v.toFixed(2) },
+  exports: ['buildSegs', 'donutBlock', 'POCKET_C', 'ASSET_C', 'ACCTYPE_C', 'SEC_C'],
+});
 
 const prop = (over = {}) => ({ id: 'im1', name: 'Appart', kind: 'main', buyDate: '2025-09-11', price: 100000, notary: 0, works: 0, otherFees: 0, growth: 0, loan: { amount: 90000, rate: 0, years: 10, payment: 0, first: '' }, ...over });
 const hold = (over = {}) => ({ ticker: 'MC', type: 'Action', country: 'France', sector: 'Luxe', value: 1000, valueRef: 1000, pnlRef: 100, avgBuyPrice: 100, quantity: 10, currency: 'EUR', ...over });
 
 let S, props;
 const globals = () => ({
+  ...charts,
   S,
   imRead: () => props,
   _dayKey: () => TODAY,
@@ -98,6 +104,21 @@ describe('Accueil', () => {
   };
   beforeEach(() => { HW = {}; });
   const render = () => loadClassic('js/screens/dashboard.js', { globals: { ...globals(), ...links() }, exports: ['renderDash'] }).renderDash();
+
+  it('camembert des grandes classes d\'actifs (mêmes chiffres que l\'Analyse), qui ouvre l\'Analyse', () => {
+    props = [prop()];
+    const html = render();
+    expect(html).toContain('Grandes classes d\'actifs');
+    expect(html).toContain('id="js-pocket-card"');
+    expect(html).toContain('<span class="leg-name">Bourse</span>');
+    expect(html).toContain('<span class="leg-name">Immobilier</span>');   // immobilier net compris, comme l'Analyse
+    expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('Patrimoine net'));
+    expect(html.indexOf('Grandes classes')).toBeGreaterThan(html.indexOf('hist-card'));   // après l'évolution
+  });
+  it('sans aucune valeur : pas de camembert vide', () => {
+    S.accounts = [];
+    expect(render()).not.toContain('Grandes classes');
+  });
 
   it('affiche le patrimoine NET (comptes + immobilier − crédits)', () => {
     props = [prop()];
