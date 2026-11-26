@@ -19,7 +19,7 @@ const S = {
   theme: 'auto',
   currency: 'EUR',
   privacy: false,
-  user: { name: 'Alexandre Martin' },
+  user: { name: '' },   // saisi dans Réglages > Profil (champ vide par défaut : « Votre nom »)
   accounts: [],
   sort: 'value',
   sortDir: -1,

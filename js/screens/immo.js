@@ -65,9 +65,9 @@ function renderImmo() {
   return `${moduleBarHTML('immo', "Sélectionne un bien pour consulter sa fiche. Ni loyers, ni fiscalité.")}
   <div style="padding:12px 20px">
     ${_imBanner()}${legacyCard}
-    <div class="t-label">Patrimoine immobilier net</div>
+    ${list.length ? `<div class="t-label">Patrimoine immobilier net</div>
     <div class="t-num" style="font-size:28px;font-weight:800">${masked(tot.equity)}</div>
-    <div class="t-sm">Valeur brute ${masked(tot.value)} · Crédit restant ${masked(tot.debt)}</div>
+    <div class="t-sm">Valeur brute ${masked(tot.value)} · Crédit restant ${masked(tot.debt)}</div>` : ''}
     <button class="form-submit" data-imnew="1">+ Ajouter un bien</button>
   </div>
   <div class="col gap12 px" style="padding-bottom:100px">${tiles || '<div class="t-sm" style="text-align:center;padding:20px">Aucun bien. Ajoute ta résidence principale ou un bien locatif.</div>'}</div>`;

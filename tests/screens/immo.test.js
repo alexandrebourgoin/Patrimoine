@@ -56,7 +56,11 @@ describe('Écrans Immobilier', () => {
       expect(html).toContain('data-imopen="im1"');
       expect(html).toContain('Crédit remboursé :');
     });
-    it('liste vide : message d\'invitation', () => expect(api.renderImmo()).toContain('Aucun bien'));
+    it('liste vide : message d\'invitation, sans bloc de totaux à 0,00 €', () => {
+      const html = api.renderImmo();
+      expect(html).toContain('Aucun bien');
+      expect(html).not.toContain('Patrimoine immobilier net');
+    });
     it('mode courant uniquement', () => {
       store('demo').save([prop({ id: 'imD', name: 'Bien démo' })]);
       expect(api.renderImmo().includes('imD')).toBe(false);
