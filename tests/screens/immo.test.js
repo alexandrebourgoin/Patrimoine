@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { loadClassic, fakeDocument } from '../helpers/load-classic.js';
+import { LOAN } from '../helpers/loan.js';
 
-const CALC = ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoLoan', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'];
-const calc = loadClassic('js/features/realestate-calc.js', { exports: CALC });
+const CALC = ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoLoan', 'immoLoans', 'immoLoanSchedules', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'];
+const calc = loadClassic('js/features/realestate-calc.js', { globals: LOAN, exports: CALC });
 const { createImmoStore } = loadClassic('js/features/realestate-storage.js', { globals: { immoValid: calc.immoValid }, exports: ['createImmoStore'] });
 
 function makeDom() {
@@ -12,7 +13,10 @@ function makeDom() {
     classList: { add() {}, remove() {}, toggle() {} },
     addEventListener(type, fn) { (handlers[id] ??= {})[type] = fn; },
   });
-  return { els, handlers, document: { ...base, getElementById: get } };
+  // Blocs de crédit du formulaire (#im-loans [data-loan]) : chacun lit ses champs data-lf
+  const loanBlocks = [];
+  const querySelectorAll = sel => (sel === '#im-loans [data-loan]' ? loanBlocks : []);
+  return { els, handlers, loanBlocks, document: { ...base, getElementById: get, querySelectorAll } };
 }
 function memoryStorage() {
   const data = new Map();
@@ -27,9 +31,14 @@ describe('Écrans Immobilier', () => {
     S = { isDemo: false, screen: 'immo', immoId: null };
     dom = makeDom(); storage = memoryStorage();
     toasts = []; calls = { render: [], go: [], back: 0, confirm: null };
+    // Tableau d'amortissement : module partagé js/features/loan-amort.js, chargé pour de vrai sur le même faux DOM
+    const amort = loadClassic('js/features/loan-amort.js', {
+      globals: { document: dom.document, masked: v => v.toFixed(2), fmtDate: d => d, esc: s => String(s), registerModal() {} },
+      exports: ['openLoanAmort'],
+    });
     api = loadClassic('js/screens/immo.js', {
       globals: {
-        ...calc, createImmoStore, document: dom.document, S, localStorage: storage, SCREEN_BIND: {}, registerModal() {},
+        ...calc, ...amort, createImmoStore, document: dom.document, S, localStorage: storage, SCREEN_BIND: {}, registerModal() {},
         toast: m => toasts.push(m), esc: s => String(s), masked: v => v.toFixed(2), fmtDate: d => d, _dayKey: () => '2026-11-22',
         renderScreen: id => calls.render.push(id), go: id => calls.go.push(id), back() { calls.back++; },
         openConfirm: (m, cb) => { calls.confirm = { m, cb }; },
@@ -41,9 +50,12 @@ describe('Écrans Immobilier', () => {
   const bind = id => { const el = { querySelector: () => null }; api.SCREEN_BIND[id](el); return el; };
   const fillForm = (v = {}) => {
     const f = { 'im-name': 'Maison', 'im-kind': 'secondary', 'im-date': '2025-09-11', 'im-price': '100000', 'im-notary': '8000', 'im-works': '', 'im-other': '', 'im-growth': '2',
-      'im-l-amt': '', 'im-l-rate': '', 'im-l-years': '', 'im-l-pay': '', 'im-l-first': '', ...v };
+      ...v };
+    const loans = f.loans || []; delete f.loans;
     api.openImmoForm();
     Object.entries(f).forEach(([id, value]) => { dom.els[id].value = value; });
+    dom.loanBlocks.length = 0;
+    loans.forEach(L => dom.loanBlocks.push({ dataset: { lid: '' }, querySelector: s => ({ value: L[/data-lf="(\w+)"/.exec(s)[1]] ?? '' }) }));
   };
   const save = () => dom.handlers['im-save'].click();
 
@@ -56,7 +68,11 @@ describe('Écrans Immobilier', () => {
       expect(html).toContain('data-imopen="im1"');
       expect(html).toContain('Crédit remboursé :');
     });
-    it('liste vide : message d\'invitation', () => expect(api.renderImmo()).toContain('Aucun bien'));
+    it('liste vide : message d\'invitation, sans bloc de totaux à 0,00 €', () => {
+      const html = api.renderImmo();
+      expect(html).toContain('Aucun bien');
+      expect(html).not.toContain('Patrimoine immobilier net');
+    });
     it('mode courant uniquement', () => {
       store('demo').save([prop({ id: 'imD', name: 'Bien démo' })]);
       expect(api.renderImmo().includes('imD')).toBe(false);
@@ -114,6 +130,19 @@ describe('Écrans Immobilier', () => {
       expect(html).toContain('data-imamort');
       expect(html).toContain('dont assurance');
     });
+    it('plusieurs crédits : un bloc et un tableau par crédit, puis le total', () => {
+      S.immoId = 'im1';
+      store().save([prop({ loans: [{ id: 'a', label: 'Prêt principal', amount: 90000, rate: 3.5, years: 20 }, { id: 'b', label: 'PTZ', amount: 20000, rate: 0, years: 10 }] })]);
+      const html = api.renderImmoDetail();
+      expect(html).toContain('Prêt principal');
+      expect(html).toContain('PTZ');
+      expect(html).toContain('data-imamort="1"');
+      expect(html).toContain('data-imer="1"');   // simulation de remboursement anticipé, par crédit
+      expect(html).toContain('Total des 2 crédits');
+      api.openImmoAmort('im1', 1);
+      expect(dom.els['ima-body'].innerHTML).toContain('Amortissement — Appart · PTZ');
+      expect(dom.els['ima-body'].innerHTML).toContain('120 échéances');
+    });
     it('bien introuvable : message', () => {
       S.immoId = 'absent';
       expect(api.renderImmoDetail()).toContain('Bien introuvable');
@@ -151,8 +180,8 @@ describe('Écrans Immobilier', () => {
       fillForm({ 'im-other': '600' });
       save();
       const [p] = store().read();
-      expect({ name: p.name, kind: p.kind, price: p.price, notary: p.notary, otherFees: p.otherFees, growth: p.growth, loan: p.loan })
-        .toEqual({ name: 'Maison', kind: 'secondary', price: 100000, notary: 8000, otherFees: 600, growth: 2, loan: null });
+      expect({ name: p.name, kind: p.kind, price: p.price, notary: p.notary, otherFees: p.otherFees, growth: p.growth, loans: p.loans })
+        .toEqual({ name: 'Maison', kind: 'secondary', price: 100000, notary: 8000, otherFees: 600, growth: 2, loans: [] });
       expect(store('demo').read()).toHaveLength(0);
       expect(calls.render).toContain('immo');
       expect(toasts.at(-1)).toBe('Bien enregistré ✓');
@@ -161,15 +190,37 @@ describe('Écrans Immobilier', () => {
       fillForm({ 'im-name': '' }); save();
       expect(store().read()[0].name).toBe('Résidence secondaire');
     });
-    it('enregistre le crédit saisi (virgule décimale acceptée)', () => {
-      fillForm({ 'im-l-amt': '90000', 'im-l-rate': '3,5', 'im-l-years': '20', 'im-l-pay': '560' }); save();
-      expect(store().read()[0].loan).toEqual({ amount: 90000, rate: 3.5, years: 20, payment: 560, first: '' });
+    it('enregistre le crédit saisi (virgule décimale acceptée), au format « loans »', () => {
+      fillForm({ loans: [{ label: 'Prêt principal', amount: '90000', rate: '3,5', years: '20', insurance: '25' }] }); save();
+      const p = store().read()[0];
+      expect(p.loans).toHaveLength(1);
+      expect(p.loans[0]).toMatchObject({ label: 'Prêt principal', amount: 90000, rate: 3.5, years: 20, insurance: 25, first: '' });
+      expect(p.loan).toBeFalsy();
+    });
+    it('quote-part : 60 % du bien, 50 % de la dette du crédit ; 100 % ou vide → rien d\'enregistré', () => {
+      fillForm({ 'im-share': '60', loans: [{ amount: '100000', rate: '1', years: '20', debtShare: '50' }] }); save();
+      const p = store().read()[0];
+      expect(p.share).toBe(60);
+      expect(p.loans[0].debtShare).toBe(50);
+      S.immoId = p.id;
+      const html = api.renderImmoDetail();
+      expect(html).toContain('Ma part de propriété (60 %)');
+      expect(html).toContain('Ma part de cette dette (50 %)');
+      expect(html).toContain('Mon patrimoine net dans ce bien');
+    });
+    it('quote-part invalide refusée', () => {
+      fillForm({ 'im-share': '0' }); save();
+      expect(toasts.at(-1)).toBe('La part de propriété doit être comprise entre 1 et 100 %');
+    });
+    it('plusieurs crédits pour un même bien (prêt principal + PTZ)', () => {
+      fillForm({ loans: [{ label: 'Prêt principal', amount: '150000', rate: '3.2', years: '25' }, { label: 'PTZ', amount: '40000', rate: '0', years: '20' }] }); save();
+      expect(store().read()[0].loans.map(L => L.label)).toEqual(['Prêt principal', 'PTZ']);
     });
     it.each([
       ['sans date', { 'im-date': '' }, "La date d'achat est obligatoire"],
       ['sans prix', { 'im-price': '' }, "Indique le prix d'achat"],
       ['autres frais négatifs', { 'im-other': '-5' }, 'Autres frais : indique un montant positif ou nul'],
-      ['crédit sans durée', { 'im-l-amt': '1000' }, 'Indique la durée du crédit'],
+      ['crédit sans durée', { loans: [{ amount: '1000' }] }, 'Indique la durée du crédit'],
     ])('refuse : %s', (_, v, msg) => {
       fillForm(v); save();
       expect(toasts.at(-1)).toBe(msg);
@@ -222,11 +273,13 @@ describe('Écrans Immobilier', () => {
       dom.handlers['im-notary-est'].click();
       expect(dom.els['im-notary'].value).toBe(36400);
     });
-    it('aperçu du crédit : mensualité calculée et assurance déduite', () => {
-      fillForm({ 'im-l-amt': '90000', 'im-l-rate': '3.5', 'im-l-years': '20', 'im-l-pay': '560' });
+    it('aperçu des crédits : mensualité de chacun, assurance et total', () => {
+      fillForm({ loans: [{ label: 'Prêt', amount: '90000', rate: '3.5', years: '20', insurance: '20' }, { label: 'PTZ', amount: '20000', rate: '0', years: '10' }] });
       dom.handlers['im-sheet'].input();
-      expect(dom.els['im-prev'].innerHTML).toContain('Mensualité calculée');
-      expect(dom.els['im-prev'].innerHTML).toContain('Assurance déduite');
+      const html = dom.els['im-prev'].innerHTML;
+      expect(html).toContain('Prêt : <b>521.96</b>/mois sur 240 mois + assurance 20.00');
+      expect(html).toContain('PTZ : <b>166.67</b>/mois sur 120 mois');
+      expect(html).toContain('Total : <b>708.63</b>/mois assurance comprise');
     });
   });
 

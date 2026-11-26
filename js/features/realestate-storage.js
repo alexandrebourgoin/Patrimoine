@@ -28,7 +28,7 @@ function createImmoStore(storage, mode) {
   function read() {
     const raw = storage.getItem(key);
     if (raw === null || raw === undefined) return [];
-    return _imCheckList(_imParse(raw, 'Biens immobiliers'), 'Bien').map(p => ({ ...p, loan: p.loan ? { ...p.loan } : null }));
+    return _imCheckList(_imParse(raw, 'Biens immobiliers'), 'Bien').map(p => ({ ...p, loan: p.loan ? { ...p.loan } : null, ...(Array.isArray(p.loans) ? { loans: p.loans.map(L => ({ ...L })) } : {}) }));
   }
   // Relit d'abord : des données corrompues déjà enregistrées bloquent l'écriture au lieu d'être écrasées
   function save(list) {

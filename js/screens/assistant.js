@@ -9,11 +9,7 @@ function renderAssistant() {
     2: { bg: 'rgba(245,158,11,.12)', col: '#F59E0B' },
     1: { bg: 'var(--accent-dim)', col: 'var(--accent)' },
   };
-  const header = `${backBarHTML()}
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">${navLabel('assistant')}</div>
-    <div class="t-sm" style="margin-top:2px">Analyse automatique de vos comptes et titres</div>
-  </div>`;
+  const header = `${moduleBarHTML('assistant', "Analyse automatique de vos comptes et titres")}`;
 
   if (!hasData) return header + `<div style="text-align:center;padding:60px 20px;color:var(--text2)">
     <div style="font-size:40px;margin-bottom:12px">🤖</div>

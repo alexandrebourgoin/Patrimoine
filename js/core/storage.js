@@ -226,6 +226,8 @@ function _qtyOnDay(h, dayKey) {
 function reconstructWealthOnDay(dayKey) {
   let tot = 0;
   S.accounts.filter(a => !a.observer).forEach(a => {
+    const k = typeof accShare === 'function' ? accShare(a) : 1;   // ma part du compte, comme totalWealth()
+    let accTot = 0;
     a.holdings.forEach(h => {
       const qty = _qtyOnDay(h, dayKey);
       if (qty <= 0) return;
@@ -236,10 +238,11 @@ function reconstructWealthOnDay(dayKey) {
         for (const p of hist.series) { if (p.d <= dayKey) c = p.c; else break; }
         if (c != null) price = c;
       }
-      tot += toRefCcy(qty * price, h.currency);
+      accTot += toRefCcy(qty * price, h.currency);
     });
     // Liquidités du compte à cette date (apports/retraits et transactions antérieurs)
-    tot += accCash(a, dayKey);
+    accTot += accCash(a, dayKey);
+    tot += accTot * k;
   });
   return +tot.toFixed(2);
 }

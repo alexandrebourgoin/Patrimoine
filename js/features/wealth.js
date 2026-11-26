@@ -1,9 +1,17 @@
 // Patrimoine : agrégats de l'Accueil et de l'Analyse, fonctions PURES (comptes, biens et date sont passés en paramètres).
-//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants
+//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants − autres crédits
+//   (toujours MA PART : quote-part des comptes, des biens et de chaque dette)
 //   Patrimoine brut = comptes financiers + immobilier brut
 // UNE seule règle décide quels biens comptent (wealthProperties) : l'Accueil et l'Analyse affichent donc toujours le même total.
 // Les snapshots de l'historique (totalWealth, storage.js) et les performances de compte restent FINANCIERS : l'immobilier n'y entre pas.
 // Dépend de immoCalc (realestate-calc.js, chargé avant). wealthNow() est le seul accès à l'état (S, biens, date), utilisé À L APPEL.
+
+// Part détenue d'un compte (0 à 1) : acc.share en % (compte joint à 50 %…), 100 % par défaut. Les montants du compte restent à 100 %.
+// Un type qui ne peut pas être détenu à plusieurs (PEA, livrets…) compte toujours à 100 % (accJointAllowed : account-rules.js)
+function accShare(acc) {
+  if (typeof accJointAllowed === 'function' && !accJointAllowed(acc.type)) return 1;
+  const s = +acc.share; return s > 0 && s <= 100 ? s / 100 : 1;
+}
 
 // Biens pris en compte : date d'achat renseignée et passée, prix > 0, valeurs calculables. → [{ p, c }]
 function wealthProperties(properties, today) {
@@ -12,15 +20,18 @@ function wealthProperties(properties, today) {
     .filter(({ c }) => Number.isFinite(c.value) && Number.isFinite(c.debt));
 }
 
-function wealthBreakdown(accounts, properties, today) {
-  const financial = accounts.filter(a => !a.observer).reduce((s, a) => s + (+a.value || 0), 0);
+// credits : autres crédits (consommation, auto…) ; seule la part de dette supportée est déduite (creditTotals, credits.js)
+function wealthBreakdown(accounts, properties, today, credits = []) {
+  // Toujours MA PART : comptes × part détenue, biens × part de propriété, crédits × part de dette (E04, E05)
+  const financial = accounts.filter(a => !a.observer).reduce((s, a) => s + (+a.value || 0) * accShare(a), 0);
   const list = wealthProperties(properties, today);
-  const property = list.reduce((s, x) => s + x.c.value, 0);
-  const debt = list.reduce((s, x) => s + x.c.debt, 0);
-  return { financial, property, debt, count: list.length, gross: financial + property, net: financial + property - debt };
+  const property = list.reduce((s, x) => s + x.c.myValue, 0);
+  const debt = list.reduce((s, x) => s + x.c.myDebt, 0);
+  const otherDebt = credits.length ? creditTotals(credits, today).myRemaining : 0;
+  return { financial, property, debt, otherDebt, count: list.length, credits: credits.length, gross: financial + property, net: financial + property - debt - otherDebt };
 }
 
-// Grande classe d'un compte, d'après son type : Liquidités (livrets, compte courant, compte à terme), Bourse (comptes-titres, PEA,
+// Grande classe d'un compte, d'après son type (les supports en fonds euros sont ensuite isolés : isFondsEuros) : Liquidités (livrets, compte courant, compte à terme), Bourse (comptes-titres, PEA,
 // assurance-vie, PER, épargne salariale, Pilier 3a), Crypto, Immobilier (SCPI…), Autres. La valeur du compte ENTIER (positions +
 // liquidités) va dans sa classe : le cash d'un PEA reste dans la Bourse.
 function accPocket(acc) {
@@ -33,6 +44,12 @@ function accPocket(acc) {
   return 'Autres';
 }
 
+// Fonds en euros (assurance-vie, PER) : capital garanti, à part de la Bourse. Repéré par le nom, le secteur ou le type du support.
+const _FONDS_EUROS_RE = /fonds\s*(en\s*)?euros?/i;
+function isFondsEuros(h) {
+  return !!h && (h.type === 'Fonds euros' || _FONDS_EUROS_RE.test(h.name || '') || _FONDS_EUROS_RE.test(h.sector || ''));
+}
+
 const ASSET_LABEL = { Action: 'Actions', ETF: 'ETF / Fonds', Obligation: 'Obligations', Cash: 'Cash', Crypto: 'Crypto' };
 // Pays / secteur affichables : vide, tiret, « Inconnu » ou « Autre » → « Non renseigné » (une crypto n'a ni pays ni secteur)
 const _wUnknown = v => !v || /^\s*(—|-|inconnu|autre)?\s*$/i.test(String(v));
@@ -42,25 +59,28 @@ const _wAdd = (o, k, v) => { o[k] = (o[k] || 0) + v; };
 //   byPocket / byAsset / byAccType : incluent la valeur nette de l'immobilier saisi (une seule fois) ; tot = patrimoine net
 //   byRaw / totRaw : titres et liquidités SEULEMENT, par type brut (Action, ETF, Obligation, Cash…) : base des objectifs d'allocation
 //   byGeo / bySec : titres seulement
-function analysisData(accounts, properties, today, cashOf) {
+function analysisData(accounts, properties, today, cashOf, credits = []) {
   const accs = accounts.filter(a => !a.observer);
   const byPocket = {}, byAsset = {}, byAccType = {}, byRaw = {}, byGeo = {}, bySec = {};
   accs.forEach(a => {
-    const pk = accPocket(a);
-    _wAdd(byPocket, pk, a.value || 0);
-    _wAdd(byAccType, a.type || 'Autre', a.value || 0);
-    const cash = cashOf(a);
+    const pk = accPocket(a), k = accShare(a);   // toutes les répartitions comptent MA PART du compte
+    // Les supports en fonds euros forment leur propre grande classe ; le reste du compte garde sa classe
+    const fe = (a.holdings || []).filter(isFondsEuros).reduce((s, h) => s + (h.valueRef ?? h.value ?? 0), 0) * k;
+    _wAdd(byPocket, pk, (a.value || 0) * k - fe);
+    if (fe) _wAdd(byPocket, 'Fonds euros', fe);
+    _wAdd(byAccType, a.type || 'Autre', (a.value || 0) * k);
+    const cash = cashOf(a) * k;
     if (cash) { _wAdd(byAsset, 'Cash', cash); _wAdd(byRaw, 'Cash', cash); }
     (a.holdings || []).forEach(h => {
-      const hv = h.valueRef ?? h.value;
+      const hv = (h.valueRef ?? h.value) * k;
       const crypto = h.type === 'Crypto' || pk === 'Crypto';
-      _wAdd(byAsset, pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : (ASSET_LABEL[h.type] || h.type || 'Autres'), hv);
+      _wAdd(byAsset, pk === 'Immobilier' ? 'Immobilier' : crypto ? 'Crypto' : isFondsEuros(h) ? 'Fonds euros' : (ASSET_LABEL[h.type] || h.type || 'Autres'), hv);
       _wAdd(byRaw, h.type, hv);
       _wAdd(byGeo, crypto ? 'Crypto (sans pays)' : (_wUnknown(h.country) ? 'Non renseigné' : h.country), hv);
       _wAdd(bySec, crypto ? 'Crypto' : (_wUnknown(h.sector) ? 'Non renseigné' : h.sector), hv);
     });
   });
-  const wealth = wealthBreakdown(accounts, properties, today);
+  const wealth = wealthBreakdown(accounts, properties, today, credits);
   const immoNet = wealth.property - wealth.debt;
   if (wealth.count) {
     _wAdd(byPocket, 'Immobilier', immoNet); _wAdd(byAsset, 'Immobilier', immoNet); _wAdd(byAccType, 'Immobilier', immoNet);
@@ -70,5 +90,5 @@ function analysisData(accounts, properties, today, cashOf) {
 }
 
 // Seul accès à l'état : comptes de S, biens du mode courant (imRead), jour d'aujourd'hui
-function wealthNow() { return wealthBreakdown(S.accounts, imRead(), _dayKey(Date.now())); }
-function analysisNow() { return analysisData(S.accounts, imRead(), _dayKey(Date.now()), a => accCash(a)); }
+function wealthNow() { return wealthBreakdown(S.accounts, imRead(), _dayKey(Date.now()), crRead()); }
+function analysisNow() { return analysisData(S.accounts, imRead(), _dayKey(Date.now()), a => accCash(a), crRead()); }

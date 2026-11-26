@@ -19,7 +19,7 @@ const S = {
   theme: 'auto',
   currency: 'EUR',
   privacy: false,
-  user: { name: 'Alexandre Martin' },
+  user: { name: '' },   // saisi dans Réglages > Profil (champ vide par défaut : « Votre nom »)
   accounts: [],
   sort: 'value',
   sortDir: -1,
@@ -63,7 +63,7 @@ const S = {
 // Le 3e chiffre EST la version du cache du service worker : 1.10.NN ↔ patrimoine-vNN.
 // Toute modif de fichier impose de bumper les deux (sw.js + ici) — un écart est signalé
 // dans Réglages → À propos, qui affiche le cache réellement servi.
-const APP_VERSION = '1.11.113';
+const APP_VERSION = '1.11.114';
 const CACHE_NAME  = 'patrimoine-v' + APP_VERSION.split('.')[2];
 
 
@@ -74,10 +74,12 @@ function fmtCur(v) {
   return PU.fmtCur(v, S.currency);
 }
 function fmtPct(v) { return PU.fmtPct(v); }
+function pctClass(v) { return PU.pctClass(v); }
 function fmtDate(s) { return PU.fmtDate(s); }
 function initials(n) { return PU.initials(n); }
 // Observer accounts excluded from total wealth
-function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value,0); }
+// Comptes financiers, MA PART (accShare : compte joint) ; base de l'historique à partir de la saisie d'une quote-part
+function totalWealth() { return S.accounts.filter(a=>!a.observer).reduce((s,a)=>s+a.value*accShare(a),0); }
 
 // Approximate FX rates for P/L produit display only
 const FX_RATES = { EUR:1, USD:1.08, GBP:1.16, CHF:1.05, JPY:163 };
@@ -164,5 +166,9 @@ try {
     }
   }
 } catch(e) {}
+
+// Rappel de sauvegarde si la dernière date de plus de 10 jours (js/features/backup.js) : attend le déverrouillage
+// et la fermeture de la fenêtre Nouveautés.
+setTimeout(maybeRemindBackup, 1500);
 
 // Retour Android + Échap : js/core/back-handler.js. Mise à jour + enregistrement du service worker : js/core/app-update.js.

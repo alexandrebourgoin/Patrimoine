@@ -44,7 +44,7 @@ const walk = d => readdirSync(join(root, d)).flatMap(n => {
   return statSync(join(root, rel)).isDirectory() ? walk(rel) : [rel];
 });
 const jsFiles = walk('js').filter(f => f.endsWith('.js'));
-const SHEETS_NOT_REGISTERED = ['icon-picker-sheet']; // empilé au-dessus des autres : gardé à part dans les handlers
+const SHEETS_NOT_REGISTERED = ['tp-sheet']; // choix du type, empilé au-dessus des fenêtres de compte : gardé à part dans les handlers
 
 const registrations = jsFiles.flatMap(f =>
   [...read(f).matchAll(/registerModal\('([a-z-]+-sheet)',\s*([A-Za-z_]+)\)/g)].map(m => ({ file: f, sheet: m[1], close: m[2] })));
@@ -52,7 +52,7 @@ const registrations = jsFiles.flatMap(f =>
 describe('toutes les feuilles du HTML sont enregistrées', () => {
   const htmlSheets = [...read('mon-patrimoine.html').matchAll(/id="([a-z-]+-sheet)"/g)].map(m => m[1]);
 
-  it('chaque feuille #…-sheet du HTML a un registerModal (sauf le sélecteur d\'icône)', () => {
+  it('chaque feuille #…-sheet du HTML a un registerModal (sauf le choix du type, empilé)', () => {
     const registered = registrations.map(r => r.sheet);
     for (const id of htmlSheets.filter(id => !SHEETS_NOT_REGISTERED.includes(id)))
       expect(registered, id).toContain(id);

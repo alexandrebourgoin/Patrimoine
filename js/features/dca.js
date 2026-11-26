@@ -1,4 +1,5 @@
-// DCA & objectifs : stockage, écran, formulaires (plan / objectif) et projection du patrimoine.
+// DCA & objectifs : stockage, écran, formulaires (plan / objectif). La projection du patrimoine (hypothèses enregistrées
+// avec les données DCA) est affichée dans l'écran Analyse : renderDcaProjectionNow() + bindDcaProjection().
 // Calculs et validations : js/features/dca-calc.js (purs, testés seuls) ; résolution des ISIN : js/features/dca-isin.js.
 // Dépend, À L APPEL seulement, de S, masked, toast… (mon-patrimoine.js). S.dca est initialisé dans le littéral de S.
 //
@@ -59,6 +60,13 @@ function dcaCommit(mutate) {
 const _dcaToday = () => dcaYmd(new Date());
 function _fmtDate(s) { return dcaParseYmd(s).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'numeric' }); }
 function _numIn(v) { return parseFloat(String(v).replace(',', '.')); }
+// Accueil « À surveiller » : prochain investissement programmé dans les 7 jours
+HOME_WATCH.dca = () => {
+  if (!S.dca || !S.dca.plans.length) return [];
+  const today = _dcaToday(), next = dcaStats(S.dca.plans, today).next;
+  if (!next || next.date > _hwAddDays(today, 7)) return [];
+  return [{ level: 'soon', when: next.date, go: 'dca', text: `Investissement programmé le ${fmtDate(next.date)}`, sub: masked(next.plan.budget) + ' à répartir' }];
+};
 
 function dcaPriceRef(ticker) {
   for (const a of S.accounts) for (const h of a.holdings) if (h.ticker === ticker && h.currentPrice) return toRefCcy(h.currentPrice, h.currency || 'EUR');
@@ -75,18 +83,14 @@ const _dcaBanner = () => _dcaLoadError
 
 function renderDca() {
   const today = _dcaToday(), st = dcaStats(S.dca.plans, today), plan = st.current;
-  const header = `${backBarHTML()}
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">${navLabel('dca')}</div>
-    <div class="t-sm" style="margin-top:2px">Investissement programmé, objectifs et projection — calculs théoriques, aucun ordre passé</div>
-  </div>${_dcaBanner()}`;
+  const header = `${moduleBarHTML('dca', "Investissement programmé et objectifs — calculs théoriques, aucun ordre passé")}${_dcaBanner()}`;
   const sec = t => `<div class="t-section px" style="padding:20px 20px 8px">${t}</div>`;
   if (!plan) return header + `<div style="text-align:center;padding:50px 20px;color:var(--text2)">
     <div style="font-size:40px;margin-bottom:12px">📈</div>
     <div style="font-size:15px;font-weight:600">Aucun plan DCA</div>
     <div class="t-sm" style="margin:6px 0 18px">Définis un budget mensuel et sa répartition entre tes titres.</div>
     <button class="form-submit" id="js-dca-cfg" style="max-width:260px">Configurer le plan</button>
-  </div>` + renderDcaGoals(null, today) + renderDcaProjection(null);
+  </div>` + renderDcaGoals(null, today);
 
   const pct = n => (Math.round(n * 100) / 100).toString().replace('.', ',');
   const lines = plan.lines.map(l => {
@@ -126,7 +130,6 @@ function renderDca() {
     <div id="dca-bar-info" class="t-sm" style="margin-top:10px;text-align:center">${st.proj.length ? `${_fmtDate(st.proj[0].date)} → ${_fmtDate(st.proj[st.proj.length - 1].date)} · ${masked(maxC)} cumulés (sans rendement)` : '—'}</div>
   </div>
   ${renderDcaGoals(plan, today)}
-  ${renderDcaProjection(dcaPlanAt(S.dca.plans, today))}
   ${sec('Historique des stratégies')}
   <div class="s-group">${hist}</div>
   <div class="t-sm px" style="padding:14px 20px 30px">Cumul = somme des apports prévus par le plan, pas une valeur de portefeuille. Les données sont stockées sur cet appareil.</div>`;
@@ -148,7 +151,9 @@ function renderDcaGoals(plan, today) {
   }).join('') + `</div>`;
 }
 
-// Projection du patrimoine FINANCIER à 1, 3, 5, 10, 15 et 20 ans (hypothèses modifiables, enregistrées avec les données DCA)
+// Projection du patrimoine FINANCIER à 1, 3, 5, 10, 15 et 20 ans (hypothèses modifiables, enregistrées avec les données DCA).
+// Affichée dans l'écran Analyse (js/screens/analysis.js) ; le versement mensuel vient du plan DCA en vigueur.
+function renderDcaProjectionNow() { return renderDcaProjection(dcaPlanAt(S.dca.plans, _dcaToday())); }
 function renderDcaProjection(plan) {
   const title = '<div class="t-section px" style="padding:20px 20px 8px">Projection du patrimoine</div>';
   const set = dcaProjectionSettings(S.dca.projection), monthly = plan ? plan.budget : 0;
@@ -165,6 +170,7 @@ function renderDcaProjection(plan) {
     <div style="border-top:1px solid var(--border);margin-top:8px"></div>
     ${line('DCA mensuel', plan ? `<b>${masked(monthly)}</b>` : '—')}
     ${plan ? '' : '<div class="t-sm" style="margin-top:8px">Aucun plan en vigueur : projection sans versements.</div>'}
+    <div class="tap" data-go-dca="1" style="margin-top:10px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer">${plan ? 'Modifier le plan DCA →' : 'Créer un plan DCA →'}</div>
   </div>
   <div style="display:flex;gap:10px;margin:12px 20px 0">${input('rl', 'Liquidités (%/an)')}${input('rr', 'Autres actifs (%/an)')}</div>
   <div class="s-group dca-proj" style="margin-top:12px;padding:4px 14px 8px">
@@ -351,8 +357,9 @@ document.getElementById('dca-modal-body').addEventListener('input', e => {
   if (e.target.classList.contains('dl-w') || e.target.id === 'dca-budget') dcaUpdateTotal();
 });
 
-// Hypothèses de rendement : enregistrées avec les données DCA, puis l'écran est redessiné
+// Hypothèses de rendement : enregistrées avec les données DCA, puis l'écran (Analyse) est redessiné ; lien vers le DCA
 function bindDcaProjection(el) {
+  el.querySelectorAll('[data-go-dca]').forEach(b => b.addEventListener('click', () => go('dca')));
   el.querySelectorAll('[data-dca-return]').forEach(input => input.addEventListener('change', () => {
     const key = input.dataset.dcaReturn;
     if (!['rl', 'rr'].includes(key)) return;
@@ -362,13 +369,12 @@ function bindDcaProjection(el) {
       input.value = set[key];
       return toast(`Rendement entre ${DCA_RETURN_MIN} et ${DCA_RETURN_MAX} %`);
     }
-    if (dcaCommit(() => { S.dca.projection = { ...set, [key]: value }; })) renderScreen('dca');
+    if (dcaCommit(() => { S.dca.projection = { ...set, [key]: value }; })) renderScreen(S.screen);
     else input.value = set[key];
   }));
 }
 
 SCREEN_BIND.dca = function (el) {
-  bindDcaProjection(el);
   el.querySelector('#js-back')?.addEventListener('click', back);
   el.querySelector('#js-dca-cfg')?.addEventListener('click', openDcaPlanModal);
   el.querySelector('#js-dca-sync')?.addEventListener('click', () => { void dcaResolveIsins(true); });

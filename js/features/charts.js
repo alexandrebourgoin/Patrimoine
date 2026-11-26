@@ -122,15 +122,10 @@ function histSvg(pts, w, h) {
   </svg>`;
 }
 
-function initHistChart(container, pts) {
-  const svg = container.querySelector('#hist-svg');
-  const tip = container.querySelector('.hist-tip');
-  if (!svg || !pts || pts.length < 2) return;
-  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
-  const pad = 2;
-  const xhair = svg.querySelector('#hist-xhair');
-  const dot = svg.querySelector('#hist-dot');
-
+// Curseur commun aux courbes (patrimoine, titre suivi) : ligne verticale + point sur la valeur la plus proche, info-bulle.
+// tipText(i) : texte de l'info-bulle pour le point i ; tipW : largeur estimée de l'info-bulle (bascule à gauche du doigt).
+function _bindChartCursor(svg, pts, { xhair, dot, tip, tipW, tipText }) {
+  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1, pad = 2;
   function update(clientX) {
     const rect = svg.getBoundingClientRect();
     const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
@@ -142,24 +137,34 @@ function initHistChart(container, pts) {
     xhair.setAttribute('opacity', '1');
     dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
     dot.setAttribute('opacity', '1');
+    if (!tip) return;
     let tipX = relX + 10;
-    if (tipX + 115 > rect.width) tipX = relX - 125;
+    if (tipX + tipW > rect.width) tipX = relX - tipW - 8;
     tip.style.left = Math.max(0, tipX) + 'px';
     tip.style.top = Math.max(0, y - 22) + 'px';
-    if(S.privacy){tip.style.opacity='0';return;}
+    if (S.privacy) { tip.style.opacity = '0'; return; }
     tip.style.opacity = '1';
-    tip.textContent = fmtCur(pts[i]);
+    tip.textContent = tipText(i);
   }
   function hide() {
     xhair.setAttribute('opacity', '0');
     dot.setAttribute('opacity', '0');
-    tip.style.opacity = '0';
+    if (tip) tip.style.opacity = '0';
   }
   svg.addEventListener('touchstart', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchmove', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
+  svg.addEventListener('touchmove',  e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
   svg.addEventListener('touchend', hide, { passive: true });
   svg.addEventListener('mousemove', e => update(e.clientX));
   svg.addEventListener('mouseleave', hide);
+}
+
+function initHistChart(container, pts) {
+  const svg = container.querySelector('#hist-svg');
+  if (!svg || !pts || pts.length < 2) return;
+  _bindChartCursor(svg, pts, {
+    xhair: svg.querySelector('#hist-xhair'), dot: svg.querySelector('#hist-dot'), tip: container.querySelector('.hist-tip'),
+    tipW: 115, tipText: i => fmtCur(pts[i]),
+  });
 }
 
 // Construit pts[] (un point par jour calendaire) depuis une série réelle :
@@ -223,12 +228,12 @@ function stockChartSvg(h, w, ch, period) {
   const line = 'M'+xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line+`L${xs[xs.length-1].toFixed(1)},${ch}L0,${ch}Z`;
   const gid = 'sc'+Math.random().toString(36).slice(2,7);
-  // PRU line with value label
+  // Ligne du PRU, étiquette à GAUCHE : le cours actuel est annoté à droite, les deux ne se chevauchent plus
   const pruClamp = Math.max(mn, Math.min(mx, h.avgBuyPrice));
   const pruY = (padT+(1-(pruClamp-mn)/rng)*(ch-padT-padB)).toFixed(1);
   const pruLabel = `PRU ${h.avgBuyPrice.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
-    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
+    <text x="4" y="${Math.max(padT + 9, parseFloat(pruY) - 3).toFixed(1)}" text-anchor="start" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
   // Current price annotation at the right edge
   const lastY = ys[ys.length - 1];
   const txtY = Math.max(padT + 10, Math.min(ch - padB - 2, lastY - 4));
@@ -237,7 +242,7 @@ function stockChartSvg(h, w, ch, period) {
   // BUY / SELL markers mapped to extended history window
   const markers = h.transactions.filter(t=>t.type!=='DIV').map(tx=>{
     const idx = Math.max(0, Math.min(days-1, Math.round((new Date(tx.date+'T00:00:00') - startDate) / 86400000)));
-    const x = xs[idx].toFixed(1);
+    const x = Math.max(4, Math.min(w - 4, xs[idx])).toFixed(1);   // marqueur entier, même au bord du graphique
     const yy = ys[idx].toFixed(1);
     const mc = tx.type==='BUY'?'var(--gain)':'var(--loss)';
     return `<line x1="${x}" x2="${x}" y1="${padT}" y2="${ch-padB}" stroke="${mc}" stroke-width="1.5" opacity="0.55"/>
@@ -363,43 +368,56 @@ function watchChartSvg(pts, w, h, wCur = 'EUR') {
 
 function initWatchChart(container, pts, startDate, wCur = 'EUR') {
   const svg = container.querySelector('#watch-svg');
-  const tip = container.querySelector('#watch-chart-tip');
   if (!svg || !pts || pts.length < 2) return;
-  const mn = Math.min(...pts), mx = Math.max(...pts), rng = mx - mn || 1;
-  const pad = 2;
-  const xhair = svg.querySelector('#watch-xhair');
-  const dot = svg.querySelector('#watch-dot');
-  function update(clientX) {
-    const rect = svg.getBoundingClientRect();
-    const relX = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const idx = Math.round((relX - pad) / (rect.width - pad * 2) * (pts.length - 1));
-    const i = Math.max(0, Math.min(pts.length - 1, idx));
-    const x = pad + (i / (pts.length - 1)) * (rect.width - pad * 2);
-    const y = pad + (1 - (pts[i] - mn) / rng) * (rect.height - pad * 2);
-    xhair.setAttribute('x1', x.toFixed(1)); xhair.setAttribute('x2', x.toFixed(1));
-    xhair.setAttribute('opacity', '1');
-    dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1));
-    dot.setAttribute('opacity', '1');
-    let tipX = relX + 10;
-    if (tipX + 145 > rect.width) tipX = relX - 153;
-    if (tip) {
-      tip.style.left = Math.max(0, tipX) + 'px';
-      tip.style.top = Math.max(0, y - 22) + 'px';
-      if(S.privacy){tip.style.opacity='0';return;}
-      tip.style.opacity = '1';
-      const d = new Date(startDate.getTime() + i * 86400000);
-      tip.textContent = fmtNative(pts[i], wCur) + '  ' + d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-    }
-  }
-  function hide() {
-    xhair.setAttribute('opacity', '0');
-    dot.setAttribute('opacity', '0');
-    if (tip) tip.style.opacity = '0';
-  }
-  svg.addEventListener('touchstart', e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchmove',  e => { e.stopPropagation(); update(e.touches[0].clientX); }, { passive: true });
-  svg.addEventListener('touchend', hide, { passive: true });
-  svg.addEventListener('mousemove', e => update(e.clientX));
-  svg.addEventListener('mouseleave', hide);
+  _bindChartCursor(svg, pts, {
+    xhair: svg.querySelector('#watch-xhair'), dot: svg.querySelector('#watch-dot'), tip: container.querySelector('#watch-chart-tip'),
+    tipW: 145,
+    tipText: i => fmtNative(pts[i], wCur) + '  ' + new Date(startDate.getTime() + i * 86400000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+  });
 }
 
+// ═══════════════════════════════════════════════
+// RÉPARTITIONS : couleurs, segments, donut + légende (Analyse et Accueil)
+// ═══════════════════════════════════════════════
+const SEC_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899'];
+const ACCTYPE_C=['#4F8EF7','#00C2CB','#00D68F','#F59E0B','#A78BFA','#FF5A5A','#F97316','#EC4899','#22D3EE','#84CC16'];
+const POCKET_C={'Liquidités':'#F59E0B','Fonds euros':'#14B8A6','Bourse':'#4F8EF7','Crypto':'#A78BFA','Immobilier':'#00D68F','Autres':'#8A94A6'};
+const ASSET_C={'Actions':'#4F8EF7','ETF / Fonds':'#00C2CB','Obligations':'#00D68F','Fonds euros':'#14B8A6','Cash':'#F59E0B','Crypto':'#A78BFA','Immobilier':'#10B981','Autres':'#8A94A6'};
+
+function buildSegs(obj, colors) {
+  // Une part à 0 (ou négative, ex. compte vide / cash négatif) n'a rien à représenter dans le
+  // donut — la garder faisait planter le dessin des tranches (voir donutSvg).
+  const entries=Object.entries(obj).filter(([,v])=>v>0);
+  const tot=entries.reduce((s,[,v])=>s+v,0);
+  return entries.sort((a,b)=>b[1]-a[1]).map(([name,value],i)=>({
+    name, value,
+    color: colors[name]||colors[i%colors.length],
+    pct: tot>0?(value/tot*100).toFixed(1):'0.0'
+  }));
+}
+// Donut + légende : le nom a sa propre ligne (avec le pourcentage), le montant passe dessous. Ainsi rien n'est tronqué
+// (« Obligati… », « ETF / Fo… » en largeur de téléphone) ; un nom vraiment trop long reste coupé par une ellipse.
+// Sous le camembert des grandes classes (Accueil et Analyse, même texte) : ce que le graphique ne montre pas.
+//   - classe nette négative (immobilier dont les crédits dépassent la valeur) : absente du camembert ;
+//   - autres crédits : déduits du patrimoine net mais pas répartis par classe, donc la somme des classes le dépasse d'autant.
+function pocketNotes(d) {
+  const notes = Object.entries(d.byPocket || {}).filter(([, v]) => v < -0.005)
+    .map(([n, v]) => `${n} : ${masked(v)} net (crédits supérieurs à la valeur), non représenté dans le graphique.`);
+  const od = d.wealth && d.wealth.otherDebt;
+  if (od > 0.005) notes.push(`Autres crédits : −${masked(od)}, déduits du patrimoine net mais non répartis par classe : la somme des classes dépasse le net de ce montant.`);
+  return notes;
+}
+function pocketNotesHTML(d, cls) {
+  const n = pocketNotes(d);
+  return n.length ? `<div class="t-sm ${cls || ''}">${n.map(esc).join('<br>')}</div>` : '';
+}
+function donutBlock(title, segs) {
+  const legend=segs.map(s=>`<div class="legend-row legend-2l">
+    <div class="leg-dot" style="background:${s.color}"></div>
+    <div class="leg-txt"><div class="leg-line"><span class="leg-name">${esc(s.name)}</span><span class="leg-pct" style="color:${s.color}">${s.pct}%</span></div><div class="t-sm t-num">${masked(s.value)}</div></div>
+  </div>`).join('');
+  return `<div class="donut-block anim">
+    ${donutSvg(segs,108,16)}
+    <div class="legend">${legend}</div>
+  </div>`;
+}

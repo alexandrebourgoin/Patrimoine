@@ -2,6 +2,18 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.114': [
+    { type:'new', text:"Sauvegarde complète (Réglages) : tous les modules, dans le dossier de votre choix, restauration d'un fichier et rappel si la dernière sauvegarde a plus de 10 jours. Date de la dernière sauvegarde dans le menu ☰." },
+    { type:'new', text:"Accueil : camembert des grandes classes d'actifs (dont « Fonds euros », distincte de la Bourse), lignes cliquables (Comptes, Immobilier, Crédits) et bloc « À surveiller » : alertes, ordres, échéances, sauvegarde, positions non synchronisées, jalons fiscaux." },
+    { type:'new', text:"Crédits : plusieurs crédits par bien immobilier (assurance en €/mois), module « Crédits » pour les autres crédits, simulation de remboursement anticipé et comparaison « rembourser ou placer »." },
+    { type:'new', text:"Quotes-parts : part d'un compte joint (compte-titres, assurance-vie) et part d'un bien (propriété et dette séparées) ; les totaux comptent votre part." },
+    { type:'new', text:"Enveloppes fiscales dans le compte : 5 ans du PEA, 8 ans de l'assurance-vie, plafonds des PEA et livrets." },
+    { type:'new', text:"Livrets et épargne logement simplifiés : solde, taux, intérêts estimés, versements, retraits et intérêts ; plafond respecté à la date du versement." },
+    { type:'new', text:"Types de comptes en trois catégories colorées ; chaque compte est représenté par la pastille de son type. Un seul PEA, Livret A… par personne. Nom proposé si vide." },
+    { type:'new', text:"Comptes dont le type n'est plus proposé (SCPI, métaux précieux, compte à terme, compte courant, type libre) : rien ne change tout seul ; un bandeau et « À surveiller » proposent de choisir un nouveau type ou de garder l'ancien." },
+    { type:'new', text:"Analyse : projection du patrimoine (1 à 20 ans). Thèmes Sable, Émeraude & or et Graphite. Non synchro : positions au cours trop ancien et cours saisi à la main." },
+    { type:'fix', text:"Modules titrés par leur nom avec la barre du bas partout ; écrans Compte, Ordres, positions et liste des comptes allégés ; plus de « -0,00 % » ; YTD « — » sans cours au 31/12 ; noms longs entiers ; messages longs sur plusieurs lignes ; Analyse affichée même si le patrimoine net est négatif." },
+  ],
   '1.11.113': [
     { type:'new', text:"Ordres et alertes (menu ☰ ou barre du bas) : ordres limites en cours avec confirmation d'exécution (ajoute le mouvement au compte) et alertes de prix, séparés entre mode démo et réel, avec pastille de compteur." },
     { type:'new', text:"Immobilier : biens (résidence principale, secondaire, locatif), valeur estimée, crédit, tableau d'amortissement. Le patrimoine net de l'Accueil et de l'Analyse intègre l'immobilier ; la carte « Comptes financiers » ne montre plus le patrimoine net." },
