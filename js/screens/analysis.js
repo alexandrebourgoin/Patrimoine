@@ -62,7 +62,7 @@ function wealthCardHTML(d) {
   return `<div class="wl-card">
     <div class="t-label">Patrimoine net</div>
     <div class="wl-amount t-num">${masked(d.tot)}</div>
-    ${w.count?`${row('Patrimoine brut',w.gross)}${row('Crédits immobiliers restants',w.debt)}${row('Dont immobilier brut',w.property)}`:''}
+    ${(w.count||w.otherDebt)?`${row('Patrimoine brut',w.gross)}${w.count?row('Crédits immobiliers restants',w.debt):''}${w.otherDebt?row('Autres crédits restants',w.otherDebt):''}${w.count?row('Dont immobilier brut',w.property):''}`:''}
     ${row('Dont comptes financiers',w.financial)}
     <div class="t-sm" style="margin-top:8px">${parts} · comment le patrimoine est placé aujourd'hui</div>
   </div>`;

@@ -1,5 +1,5 @@
 // Patrimoine : agrégats de l'Accueil et de l'Analyse, fonctions PURES (comptes, biens et date sont passés en paramètres).
-//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants
+//   Patrimoine net  = comptes financiers (hors observateurs) + immobilier brut − crédits immobiliers restants − autres crédits (ma part)
 //   Patrimoine brut = comptes financiers + immobilier brut
 // UNE seule règle décide quels biens comptent (wealthProperties) : l'Accueil et l'Analyse affichent donc toujours le même total.
 // Les snapshots de l'historique (totalWealth, storage.js) et les performances de compte restent FINANCIERS : l'immobilier n'y entre pas.
@@ -12,12 +12,14 @@ function wealthProperties(properties, today) {
     .filter(({ c }) => Number.isFinite(c.value) && Number.isFinite(c.debt));
 }
 
-function wealthBreakdown(accounts, properties, today) {
+// credits : autres crédits (consommation, auto…) ; seule la part de dette supportée est déduite (creditTotals, credits.js)
+function wealthBreakdown(accounts, properties, today, credits = []) {
   const financial = accounts.filter(a => !a.observer).reduce((s, a) => s + (+a.value || 0), 0);
   const list = wealthProperties(properties, today);
   const property = list.reduce((s, x) => s + x.c.value, 0);
   const debt = list.reduce((s, x) => s + x.c.debt, 0);
-  return { financial, property, debt, count: list.length, gross: financial + property, net: financial + property - debt };
+  const otherDebt = credits.length ? creditTotals(credits, today).myRemaining : 0;
+  return { financial, property, debt, otherDebt, count: list.length, credits: credits.length, gross: financial + property, net: financial + property - debt - otherDebt };
 }
 
 // Grande classe d'un compte, d'après son type (les supports en fonds euros sont ensuite isolés : isFondsEuros) : Liquidités (livrets, compte courant, compte à terme), Bourse (comptes-titres, PEA,
@@ -48,7 +50,7 @@ const _wAdd = (o, k, v) => { o[k] = (o[k] || 0) + v; };
 //   byPocket / byAsset / byAccType : incluent la valeur nette de l'immobilier saisi (une seule fois) ; tot = patrimoine net
 //   byRaw / totRaw : titres et liquidités SEULEMENT, par type brut (Action, ETF, Obligation, Cash…) : base des objectifs d'allocation
 //   byGeo / bySec : titres seulement
-function analysisData(accounts, properties, today, cashOf) {
+function analysisData(accounts, properties, today, cashOf, credits = []) {
   const accs = accounts.filter(a => !a.observer);
   const byPocket = {}, byAsset = {}, byAccType = {}, byRaw = {}, byGeo = {}, bySec = {};
   accs.forEach(a => {
@@ -69,7 +71,7 @@ function analysisData(accounts, properties, today, cashOf) {
       _wAdd(bySec, crypto ? 'Crypto' : (_wUnknown(h.sector) ? 'Non renseigné' : h.sector), hv);
     });
   });
-  const wealth = wealthBreakdown(accounts, properties, today);
+  const wealth = wealthBreakdown(accounts, properties, today, credits);
   const immoNet = wealth.property - wealth.debt;
   if (wealth.count) {
     _wAdd(byPocket, 'Immobilier', immoNet); _wAdd(byAsset, 'Immobilier', immoNet); _wAdd(byAccType, 'Immobilier', immoNet);
@@ -79,5 +81,5 @@ function analysisData(accounts, properties, today, cashOf) {
 }
 
 // Seul accès à l'état : comptes de S, biens du mode courant (imRead), jour d'aujourd'hui
-function wealthNow() { return wealthBreakdown(S.accounts, imRead(), _dayKey(Date.now())); }
-function analysisNow() { return analysisData(S.accounts, imRead(), _dayKey(Date.now()), a => accCash(a)); }
+function wealthNow() { return wealthBreakdown(S.accounts, imRead(), _dayKey(Date.now()), crRead()); }
+function analysisNow() { return analysisData(S.accounts, imRead(), _dayKey(Date.now()), a => accCash(a), crRead()); }
