@@ -3,7 +3,7 @@ import { loadClassic } from '../helpers/load-classic.js';
 import { LOAN } from '../helpers/loan.js';
 
 const R = loadClassic('js/features/realestate-calc.js', { globals: LOAN,
-  exports: ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoAddMonths', 'immoYearsBetween', 'immoLoan', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'],
+  exports: ['IMMO_KINDS', 'immoValid', 'immoFormError', 'immoAddMonths', 'immoYearsBetween', 'immoLoan', 'immoLoans', 'immoLoanSchedules', 'immoCalc', 'immoTotals', 'immoAge', 'immoNotaryEstimate'],
 });
 const prop = (over = {}) => ({ id: 'im1', name: 'Appart', kind: 'main', buyDate: '2025-09-11', price: 100000, notary: 8000, works: 0, otherFees: 0, growth: 2, loan: null, ...over });
 const loan = (over = {}) => ({ amount: 90000, rate: 3.5, years: 20, payment: 0, first: '', ...over });
@@ -188,4 +188,33 @@ describe('immoValid', () => {
     ['frais négatifs', prop({ notary: -1 })], ['croissance infinie', prop({ growth: Infinity })],
     ['crédit sans durée', prop({ loan: loan({ years: 0 }) })], ['première échéance mal formée', prop({ loan: loan({ first: 'demain' }) })],
   ])('refuse : %s', (_, bad) => expect(R.immoValid(bad)).toBe(false));
+});
+
+describe('plusieurs crédits par bien', () => {
+  const loans = [{ id: 'a', label: 'Prêt principal', amount: 90000, rate: 3.5, years: 20 }, { id: 'b', label: 'PTZ', amount: 20000, rate: 0, years: 10, insurance: 10 }];
+  it('immoLoans : liste « loans », ou ancien crédit unique converti', () => {
+    expect(R.immoLoans(prop({ loans }))).toHaveLength(2);
+    expect(R.immoLoans(prop({ loan: { amount: 1000, rate: 1, years: 1 } }))).toEqual([{ id: 'l1', label: '', amount: 1000, rate: 1, years: 1 }]);
+    expect(R.immoLoans(prop())).toEqual([]);
+  });
+  it('validité : chaque crédit est contrôlé ; « loans » doit être une liste', () => {
+    expect(R.immoValid(prop({ loans }))).toBe(true);
+    expect(R.immoValid(prop({ loans: [{ amount: 1000, years: 0 }] }))).toBe(false);
+    expect(R.immoValid(prop({ loans: [{ ...loans[0], insurance: -1 }] }))).toBe(false);
+    expect(R.immoValid(prop({ loans: 'x' }))).toBe(false);
+  });
+  it('dette et mensualités = somme des crédits ; fin = dernier crédit ; prochaine échéance = la plus proche', () => {
+    const p = prop({ buyDate: '2025-01-10', loans });
+    const c = R.immoCalc(p, '2026-01-10');
+    const one = R.immoLoanSchedules(p, '2026-01-10');
+    expect(c.debt).toBeCloseTo(one[0].s.remaining + one[1].s.remaining, 6);
+    expect(c.loan.pmt).toBeCloseTo(one[0].s.pmt + one[1].s.pmt, 6);
+    expect(c.loan.ins).toBe(10);
+    expect(c.loan.end).toBe(one[0].s.end);
+    expect(c.loan.count).toBe(2);
+  });
+  it('formulaire : l\'erreur nomme le crédit concerné quand il y en a plusieurs', () => {
+    const p = prop({ loans: [loans[0], { label: 'PTZ', amount: 20000, rate: 0, years: 0 }] });
+    expect(R.immoFormError(p, [])).toBe('Crédit 2 (PTZ) : indique la durée du crédit');
+  });
 });

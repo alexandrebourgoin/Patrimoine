@@ -2,8 +2,10 @@
 // Volontairement simple : ni loyers, ni fiscalité. On suit combien le bien a coûté, combien il vaut (hypothèse de prise de valeur
 // annuelle constante) et combien du crédit est remboursé.
 // Bien : { id, name, kind:'main'|'secondary'|'rental', buyDate:'AAAA-MM-JJ', price, notary, works, otherFees, growth (%/an),
-//          loan: null | { amount, rate (%/an), years, payment (mensualité totale saisie, assurance comprise, optionnelle),
-//                         first (1re échéance 'AAAA-MM-JJ', optionnelle) } }
+//          loans: [ { id, label, amount, rate (%/an), years, first (1re échéance 'AAAA-MM-JJ', optionnelle),
+//                     insurance (€/mois, optionnelle) } ] }   ← plusieurs crédits par bien (prêt principal, PTZ, prêt employeur…)
+// Ancien format, toujours lu : loan: null | { amount, rate, years, payment (mensualité totale, assurance comprise), first }.
+// immoLoans(p) renvoie toujours la liste ; un bien enregistré par le formulaire passe au format « loans ».
 // Échéanciers de crédit : js/features/loan-calc.js (chargé avant ce fichier).
 // Les valeurs estimées dépendent du JOUR (pas de l'heure) : deux écrans affichés à quelques secondes d'écart donnent les mêmes montants.
 
@@ -13,6 +15,18 @@ const IMMO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const _imFinite = n => typeof n === 'number' && Number.isFinite(n);
 const _imNonNeg = n => _imFinite(n) && n >= 0;
 
+// Un crédit est-il bien formé ? (montant et durée > 0, taux, mensualité et assurance ≥ 0, date valide)
+function _imLoanValid(L) {
+  return !!L && typeof L === 'object' && _imFinite(L.amount) && L.amount > 0 && _imFinite(L.years) && L.years > 0
+    && _imNonNeg(L.rate ?? 0) && _imNonNeg(L.payment ?? 0) && _imNonNeg(L.insurance ?? 0)
+    && (!L.first || IMMO_DATE_RE.test(L.first)) && (L.label === undefined || typeof L.label === 'string');
+}
+// Crédits d'un bien, quel que soit le format enregistré (liste « loans » ou ancien « loan » unique)
+function immoLoans(p) {
+  if (Array.isArray(p && p.loans)) return p.loans;
+  return p && p.loan ? [{ id: 'l1', label: '', ...p.loan }] : [];
+}
+
 // Un bien est-il bien formé ? (utilisé par le stockage : un enregistrement invalide fait lever, il n'est jamais ignoré)
 function immoValid(p) {
   if (!p || typeof p !== 'object') return false;
@@ -20,10 +34,9 @@ function immoValid(p) {
   if (!IMMO_KINDS[p.kind] || !IMMO_DATE_RE.test(p.buyDate || '')) return false;
   if (!(_imFinite(p.price) && p.price > 0)) return false;
   if (!_imNonNeg(p.notary ?? 0) || !_imNonNeg(p.works ?? 0) || !_imNonNeg(p.otherFees ?? 0) || !_imFinite(p.growth ?? 0)) return false;
-  const L = p.loan;
-  if (L === null || L === undefined) return true;
-  return _imFinite(L.amount) && L.amount > 0 && _imFinite(L.years) && L.years > 0 && _imNonNeg(L.rate ?? 0)
-    && _imNonNeg(L.payment ?? 0) && (!L.first || IMMO_DATE_RE.test(L.first));
+  if (p.loans !== undefined && !Array.isArray(p.loans)) return false;
+  if (p.loans === undefined && p.loan !== null && p.loan !== undefined && !_imLoanValid(p.loan)) return false;
+  return immoLoans(p).every(_imLoanValid);
 }
 
 // Saisie du formulaire → message d'erreur ou null. others : les AUTRES biens (le bien modifié en est exclu).
@@ -32,8 +45,14 @@ function immoFormError(p, others) {
   if (!(p.price > 0)) return "Indique le prix d'achat";
   for (const [k, label] of [['notary', 'Frais de notaire'], ['works', 'Travaux'], ['otherFees', 'Autres frais']])
     if (!_imNonNeg(p[k])) return `${label} : indique un montant positif ou nul`;
-  if (p.loan && !(p.loan.years > 0)) return 'Indique la durée du crédit';
-  if (p.loan && !_imNonNeg(p.loan.rate)) return 'Le taux du crédit doit être positif ou nul';
+  const loans = immoLoans(p);
+  for (const [i, L] of loans.entries()) {
+    const name = loans.length > 1 ? `Crédit ${i + 1}${L.label ? ' (' + L.label + ')' : ''} : ` : '';
+    const msg = m => name ? name + m : m[0].toUpperCase() + m.slice(1);
+    if (!(L.years > 0)) return msg('indique la durée du crédit');
+    if (!_imNonNeg(L.rate)) return msg('le taux du crédit doit être positif ou nul');
+    if (!_imNonNeg(L.insurance ?? 0)) return msg("l'assurance doit être positive ou nulle");
+  }
   if (p.kind === 'main' && others.some(x => x.kind === 'main')) return 'Une résidence principale existe déjà';
   return null;
 }
@@ -46,9 +65,24 @@ function immoYearsBetween(fromYmd, toYmd) {
   return Math.max(0, (utc(toYmd) - utc(fromYmd)) / (365.25 * 86400000));
 }
 
-// Crédit : mensualité théorique (hors assurance), assurance déduite de la mensualité saisie, échéancier complet.
-// Échéance « passée » = datée au plus tard d'aujourd'hui.
-function immoLoan(p, today) { return loanSchedule(p.loan, immoAddMonths(p.buyDate, 1), today); }
+// Échéancier de chaque crédit du bien (1re échéance par défaut : un mois après l'achat). → [{ L, s }]
+function immoLoanSchedules(p, today) {
+  return immoLoans(p).map(L => ({ L, s: loanSchedule(L, immoAddMonths(p.buyDate, 1), today) })).filter(x => x.s);
+}
+// Synthèse de tous les crédits du bien (null sans crédit) : mêmes champs qu'un échéancier, cumulés
+function immoLoan(p, today) {
+  const all = immoLoanSchedules(p, today);
+  if (!all.length) return null;
+  const sum = k => all.reduce((t, x) => t + x.s[k], 0);
+  const amount = all.reduce((t, x) => t + x.L.amount, 0), repaid = sum('repaid');
+  if (all.length === 1) return { ...all[0].s, count: 1, amount, parts: all };   // un seul crédit : son échéancier complet
+  const next = all.map(x => x.s.next).filter(Boolean).sort((a, b) => (a.date < b.date ? -1 : 1))[0] || null;
+  return {
+    count: all.length, amount, pmt: sum('pmt'), ins: sum('ins'), repaid, remaining: amount - repaid, pct: repaid / amount * 100,
+    interestPaid: sum('interestPaid'), insPaid: sum('insPaid'), next, end: all.map(x => x.s.end).sort().pop(),
+    warn: all.some(x => x.s.warn), parts: all,
+  };
+}
 
 // Coût d'acquisition, valeur estimée (prix × (1 + croissance)^années), dette restante, patrimoine net du bien
 function immoCalc(p, today) {

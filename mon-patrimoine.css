@@ -150,6 +150,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .im-row.strong .im-k{color:var(--text)}
 .im-v{text-align:right}
 .im-sep{border-top:1px solid var(--border);margin:8px 0}
+.im-link{margin-top:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer}
+.im-loan-form{border:1px solid var(--border);border-radius:12px;padding:10px 12px 2px;margin-bottom:10px;background:var(--card2)}
+.im-loan-form-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13px}
+.im-loan-form-head span{color:var(--loss);font-weight:700;cursor:pointer;font-size:12px}
 .im-loan{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
 .im-bar{height:8px;border-radius:4px;background:var(--card);overflow:hidden;margin-bottom:6px}
 .im-bar>div{height:100%;background:var(--gain)}

@@ -73,18 +73,33 @@ function renderImmo() {
   <div class="col gap12 px" style="padding-bottom:100px">${tiles || '<div class="t-sm" style="text-align:center;padding:20px">Aucun bien. Ajoute ta résidence principale ou un bien locatif.</div>'}</div>`;
 }
 
-function _imLoanBlock(p, c) {
-  const L = c.loan, pay = p.loan.payment > 0 ? p.loan.payment : L.pmt, hasIns = L.ins > 0.005;
+// Un bloc par crédit (libellé, remboursé, restant dû, mensualité, fin), puis le total si le bien en a plusieurs
+function _imOneLoanHTML(L, s, idx, many) {
+  const hasIns = s.ins > 0.005;
   return `<div class="im-loan">
-    <div class="im-row strong"><span>Crédit remboursé</span><span class="t-num">${L.pct.toFixed(1)} %</span></div>
-    <div class="im-bar"><div style="width:${Math.min(100, L.pct).toFixed(1)}%"></div></div>
-    ${_imRow('Capital remboursé', `${masked(L.repaid)} <span class="t-sm">/ ${masked(p.loan.amount)}</span>`)}
-    ${_imRow('Capital restant dû', masked(L.remaining))}
-    ${_imRow('Mensualité', `${masked(pay)}${hasIns ? ` <span class="t-sm">dont assurance ≈ ${masked(L.ins)}</span>` : ''}`)}
-    ${_imRow('Intérêts payés' + (hasIns ? ' + assurance' : ''), masked(L.interestPaid + L.insPaid))}
-    ${L.next ? _imRow('Prochaine échéance', fmtDate(L.next.date)) : ''}
-    ${_imRow('Fin du prêt', fmtDate(L.end))}
-    ${L.warn ? `<div class="t-sm" style="color:var(--loss);margin-top:4px">La mensualité saisie est inférieure à la mensualité calculée (${masked(L.pmt)}) : vérifie le taux ou la durée.</div>` : ''}
+    <div class="im-row strong"><span>${many ? esc(L.label || 'Crédit ' + (idx + 1)) : 'Crédit remboursé'}</span><span class="t-num">${s.pct.toFixed(1)} %</span></div>
+    <div class="im-bar"><div style="width:${Math.min(100, s.pct).toFixed(1)}%"></div></div>
+    ${_imRow('Capital remboursé', `${masked(s.repaid)} <span class="t-sm">/ ${masked(L.amount)}</span>`)}
+    ${_imRow('Capital restant dû', masked(s.remaining))}
+    ${_imRow('Mensualité', `${masked(s.pmt + s.ins)}${hasIns ? ` <span class="t-sm">dont assurance ${masked(s.ins)}</span>` : ''}`)}
+    ${_imRow('Taux · durée', `${String(L.rate || 0).replace('.', ',')} % · ${L.years} an${L.years > 1 ? 's' : ''}`)}
+    ${_imRow('Intérêts payés' + (hasIns ? ' + assurance' : ''), masked(s.interestPaid + s.insPaid))}
+    ${s.next ? _imRow('Prochaine échéance', fmtDate(s.next.date)) : ''}
+    ${_imRow('Fin du prêt', fmtDate(s.end))}
+    <div class="tap im-link" data-imamort="${idx}">Tableau d'amortissement →</div>
+    ${s.warn ? `<div class="t-sm" style="color:var(--loss);margin-top:4px">La mensualité saisie est inférieure à la mensualité calculée (${masked(s.pmt)}) : vérifie le taux ou la durée.</div>` : ''}
+  </div>`;
+}
+function _imLoanBlock(p, c) {
+  const parts = c.loan.parts, many = parts.length > 1;
+  const blocks = parts.map(({ L, s }, i) => _imOneLoanHTML(L, s, i, many)).join('');
+  if (!many) return blocks;
+  const T = c.loan;
+  return blocks + `<div class="im-loan">
+    <div class="im-row strong"><span>Total des ${parts.length} crédits</span><span class="t-num">${T.pct.toFixed(1)} %</span></div>
+    ${_imRow('Capital restant dû', masked(T.remaining))}
+    ${_imRow('Mensualités', masked(T.pmt + T.ins))}
+    ${_imRow('Fin du dernier crédit', fmtDate(T.end))}
   </div>`;
 }
 function renderImmoDetail() {
@@ -111,7 +126,6 @@ function renderImmoDetail() {
     ${_imRow('Patrimoine net du bien' + (L ? ' <span class="t-sm">(valeur − capital restant dû)</span>' : ''), masked(c.equity), true)}
     <div class="im-actions">
       <button class="confirm-cancel im-btn" data-imedit="1">Modifier</button>
-      ${L ? '<button class="confirm-cancel im-btn" data-imamort="1">Tableau d\'amortissement</button>' : ''}
       <button class="confirm-cancel im-btn" data-imdel="1" style="color:var(--loss)">Supprimer</button>
     </div>
   </div>
@@ -139,7 +153,8 @@ SCREEN_BIND.immodetail = function (el) {
   el.querySelector('#js-back')?.addEventListener('click', back);
   el.onclick = e => {
     if (e.target.closest('[data-imedit]')) return openImmoForm(S.immoId);
-    if (e.target.closest('[data-imamort]')) return openImmoAmort(S.immoId);
+    const am = e.target.closest('[data-imamort]');
+    if (am) return openImmoAmort(S.immoId, +am.dataset.imamort || 0);
     if (e.target.closest('[data-imdel]')) {
       const id = S.immoId, p = imRead().find(x => x.id === id);
       openConfirm(`Supprimer le bien "${p ? p.name : ''}" ?`, () => {
@@ -161,26 +176,50 @@ const _imEl = id => document.getElementById(id);
 function _imNum(id) { return parseFloat(String(_imEl(id).value).replace(',', '.')) || 0; }
 // Lit le formulaire. Une valeur non numérique saisie est lue comme 0 (champ vide) : seul « autres frais » négatif est refusé par la validation.
 function imReadForm() {
-  const amt = _imNum('im-l-amt');
   return {
     name: _imEl('im-name').value.trim(), kind: _imEl('im-kind').value, buyDate: _imEl('im-date').value,
     price: _imNum('im-price'), notary: _imNum('im-notary'), works: _imNum('im-works'), otherFees: _imNum('im-other'), growth: _imNum('im-growth'),
-    loan: amt > 0 ? { amount: amt, rate: _imNum('im-l-rate'), years: _imNum('im-l-years'), payment: _imNum('im-l-pay'), first: _imEl('im-l-first').value || '' } : null,
+    loans: _imReadLoans(),
   };
 }
-// Aperçu du crédit pendant la saisie : mensualité théorique et assurance déduite de la mensualité saisie
+// ── Crédits du formulaire : un bloc par crédit (libellé, montant, taux, durée, 1re échéance, assurance €/mois) ──
+const _IM_LOAN_FIELDS = [
+  ['label', 'Libellé', 'text', 'Prêt principal, PTZ…'], ['amount', 'Montant emprunté', 'number', '90000'],
+  ['rate', 'Taux annuel (%)', 'number', '3.5'], ['years', 'Durée (années)', 'number', '20'],
+  ['insurance', 'Assurance (€/mois)', 'number', '0'], ['first', 'Première échéance (si différente)', 'date', ''],
+];
+function _imLoanFieldsHTML(L, i) {
+  const v = k => (L && L[k] !== undefined && L[k] !== null && L[k] !== 0) ? esc(String(L[k])) : '';
+  const f = ([k, label, type, ph]) => `<div class="form-field"><div class="form-label">${label}</div><input class="form-input" data-lf="${k}" type="${type}"${type === 'number' ? ' min="0" step="any" inputmode="decimal"' : ''} placeholder="${ph}" value="${v(k)}"></div>`;
+  const rows = [];
+  for (let k = 0; k < _IM_LOAN_FIELDS.length; k += 2) rows.push(`<div class="form-row">${f(_IM_LOAN_FIELDS[k])}${f(_IM_LOAN_FIELDS[k + 1])}</div>`);
+  return `<div class="im-loan-form" data-loan="${i}" data-lid="${esc((L && L.id) || '')}">
+    <div class="im-loan-form-head"><b>Crédit ${i + 1}</b><span class="tap" data-loan-del="${i}">Retirer</span></div>${rows.join('')}</div>`;
+}
+function _imRenderLoans(loans) {
+  _imEl('im-loans').innerHTML = loans.map(_imLoanFieldsHTML).join('');
+}
+function _imReadLoans() {
+  return [...document.querySelectorAll('#im-loans [data-loan]')].map((b, i) => {
+    const g = k => b.querySelector(`[data-lf="${k}"]`).value;
+    const n = k => parseFloat(String(g(k)).replace(',', '.')) || 0;
+    const L = { id: b.dataset.lid || 'l' + Date.now().toString(36) + i, label: g('label').trim(), amount: n('amount'), rate: n('rate'), years: n('years'), insurance: n('insurance'), first: g('first') || '' };
+    return L;
+  }).filter(L => L.amount > 0);
+}
+// Aperçu pendant la saisie : mensualité de chaque crédit, total, part du coût financée
 function _imPreview() {
   const el = _imEl('im-prev'); if (!el) return;
   const p = imReadForm();
-  if (!p.buyDate) { el.innerHTML = p.loan ? "Indique la date d'achat pour calculer l'échéancier." : ''; return; }
-  const L = immoLoan(p, _imToday());
-  if (!L) { el.innerHTML = p.loan ? "Indique la durée du crédit pour calculer l'échéancier." : ''; return; }
-  const total = p.price + p.notary + p.works + p.otherFees;
-  const financed = total > 0 ? ` · ${(p.loan.amount / total * 100).toFixed(0)} % du coût total financé` : '';
-  const ins = p.loan.payment > 0
-    ? (L.ins > 0.005 ? ` Assurance déduite : <b>≈ ${masked(L.ins)}</b>/mois.` : (L.warn ? ' <span style="color:var(--loss)">La mensualité saisie est inférieure au calcul : vérifie taux et durée.</span>' : ' Aucune assurance détectée.'))
-    : " Saisis ta mensualité totale pour en déduire l'assurance.";
-  el.innerHTML = `Mensualité calculée (hors assurance) : <b>${masked(L.pmt)}</b> sur ${L.n} mois${financed}.${ins}`;
+  if (!p.loans.length) { el.innerHTML = ''; return; }
+  if (!p.buyDate) { el.innerHTML = "Indique la date d'achat pour calculer les échéanciers."; return; }
+  const parts = immoLoanSchedules(p, _imToday());
+  if (parts.length < p.loans.length) { el.innerHTML = 'Indique la durée de chaque crédit pour calculer les échéanciers.'; return; }
+  const total = p.price + p.notary + p.works + p.otherFees, borrowed = p.loans.reduce((s, L) => s + L.amount, 0);
+  const lines = parts.map(({ L, s }, i) => `${esc(L.label || 'Crédit ' + (i + 1))} : <b>${masked(s.pmt)}</b>/mois sur ${s.n} mois${s.ins > 0.005 ? ` + assurance ${masked(s.ins)}` : ''}`);
+  const monthly = parts.reduce((t, x) => t + x.s.pmt + x.s.ins, 0);
+  el.innerHTML = lines.join('<br>') + (parts.length > 1 ? `<br>Total : <b>${masked(monthly)}</b>/mois assurance comprise` : '')
+    + (total > 0 ? ` · ${(borrowed / total * 100).toFixed(0)} % du coût total financé` : '');
 }
 function openImmoForm(id) {
   const all = imRead(), p = id ? all.find(x => x.id === id) : null;
@@ -195,9 +234,9 @@ function openImmoForm(id) {
   set('im-name', p ? p.name : ''); set('im-date', p ? p.buyDate : ''); set('im-price', p ? p.price : '');
   set('im-notary', p ? p.notary : ''); set('im-other', p ? p.otherFees : ''); set('im-works', p ? p.works : '');
   _imEl('im-growth').value = p ? (p.growth ?? '') : 2;
-  const L = p && p.loan;
-  set('im-l-amt', L ? L.amount : ''); set('im-l-rate', L ? L.rate : ''); set('im-l-years', L ? L.years : '');
-  set('im-l-pay', L ? L.payment : ''); set('im-l-first', L ? L.first : '');
+  // Ancienne saisie « mensualité totale » : convertie en assurance mensuelle (mensualité − mensualité calculée)
+  const loans = p ? immoLoanSchedules(p, _imToday()).map(({ L, s }) => ({ ...L, insurance: L.insurance > 0 ? L.insurance : +s.ins.toFixed(2) })) : [];
+  _imRenderLoans(loans);
   _imPreview();
   _imEl('im-bg').classList.add('show');
   _imEl('im-sheet').classList.add('show');
@@ -214,8 +253,9 @@ function saveImmoForm() {
   const err = immoFormError(p, others);
   if (err) { toast(err); return; }
   if (!p.name) p.name = IMMO_KINDS[p.kind];
+  p.loans = p.loans.map(({ payment, ...L }) => L);   // format « loans » : l'ancienne mensualité totale est remplacée par l'assurance
   const i = _imEditId ? all.findIndex(x => x.id === _imEditId) : -1;
-  if (i >= 0) all[i] = { ...all[i], ...p, id: _imEditId };
+  if (i >= 0) { const { loan, ...prev } = all[i]; all[i] = { ...prev, ...p, id: _imEditId }; }
   else all.push({ id: 'im' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ...p });
   if (!imSave(all)) return;
   closeImmoForm();
@@ -225,6 +265,17 @@ function saveImmoForm() {
 _imEl('im-bg').addEventListener('click', closeImmoForm);
 _imEl('im-close').addEventListener('click', closeImmoForm);
 _imEl('im-sheet').addEventListener('input', _imPreview);
+_imEl('im-loan-add').addEventListener('click', () => {
+  const n = document.querySelectorAll('#im-loans [data-loan]').length;
+  _imEl('im-loans').insertAdjacentHTML('beforeend', _imLoanFieldsHTML(null, n));
+  _imEl('im-loans').lastElementChild.querySelector('[data-lf="label"]').focus();
+});
+_imEl('im-loans').addEventListener('click', e => {
+  const del = e.target.closest('[data-loan-del]'); if (!del) return;
+  del.closest('[data-loan]').remove();
+  [...document.querySelectorAll('#im-loans [data-loan]')].forEach((b, i) => { b.dataset.loan = i; b.querySelector('b').textContent = 'Crédit ' + (i + 1); });
+  _imPreview();
+});
 _imEl('im-notary-est').addEventListener('click', () => {
   const price = _imNum('im-price');
   if (!(price > 0)) { toast("Saisis d'abord le prix d'achat"); return; }
@@ -236,9 +287,10 @@ _imEl('im-save').addEventListener('click', saveImmoForm);
 // ═══════════════════════════════════════════════
 // TABLEAU D'AMORTISSEMENT : une ligne par année, dépliable en échéances mensuelles
 // ═══════════════════════════════════════════════
-function openImmoAmort(id) {
-  const p = imRead().find(x => x.id === id), L = p && immoLoan(p, _imToday());
-  if (!L) return;
+function openImmoAmort(id, idx = 0) {
+  const p = imRead().find(x => x.id === id), part = p && immoLoanSchedules(p, _imToday())[idx];
+  if (!part) return;
+  const L = part.s, title = esc(p.name) + (immoLoans(p).length > 1 ? ' · ' + esc(part.L.label || 'Crédit ' + (idx + 1)) : '');
   const years = {};
   L.rows.forEach(r => { (years[r.date.slice(0, 4)] ||= []).push(r); });
   const body = Object.entries(years).map(([y, rows]) => {
@@ -251,7 +303,7 @@ function openImmoAmort(id) {
     </details>`;
   }).join('');
   _imEl('ima-body').innerHTML = `<div class="oa-head" style="margin-bottom:10px">
-      <div class="modal-title" style="margin-bottom:0">Amortissement — ${esc(p.name)}</div>
+      <div class="modal-title" style="margin-bottom:0">Amortissement — ${title}</div>
       <div id="ima-close" class="oa-x">✕</div></div>
     <div class="t-sm" style="margin-bottom:8px">${L.n} échéances · mensualité ${masked(L.pmt)}${L.ins > 0.005 ? ` + assurance ≈ ${masked(L.ins)}` : ''} · échéances passées en gris, prochaine en couleur. Touche une année pour voir les mois.</div>
     <div class="ima-grid ima-head"><span>Date</span><span>Capital</span><span>Intérêts</span><span>Reste dû</span></div>${body}`;
