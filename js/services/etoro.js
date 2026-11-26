@@ -118,7 +118,7 @@ function etoroErrorText(status, retryAfter) {
   if (status === 403) return 'Accès refusé : la clé doit avoir la permission « Lecture » sur le compte réel';
   if (status === 429) return `Trop de requêtes vers eToro : réessaie dans ${retryAfter || 60} s`;
   // 0 : réseau coupé, ou proxy des cours pas encore redéployé avec la route ?etoro= (le pré-vol CORS des clés échoue)
-  if (status === 0) return 'eToro injoignable : vérifie ta connexion, ou le proxy des cours n'a pas encore la route eToro';
+  if (status === 0) return "eToro injoignable : vérifie ta connexion, ou le proxy des cours n'a pas encore la route eToro";
   if (status === 400 || status === 404) return 'Le proxy des cours ne connaît pas encore eToro (route ?etoro= à déployer)';
   return `Erreur eToro (${status})`;
 }

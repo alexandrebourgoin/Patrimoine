@@ -95,7 +95,7 @@ describe('eToro : réseau, erreurs et clés', () => {
     expect(calls[0][1]['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
     expect(E.etoroErrorText(401)).toMatch(/Clés refusées/);
     expect(E.etoroErrorText(429, '30')).toMatch(/30 s/);
-    expect(E.etoroErrorText(0)).toMatch(/connexion/);
+    expect(E.etoroErrorText(0)).toMatch(/connexion.*route eToro/);
     expect(E.etoroErrorText(400)).toMatch(/proxy des cours/);   // proxy pas encore redéployé avec la route eToro
   });
   it('synchro : succès → positions ; échec → dernier solde gardé et erreur notée ; sans clés → rien n est appelé', async () => {
