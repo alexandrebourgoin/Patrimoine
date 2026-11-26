@@ -243,6 +243,7 @@ function renderHoldsHTML(acc) {
   el.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin:0 20px;overflow:hidden">`+
     hs.map(h=>{
       const weight  = acc.value > 0 ? ((h.valueRef ?? h.value) / acc.value * 100).toFixed(1) : '0';
+      const stale   = priceStale(h);   // cours trop ancien ou date de cotation inconnue (js/services/prices.js)
       return `
       <div class="hold-item" data-hid="${h.id}">
         <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
@@ -255,7 +256,7 @@ function renderHoldsHTML(acc) {
             </div>
           </div>
           <div class="hold-item-bot">
-            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
+            <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${stale?';color:var(--loss);font-weight:700':''}"${stale?` title="Cours non synchronisé (${esc(priceAgeLabel(h.quoteAt))})"`:''}>${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${esc(h.type)}${stale?' · ⚠ cours obsolète':''}</div>
             <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${pctClass(h.pnlPct)}">${fmtPct(h.pnlPct)}</div>
           </div>
         </div>

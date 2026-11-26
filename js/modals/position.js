@@ -187,7 +187,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
 // ═══════════════════════════════════════════════
 // EDIT HOLDING
 // ═══════════════════════════════════════════════
-let _ehAccId=null,_ehHoldId=null;
+let _ehAccId=null,_ehHoldId=null,_ehManual=false;
 function openEditHolding(accId,holdId){
   _ehAccId=accId; _ehHoldId=holdId;
   const acc=S.accounts.find(a=>a.id===accId);
@@ -200,6 +200,8 @@ function openEditHolding(accId,holdId){
   document.getElementById('eh-country').value=h.country||'';
   document.getElementById('eh-sector').value=h.sector||'Autre';
   document.getElementById('eh-price').value=h.currentPrice||'';
+  _ehManual=h.manualPrice===true;
+  document.getElementById('eh-manual-tog').classList.toggle('on',_ehManual);
   document.getElementById('edit-holding-bg').classList.add('show');
   document.getElementById('edit-holding-sheet').classList.add('show');
 }
@@ -215,6 +217,10 @@ document.getElementById('eh-delete').addEventListener('click',()=>{
   const accId=_ehAccId, holdId=_ehHoldId;
   closeEditHolding();
   deleteHolding(accId,holdId);
+});
+document.getElementById('eh-manual-tog').addEventListener('click',()=>{
+  _ehManual=!_ehManual;
+  document.getElementById('eh-manual-tog').classList.toggle('on',_ehManual);
 });
 document.getElementById('eh-submit').addEventListener('click',()=>{
   const acc=S.accounts.find(a=>a.id===_ehAccId);
@@ -245,6 +251,8 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
     recalcHolding(h);
     acc.value=accTotal(acc);
   }
+  // Cours saisi à la main : protégé de l'actualisation et exclu de « Non synchro » (js/services/prices.js)
+  if(_ehManual) h.manualPrice=true; else delete h.manualPrice;
   saveAccounts();
   closeEditHolding();
   renderScreen('stock');

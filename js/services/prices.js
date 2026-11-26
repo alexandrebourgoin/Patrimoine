@@ -86,7 +86,7 @@ let _fxUpdatedAt = null;
 
 // Helper partagé : fetch un cours unique via Twelve Data ou Yahoo
 async function _fetchSinglePrice(yhSym, cgId) {
-  let price = null, change1d = null;
+  let price = null, change1d = null, quoteAt = null;
   const sym = yhSym || cgId;
   dbgLog('[INF]', `─── Refresh individuel: ${sym} ───`);
 
@@ -94,18 +94,19 @@ async function _fetchSinglePrice(yhSym, cgId) {
     try {
       dbgLog('[INF]', `CoinGecko → ${cgId}`);
       const r  = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_24hr_change=true`,
+        `https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true`,
         { signal: AbortSignal.timeout(8000) }
       );
       dbgLog(r.ok?'[OK]':'[WRN]', `CoinGecko status=${r.status}`);
       if (r.ok) {
         const d = await r.json();
         price    = d[cgId]?.usd             || null;
+        quoteAt  = quoteTime(d[cgId]?.last_updated_at);
         change1d = d[cgId]?.usd_24h_change  ?? null;
         dbgLog(price?'[OK]':'[WRN]', `CoinGecko prix=${price} change=${change1d}`);
       }
     } catch(e) { dbgLog('[ERR]', `CoinGecko: ${e?.message||e}`); }
-    return { price, change1d };
+    return { price, change1d, quoteAt };
   }
 
   // Proxy Cloudflare (Yahoo Finance sans CORS)
@@ -119,13 +120,14 @@ async function _fetchSinglePrice(yhSym, cgId) {
       const q = d?.quoteResponse?.result?.[0];
       if (q?.regularMarketPrice) {
         price    = q.regularMarketPrice;
+        quoteAt  = quoteTime(q.regularMarketTime);
         change1d = q.regularMarketChangePercent || 0;
         dbgLog('[OK]', `Proxy prix=${price} change=${change1d?.toFixed(2)}%`);
       }
     }
   } catch(e) { dbgLog('[ERR]', `Proxy: ${e?.message||e}`); }
 
-  // Fallback FMP (si proxy en panne)
+  // Fallback FMP (si proxy en panne) : pas de date de cotation fournie → quoteAt reste null
   if (!price && S.fmpApiKey) {
     try {
       dbgLog('[INF]', `FMP fallback → ${yhSym}`);
@@ -147,7 +149,7 @@ async function _fetchSinglePrice(yhSym, cgId) {
   }
 
   if (!price) dbgLog('[ERR]', `Aucun cours trouvé pour ${sym}`);
-  return { price, change1d };
+  return { price, change1d, quoteAt };
 }
 
 // Rafraîchit le cours d'un holding (écran stock)
@@ -160,11 +162,12 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
   const yhSym = yahooSymbolFor(ticker, h?.yahooSymbol);
   const cgId  = CG_IDS[ticker];
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _tickerFetching=false; return; }
+  if (isManualPrice(h)) { toast('Cours saisi à la main : désactivez l\'option dans « Modifier » pour l\'actualiser'); _tickerFetching=false; return; }
 
   const btn = document.querySelector('#js-ticker-refresh svg');
   if (btn) btn.classList.add('spin');
 
-  const { price } = await _fetchSinglePrice(yhSym, cgId);
+  const { price, quoteAt } = await _fetchSinglePrice(yhSym, cgId);
 
   if (btn) btn.classList.remove('spin');
   _tickerFetching = false;
@@ -173,6 +176,8 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
 
   if (h) {
     h.currentPrice = price;
+    h.priceAt = Date.now();   // heure de réception du cours
+    h.quoteAt = quoteAt;      // heure de cotation fournie par la source (null si inconnue)
     recalcHolding(h);
     acc.value = accTotal(acc);
     const cached = loadPrices() || { prices: {} };
@@ -391,7 +396,7 @@ async function fetchLivePrices() {
   const btnSvg = document.querySelector('#js-refresh-btn svg');
   if (btnSvg) btnSvg.classList.add('spin');
 
-  const allH = S.accounts.flatMap(a => a.holdings);
+  const allH = S.accounts.flatMap(a => a.holdings).filter(h => !isManualPrice(h));   // cours saisis à la main : jamais écrasés
   // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
   if (!allH.length && !S.watchlist.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
   try {
@@ -472,6 +477,8 @@ async function fetchLivePrices() {
         // Mettre à jour les holdings
         allH.filter(h => h.ticker === ticker).forEach(h => {
           h.currentPrice = price;
+          h.priceAt = Date.now();
+          h.quoteAt = quoteTime(q.regularMarketTime);
           if (!known && qCur) h.currency = qCur;
           recalcHolding(h);
           updated++;
@@ -490,11 +497,11 @@ async function fetchLivePrices() {
     }
   }
 
-  // ── CoinGecko ──────────────────────────────────
+  // ── CoinGecko ───────────────────────────────────────
   if (cgIds.length) {
     try {
       const url = 'https://api.coingecko.com/api/v3/simple/price?ids='
-        + cgIds.join(',') + '&vs_currencies=usd&include_24hr_change=true';
+        + cgIds.join(',') + '&vs_currencies=usd&include_24hr_change=true&include_last_updated_at=true';
       const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
       if (!res.ok) throw new Error('HTTP '+res.status);
       const data = await res.json();
@@ -502,7 +509,7 @@ async function fetchLivePrices() {
         const ticker = cgRev[id];
         const price  = data[id]?.usd;  // toujours en USD (devise native des cryptos)
         if (!ticker || !price) return;
-        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; recalcHolding(h); updated++; });
+        allH.filter(h=>h.ticker===ticker).forEach(h=>{ h.currentPrice=price; h.priceAt=Date.now(); h.quoteAt=quoteTime(data[id]?.last_updated_at); recalcHolding(h); updated++; });
         // Mettre à jour la watchlist si présente
         const wItem = S.watchlist.find(w => w.ticker === ticker);
         if (wItem) {
@@ -517,7 +524,7 @@ async function fetchLivePrices() {
     }
   }
 
-  // ── Finalisation ───────────────────────────────
+  // ── Finalisation ───────────────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
   if (updated > 0) {
     S.accounts.forEach(a=>{ a.value=accTotal(a); });
@@ -556,9 +563,50 @@ async function fetchLivePrices() {
 function applyPrices(priceData) {
   if(!priceData?.prices) return;
   S.accounts.flatMap(a=>a.holdings).forEach(h=>{
+    if(isManualPrice(h)) return;   // le cours saisi à la main fait foi
     const p=priceData.prices[h.ticker];
     if(p!=null){ h.currentPrice=p; recalcHolding(h); }
   });
   S.accounts.forEach(a=>{ a.value=accTotal(a); });
   S.lastPriceUpdate=priceData.updatedAt;
+}
+
+// ═══════════════════════════════════════════════
+// COURS NON SYNCHRONISÉS — positions dont la date de cotation est inconnue ou trop ancienne.
+// h.priceAt = heure de réception en ligne ; h.quoteAt = heure de cotation fournie par la source (ms), null si absente.
+// Jamais posés par le cache local applyPrices. Une date absente, invalide ou future est « inconnue ».
+// Seuils sur quoteAt : 4 jours pour actions / ETF / obligations, 24 h pour les cryptos.
+// Jamais signalé : mode démo, Cash, position soldée, position marquée manualPrice === true.
+// Écran : js/screens/stale.js.
+// ═══════════════════════════════════════════════
+const STALE_MS_DEFAULT = 4*24*3600*1000;
+const STALE_MS_CRYPTO  = 24*3600*1000;
+function validQuoteTime(ts, now=Date.now()) {
+  return typeof ts === 'number' && Number.isFinite(ts) && ts > 0 && ts <= now;
+}
+// Convertit un horodatage source en secondes Unix vers des millisecondes ; null si absent ou invalide.
+function quoteTime(seconds) {
+  const ts = typeof seconds === 'number' ? seconds * 1000 : NaN;
+  return validQuoteTime(ts) ? ts : null;
+}
+// Cours saisi à la main (interrupteur de la fiche « Modifier », js/modals/position.js).
+function isManualPrice(h) { return !!h && h.manualPrice === true; }
+function priceStale(h, now=Date.now()) {
+  if (S.isDemo || !h || isManualPrice(h) || h.type==='Cash' || !(h.quantity>0)) return false;
+  const limit = h.type==='Crypto' ? STALE_MS_CRYPTO : STALE_MS_DEFAULT;
+  return !validQuoteTime(h.quoteAt, now) || (now - h.quoteAt) > limit;
+}
+// Comptes observateurs inclus : un cours figé y est aussi trompeur. Tri : date inconnue d'abord, puis le plus ancien.
+function staleHoldings(now=Date.now()) {
+  const out = [];
+  const at = h => validQuoteTime(h.quoteAt, now) ? h.quoteAt : 0;
+  S.accounts.forEach(acc => (acc.holdings||[]).forEach(h => { if (priceStale(h, now)) out.push({acc, h}); }));
+  return out.sort((a,b) => at(a.h) - at(b.h));
+}
+function priceAgeLabel(ts, now=Date.now()) {
+  if (!validQuoteTime(ts, now)) return 'Date de cotation inconnue';
+  const m = Math.max(0, Math.floor((now - ts) / 60000));
+  if (m < 60) return 'il y a ' + m + ' min';
+  const hh = Math.floor(m / 60);
+  return hh < 48 ? 'il y a ' + hh + ' h' : 'il y a ' + Math.floor(hh / 24) + ' j';
 }

@@ -77,6 +77,7 @@
   <div id="s-assistant"  class="screen no-nav"></div>
   <div id="s-dca"        class="screen no-nav"></div>
   <div id="s-orders"     class="screen no-nav"></div>
+  <div id="s-stale"      class="screen no-nav"></div>
   <div id="s-immo"       class="screen no-nav"></div>
   <div id="s-immodetail" class="screen no-nav"></div>
   <div id="s-credits"     class="screen no-nav"></div>
@@ -836,6 +837,13 @@
         <input class="form-input" type="number" id="eh-price" min="0" step="any" placeholder="0.00" inputmode="decimal">
       </div>
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div>
+        <div style="font-size:14px;font-weight:600">Cours saisi à la main</div>
+        <div class="t-sm" style="margin-top:2px">Jamais remplacé par l'actualisation ni signalé « Non synchro »</div>
+      </div>
+      <div class="toggle" id="eh-manual-tog"><div class="toggle-thumb"></div></div>
+    </div>
     <button class="form-submit" id="eh-submit">Enregistrer</button>
     <button class="confirm-cancel" id="eh-delete" style="width:100%;margin-top:10px;color:var(--loss)">Supprimer ce titre du compte</button>
   </div>
@@ -961,6 +969,7 @@
 <script src="js/screens/settings.js"></script>
 <script src="js/screens/watch.js"></script>
 <script src="js/screens/orders.js"></script>
+<script src="js/screens/stale.js"></script>
 <script src="js/screens/immo.js"></script>
 <script src="js/screens/credits.js"></script>
 <script src="js/screens/early-repay.js"></script>
