@@ -2,6 +2,18 @@
 // Dépend, À L APPEL seulement, de S et des helpers de mon-patrimoine.js ; enregistre son binding dans SCREEN_BIND (js/core/screens.js, chargé avant).
 
 // ── COMPTES ──
+// Type de compte court pour la liste : l'abréviation entre parenthèses si elle existe (« Plan d'Épargne en Actions (PEA) » → « PEA »)
+function accTypeShort(type) {
+  const m = /\(([^)]+)\)\s*$/.exec(type || '');
+  return m ? m[1] : (type || '');
+}
+// Sous-titre d'une carte de compte sur une ligne : type (seulement s'il n'est pas déjà dans le nom) · nombre de valeurs · banque
+function accSubtitle(a) {
+  const short = accTypeShort(a.type), name = (a.name || '').toLowerCase(), type = (a.type || '').toLowerCase();
+  const redundant = !short || name.includes(short.toLowerCase()) || type.includes(name);
+  const parts = [redundant ? '' : esc(short), `${a.holdings.length} valeur${a.holdings.length !== 1 ? 's' : ''}`, a.bank ? esc(a.bank) : ''];
+  return parts.filter(Boolean).join(' · ');
+}
 function renderComptes() {
   const w=totalWealth();
   const anim=_skipAccAnim?'':' anim';   // remis à faux en fin de fonction
@@ -39,7 +51,7 @@ function renderComptes() {
           <div class="row" style="flex-wrap:wrap;gap:4px;align-items:center">
             <div style="font-size:15px;font-weight:700">${esc(a.name)}</div>${obsTag}
           </div>
-          <div class="t-sm">${esc(a.type||"")} · ${a.holdings.length} valeur${a.holdings.length!==1?'s':''}${a.bank?' · '+esc(a.bank):''}</div>
+          <div class="t-sm acc-sub">${accSubtitle(a)}</div>
         </div>
         <div class="col right gap4 tap" data-acc="${a.id}" style="cursor:pointer">
           <div style="font-size:15px;font-weight:800" class="t-num">${displayVal}</div>
@@ -49,7 +61,7 @@ function renderComptes() {
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </div>
       </div>
-      ${!a.observer?`<div class="acc-bar tap" data-acc="${a.id}" style="cursor:pointer"><div class="acc-bar-fill" style="width:${pct}%"></div></div>`:''}
+      ${!a.observer?`<div class="acc-share tap" data-acc="${a.id}"><div class="acc-bar"><div class="acc-bar-fill" style="width:${pct}%"></div></div><span>${pct.replace('.', ',')} % du patrimoine financier</span></div>`:''}
     </div>`;
   }).join('');
   const empty=!S.accounts.length?`<div style="text-align:center;padding:40px 20px;color:var(--text2)">

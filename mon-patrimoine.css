@@ -263,7 +263,14 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .acc-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;cursor:pointer;transition:background .12s}
 .acc-card:active{background:var(--card2)}
 .acc-icon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
-.acc-bar{height:2px;border-radius:2px;background:var(--border);margin-top:12px;overflow:hidden}
+.acc-share{display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer}
+.acc-share span{font-size:11px;color:var(--text3);white-space:nowrap;flex-shrink:0}
+.acc-share .acc-bar{flex:1;margin-top:0}
+.acc-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.acc-bar{height:4px;border-radius:2px;background:var(--border);margin-top:12px;overflow:hidden}
+/* Carte Patrimoine (fond bleu) : variation et textes secondaires lisibles */
+.wealth-card .badge{background:rgba(255,255,255,.18);color:#fff}
+.wealth-card .badge.dn{background:rgba(255,90,90,.28)}
 .acc-bar-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .acc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .acc-card-grid{padding:14px;min-width:0}
