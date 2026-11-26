@@ -32,11 +32,15 @@ const INSTR = {
 function storage() { const m = {}; return { getItem: k => m[k] ?? null, setItem: (k, v) => { m[k] = String(v); }, keys: () => Object.keys(m) }; }
 const S = { accounts: [], isDemo: false };
 const saveData = vi.fn(), toast = vi.fn();
+// Registre des services liés (js/services/linked.js), puis le service eToro qui s'y inscrit
+const net = { S, localStorage: storage(), fetch: (...a) => globalThis.__fetch(...a), PROXY_URL: 'https://prix.dev' };
+const L = loadClassic('js/services/linked.js', { globals: net,
+  exports: ['LINKED_KEYS_STORE', 'LINKED_SERVICES', 'linkedService', 'linkedKeys', 'linkedKeysSave', 'linkedKeysDelete', 'linkedMask',
+    'linkedErrorText', 'linkedGet', 'linkedDue', 'linkedSyncAll'] });
 const E = loadClassic('js/services/etoro.js', {
-  globals: { S, saveData, toast, _dayKey: () => '2026-11-26', recalcHolding: h => globalThis.PU.recalcHolding(h, {}, 'USD'),
-    accTotal: a => globalThis.PU.accTotal(a, {}, 'USD'), localStorage: storage(), fetch: (...a) => globalThis.__fetch(...a), PROXY_URL: 'https://prix.dev' },
-  exports: ['ETORO_KEYS_STORE', 'etoroPortfolio', 'etoroHoldings', 'etoroApply', 'etoroSync', 'etoroDue', 'etoroKeys', 'etoroKeysSave',
-    'etoroKeysDelete', 'etoroMask', 'etoroErrorText', 'etoroGet', 'etoroSyncAll'],
+  globals: { ...net, saveData, toast, _dayKey: () => '2026-11-26', recalcHolding: h => globalThis.PU.recalcHolding(h, {}, 'USD'),
+    accTotal: a => globalThis.PU.accTotal(a, {}, 'USD'), LINKED_SERVICES: L.LINKED_SERVICES, linkedGet: L.linkedGet, linkedKeys: L.linkedKeys },
+  exports: ['etoroPortfolio', 'etoroHoldings', 'etoroApply', 'etoroSync', 'etoroGet', 'ETORO_PUBLIC_KEY'],
 });
 
 describe('eToro : solde (equity) et positions, d après la réponse /trading/info/real/pnl', () => {
@@ -85,21 +89,24 @@ describe('eToro : application au compte', () => {
 });
 
 describe('eToro : réseau, erreurs et clés', () => {
-  it('appel par le proxy des cours (route ?etoro=) avec les trois en-têtes ; message clair par code d erreur', async () => {
+  it('appel par le proxy des cours (?api=etoro&call=…) avec les trois en-têtes, clé publique connue de l app ; messages clairs', async () => {
     const calls = [];
     globalThis.__fetch = async (url, o) => { calls.push([url, o.headers]); return { ok: true, json: async () => ({ ok: 1 }) }; };
-    await E.etoroGet('etoro=pnl', { apiKey: 'A', userKey: 'U' });
-    expect(calls[0][0]).toBe('https://prix.dev?etoro=pnl');
-    expect(calls[0][1]['x-api-key']).toBe('A');
+    await E.etoroGet('pnl', '', { userKey: 'U' });
+    await E.etoroGet('instruments', 'ids=1,2', { apiKey: 'A', userKey: 'U' });
+    expect(calls[0][0]).toBe('https://prix.dev?api=etoro&call=pnl');
+    expect(calls[1][0]).toBe('https://prix.dev?api=etoro&call=instruments&ids=1,2');
+    expect(calls[0][1]['x-api-key']).toBe(E.ETORO_PUBLIC_KEY);
     expect(calls[0][1]['x-user-key']).toBe('U');
     expect(calls[0][1]['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
-    expect(E.etoroErrorText(401)).toMatch(/Clés refusées/);
-    expect(E.etoroErrorText(429, '30')).toMatch(/30 s/);
-    expect(E.etoroErrorText(0)).toMatch(/connexion.*route eToro/);
-    expect(E.etoroErrorText(400)).toMatch(/proxy des cours/);   // proxy pas encore redéployé avec la route eToro
+    expect(L.linkedErrorText('etoro', 401)).toMatch(/Clé refusée par eToro/);
+    expect(L.linkedErrorText('etoro', 403)).toMatch(/permission « Lecture »/);
+    expect(L.linkedErrorText('etoro', 429, '30')).toMatch(/eToro : réessaie dans 30 s/);
+    expect(L.linkedErrorText('etoro', 0)).toMatch(/eToro injoignable.*proxy des cours/);
+    expect(L.linkedErrorText('etoro', 400)).toMatch(/proxy des cours ne connaît pas encore eToro/);
   });
   it('synchro : succès → positions ; échec → dernier solde gardé et erreur notée ; sans clés → rien n est appelé', async () => {
-    globalThis.__fetch = async url => ({ ok: true, json: async () => (url.includes('etoro=pnl') ? PNL : { instrumentDisplayDatas: Object.entries(INSTR).map(([id, v]) => ({ instrumentID: +id, ...v })) }) });
+    globalThis.__fetch = async url => ({ ok: true, json: async () => (url.includes('call=pnl') ? PNL : { instrumentDisplayDatas: Object.entries(INSTR).map(([id, v]) => ({ instrumentID: +id, ...v })) }) });
     const acc = { id: 'e1', holdings: [], cashflows: [], sync: { provider: 'etoro' } };
     expect(await E.etoroSync(acc, { keys: { apiKey: 'A', userKey: 'U' }, quiet: true })).toBe(true);
     const before = acc.value;
@@ -107,39 +114,44 @@ describe('eToro : réseau, erreurs et clés', () => {
     globalThis.__fetch = async () => ({ ok: false, status: 401, headers: { get: () => null } });
     expect(await E.etoroSync(acc, { keys: { apiKey: 'A', userKey: 'U' }, quiet: true })).toBe(false);
     expect(acc.value).toBe(before);
-    expect(acc.sync.error).toMatch(/Clés refusées/);
+    expect(acc.sync.error).toMatch(/Clé refusée/);
     let called = false; globalThis.__fetch = async () => { called = true; };
     expect(await E.etoroSync({ id: 'zz', sync: { provider: 'etoro' } }, { quiet: true })).toBe(false);
     expect(called).toBe(false);
   });
   it('clés : rangées hors des données « patrimoine-* » (jamais sauvegardées), masquées à l affichage, supprimables', () => {
-    expect(E.ETORO_KEYS_STORE.startsWith('patrimoine-')).toBe(false);
+    expect(L.LINKED_KEYS_STORE.startsWith('patrimoine-')).toBe(false);
     const st = storage();
-    E.etoroKeysSave('a', { apiKey: ' ABCDEFGHIJKL ', userKey: 'u123456789xyz' }, st);
-    expect(E.etoroKeys('a', st)).toEqual({ apiKey: 'ABCDEFGHIJKL', userKey: 'u123456789xyz' });
-    expect(E.etoroMask('ABCDEFGHIJKL')).toBe('ABCD…IJKL');
-    E.etoroKeysDelete('a', st);
-    expect(E.etoroKeys('a', st)).toBeNull();
+    L.linkedKeysSave('a', { apiKey: ' ABCDEFGHIJKL ', userKey: 'u123456789xyz' }, st);
+    expect(L.linkedKeys('a', st)).toEqual({ apiKey: 'ABCDEFGHIJKL', userKey: 'u123456789xyz' });
+    expect(L.linkedMask('ABCDEFGHIJKL')).toBe('ABCD…IJKL');
+    L.linkedKeysDelete('a', st);
+    expect(L.linkedKeys('a', st)).toBeNull();
   });
   it('rafraîchissement des cours : tous les comptes liés synchronisés, rien en démo', async () => {
-    globalThis.__fetch = async url => ({ ok: true, json: async () => (url.includes('etoro=pnl') ? PNL : { instrumentDisplayDatas: [] }) });
-    const keys = storage(); E.etoroKeysSave('l1', { apiKey: 'A', userKey: 'U' });
+    globalThis.__fetch = async url => ({ ok: true, json: async () => (url.includes('call=pnl') ? PNL : { instrumentDisplayDatas: [] }) });
+    const keys = storage(); L.linkedKeysSave('l1', { userKey: 'U' });
     S.accounts = [{ id: 'l1', holdings: [], cashflows: [], sync: { provider: 'etoro' } }, { id: 'l2', holdings: [], cashflows: [], sync: { provider: 'etoro' } }, { id: 'm', holdings: [] }];
-    expect(await E.etoroSyncAll()).toEqual({ synced: 1, failed: 1 });   // l2 : pas de clés sur l'appareil
-    S.isDemo = true; expect(await E.etoroSyncAll()).toEqual({ synced: 0, failed: 0 }); S.isDemo = false;
+    expect(await L.linkedSyncAll()).toEqual({ synced: 1, failed: 1 });   // l2 : pas de clés sur l'appareil
+    S.isDemo = true; expect(await L.linkedSyncAll()).toEqual({ synced: 0, failed: 0 }); S.isDemo = false;
     S.accounts = []; void keys;
   });
   it('synchro automatique : comptes eToro jamais synchronisés ou depuis plus d 1 h', () => {
     const now = 10 * 3600e3;
     const list = [{ id: 1, sync: { provider: 'etoro', lastSync: now - 30 * 60e3 } }, { id: 2, sync: { provider: 'etoro', lastSync: now - 2 * 3600e3 } },
       { id: 3, sync: { provider: 'etoro' } }, { id: 4 }];
-    expect(E.etoroDue(list, now).map(a => a.id)).toEqual([2, 3]);
+    expect(L.linkedDue(list, now).map(a => a.id)).toEqual([2, 3]);
   });
 });
 
-describe('eToro : clé publique', () => {
-  it('clé publique commune pré-remplie (affichée par eToro dans Gestion des clés API)', () => {
-    const K = loadClassic('js/services/etoro.js', { globals: { localStorage: { getItem: () => null, setItem() {} } }, exports: ['ETORO_PUBLIC_KEY'] });
-    expect(K.ETORO_PUBLIC_KEY).toBe('sdgdskldFPLGfjHn1421dgnlxdGTbngdflg6290bRjslfihsjhSDsdgGHH25hjf');
+describe('eToro : service lié', () => {
+  it('inscrit au registre ; clé publique commune connue de l app, seule la clé utilisateur est saisie', () => {
+    expect(E.ETORO_PUBLIC_KEY).toBe('sdgdskldFPLGfjHn1421dgnlxdGTbngdflg6290bRjslfihsjhSDsdgGHH25hjf');
+    const svc = L.LINKED_SERVICES.etoro;
+    expect(svc).toMatchObject({ label: 'eToro', bank: 'eToro', currency: 'USD' });
+    expect(svc.keysFrom(' U123 ')).toEqual({ apiKey: E.ETORO_PUBLIC_KEY, userKey: 'U123' });
+    expect(svc.keysReady({ userKey: '' })).toBe(false);
+    expect(L.linkedService({ sync: { provider: 'etoro' } })).toBe(svc);
+    expect(L.linkedService({ sync: { provider: 'inconnu' } })).toBeNull();
   });
 });

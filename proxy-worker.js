@@ -6,8 +6,10 @@
    1) ?symbols=MC.PA,AAPL,EURUSD=X      → cours spot Yahoo (v7 quote, crumb auth)
    2) ?chart=MC.PA&range=5y&interval=1d → historique Yahoo (v8 chart)
    3) ?search=FR0013412269              → recherche Yahoo (nom/ISIN → symbole, v1 search)
-   4) ?etoro=pnl | ?etoro=instruments&ids=1001,100000 → API publique eToro (compte lié, lecture seule)
-      En-têtes x-api-key / x-user-key de l'appli transmis à eToro tels quels : ni stockés, ni journalisés, ni mis en cache.
+   4) ?api=<service>&call=<appel>[&…]   → comptes liés (lecture seule), table LINKED_APIS ci-dessous
+      ex. ?api=etoro&call=pnl, ?api=etoro&call=instruments&ids=1001,100000
+      Seuls les appels déclarés passent. En-têtes de clés transmis tels quels : ni stockés, ni journalisés, ni mis en cache.
+      Ajouter un service = une entrée dans LINKED_APIS (et le module correspondant dans l'appli).
 
    La récupération crumb/cookie (cache 5 min) est factorisée dans getCrumb()
    et partagée par les trois routes. Les v8 chart et v1 search n'ont pas besoin
@@ -41,27 +43,36 @@ async function getCrumb(forceRefresh) {
   return _crumbCache;
 }
 
-// eToro : seuls ces deux appels en lecture sont relayés (aucun ordre possible)
-const ETORO_API = 'https://public-api.etoro.com/api/v1';
-const ETORO_CORS = { ...CORS, 'Access-Control-Allow-Headers': 'x-api-key, x-user-key, x-request-id', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Expose-Headers': 'Retry-After', 'Cache-Control': 'no-store' };
+// Comptes liés : services et appels autorisés (lecture seule). Pour chaque appel, path(url) → chemin, ou null si paramètres invalides.
+const LINKED_APIS = {
+  etoro: {
+    base: 'https://public-api.etoro.com/api/v1',
+    headers: ['x-api-key', 'x-user-key', 'x-request-id'],
+    calls: {
+      pnl: () => '/trading/info/real/pnl',
+      instruments: url => {
+        const ids = (url.searchParams.get('ids') || '').split(',').filter(x => /^\d+$/.test(x)).slice(0, 100);
+        return ids.length ? '/market-data/instruments?instrumentIds=' + ids.join(',') : null;
+      },
+    },
+  },
+};
+const LINKED_HEADERS = [...new Set(Object.values(LINKED_APIS).flatMap(a => a.headers))];
+const LINKED_CORS = { ...CORS, 'Access-Control-Allow-Headers': LINKED_HEADERS.join(', '), 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Expose-Headers': 'Retry-After', 'Cache-Control': 'no-store' };
 
-async function etoroRoute(req, url) {
-  const what = url.searchParams.get('etoro');
-  let path;
-  if (what === 'pnl') path = '/trading/info/real/pnl';
-  else if (what === 'instruments') {
-    const ids = (url.searchParams.get('ids') || '').split(',').filter(x => /^\d+$/.test(x)).slice(0, 100);
-    if (!ids.length) return new Response(JSON.stringify({ error: 'ids required' }), { status: 400, headers: ETORO_CORS });
-    path = '/market-data/instruments?instrumentIds=' + ids.join(',');
-  } else return new Response(JSON.stringify({ error: 'etoro=pnl or etoro=instruments' }), { status: 400, headers: ETORO_CORS });
+async function linkedRoute(req, url) {
+  const api = LINKED_APIS[url.searchParams.get('api')];
+  const call = api && Object.prototype.hasOwnProperty.call(api.calls, url.searchParams.get('call')) && api.calls[url.searchParams.get('call')];
+  const path = call && call(url);
+  if (!path) return new Response(JSON.stringify({ error: 'api/call inconnu ou paramètres invalides' }), { status: 400, headers: LINKED_CORS });
   const h = {};
-  for (const k of ['x-api-key', 'x-user-key', 'x-request-id']) { const v = req.headers.get(k); if (v) h[k] = v; }
+  for (const k of api.headers) { const v = req.headers.get(k); if (v) h[k] = v; }
   try {
-    const r = await fetch(ETORO_API + path, { headers: h });
-    const out = { ...ETORO_CORS }; const ra = r.headers.get('Retry-After'); if (ra) out['Retry-After'] = ra;
+    const r = await fetch(api.base + path, { headers: h });
+    const out = { ...LINKED_CORS }; const ra = r.headers.get('Retry-After'); if (ra) out['Retry-After'] = ra;
     return new Response(await r.text(), { status: r.status, headers: out });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 502, headers: ETORO_CORS });
+    return new Response(JSON.stringify({ error: e.message }), { status: 502, headers: LINKED_CORS });
   }
 }
 
@@ -69,9 +80,9 @@ export default {
   async fetch(req) {
     const url = new URL(req.url);
 
-    // ── ROUTE eTORO (compte lié) : pré-vol CORS des en-têtes de clés, puis appel ──
-    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: ETORO_CORS });
-    if (url.searchParams.has('etoro')) return etoroRoute(req, url);
+    // ── ROUTE COMPTES LIÉS : pré-vol CORS des en-têtes de clés, puis appel ──
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: LINKED_CORS });
+    if (url.searchParams.has('api')) return linkedRoute(req, url);
 
     // ── ROUTE HISTORIQUE (v8 chart) ──
     const chart = url.searchParams.get('chart');
@@ -114,7 +125,7 @@ export default {
 
     // ── ROUTE COURS SPOT (v7 quote, inchangée) ──
     const symbols = url.searchParams.get('symbols');
-    if (!symbols) return new Response(JSON.stringify({ error: 'symbols, chart, search or etoro required' }), { status: 400, headers: CORS });
+    if (!symbols) return new Response(JSON.stringify({ error: 'symbols, chart, search or api required' }), { status: 400, headers: CORS });
     try {
       const fetchQuote = async (crumb, cookie) => {
         const r = await fetch(

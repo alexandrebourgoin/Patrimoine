@@ -213,21 +213,6 @@
   </div>
 </div>
 
-<!-- COMPTE eTORO SYNCHRONISÉ (js/screens/etoro.js, appels : js/services/etoro.js) -->
-<div id="et-bg" class="add-modal-bg"></div>
-<div id="et-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
-  <div class="modal-drag"></div>
-  <div class="modal-body">
-    <div class="oa-head" style="margin-bottom:10px"><div class="modal-title" style="margin-bottom:0" id="et-title">Réglages eToro</div><div id="et-close" class="oa-x">✕</div></div>
-    <div class="t-sm" style="margin-bottom:12px">Lecture seule : l'app lit ton solde et tes positions, sans jamais passer d'ordre. Crée une clé sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b> seulement, puis copie la clé utilisateur tout de suite (elle n'est affichée qu'une fois).</div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Clé publique <span style="font-weight:400;color:var(--text3)">(pré-remplie, la même pour tous)</span></div><input class="form-input" id="et-api" type="text" autocomplete="off" spellcheck="false" style="font-size:12px"></div></div>
-    <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur <span style="font-weight:400;color:var(--text3)">(affichée une seule fois par eToro)</span></div><input class="form-input" id="et-user" type="password" autocomplete="off" spellcheck="false"></div></div>
-    <div class="t-sm" style="margin:-4px 0 12px">Les clés restent sur cet appareil : elles ne sont ni sauvegardées ni exportées.</div>
-    <button class="form-submit" id="et-submit">Tester et enregistrer</button>
-    <div id="et-del" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--loss);cursor:pointer">Supprimer les clés de cet appareil</div>
-  </div>
-</div>
-
 <!-- IMMOBILIER (écrans : js/screens/immo.js) -->
 <div id="im-bg" class="add-modal-bg"></div>
 <div id="im-sheet" class="add-modal-sheet" style="max-height:92vh;overflow-y:auto">
@@ -425,15 +410,6 @@
         <input class="form-input" type="date" id="acc-start">
       </div>
     </div>
-    <!-- Liaison API (tous types) : js/screens/etoro.js -->
-    <div class="form-row"><div class="form-field"><div class="form-label">Lier à une API <span style="font-weight:400;color:var(--text3)">(optionnel)</span></div>
-      <select class="form-input" id="acc-sync" style="cursor:pointer"><option value="">Non : saisie manuelle</option><option value="etoro">eToro (lecture seule)</option></select></div></div>
-    <div id="acc-sync-box" class="hidden">
-      <div class="t-sm" style="margin:-4px 0 12px">Solde et positions lus chez eToro, sans jamais passer d'ordre. Crée une clé sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b>, puis copie la clé utilisateur tout de suite (elle n'est affichée qu'une fois).</div>
-      <div class="form-row"><div class="form-field"><div class="form-label">Clé publique <span style="font-weight:400;color:var(--text3)">(pré-remplie, la même pour tous)</span></div><input class="form-input" id="acc-et-api" type="text" autocomplete="off" spellcheck="false" style="font-size:12px"></div></div>
-      <div class="form-row"><div class="form-field"><div class="form-label">Clé utilisateur</div><input class="form-input" id="acc-et-user" type="password" autocomplete="off" spellcheck="false" placeholder="Clé utilisateur (User key)"></div></div>
-      <div class="t-sm" style="margin:-4px 0 12px">Mise à jour avec les cours (bouton rafraîchir). Les clés restent sur cet appareil, jamais sauvegardées ni exportées.</div>
-    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:14px">
       <div>
         <div style="font-size:14px;font-weight:600">Compte observateur</div>
@@ -442,6 +418,29 @@
       <div class="toggle" id="acc-obs-tog"><div class="toggle-thumb"></div></div>
     </div>
     <button class="form-submit" id="acc-submit">Créer le compte</button>
+    <!-- Compte lié à un service (js/screens/linked.js) : lien discret, puis récap une fois le service choisi -->
+    <div id="acc-link-api" class="tap" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Mettre à jour via un service</div>
+    <div id="acc-link-recap" class="hidden" style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;font-weight:600"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span data-name style="flex:1"></span><span id="acc-link-edit" class="tap" style="color:var(--accent);cursor:pointer">Modifier</span><span id="acc-link-del" class="tap" style="color:var(--text3);cursor:pointer">Retirer</span></div>
+  </div>
+</div>
+
+<!-- MISE À JOUR AUTOMATIQUE : compte lié à un service (js/screens/linked.js, registre : js/services/linked.js) -->
+<div id="ls-bg" class="add-modal-bg" style="z-index:224"></div>
+<div id="ls-sheet" class="add-modal-sheet" style="z-index:225;max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:12px"><div class="modal-title" style="margin-bottom:0" id="ls-title">Mise à jour automatique</div><div id="ls-close" class="oa-x">✕</div></div>
+    <div id="ls-list"></div>
+    <div id="ls-key" class="hidden">
+      <div id="ls-status" class="t-sm hidden" style="margin-bottom:12px"></div>
+      <div class="form-row"><div class="form-field"><div class="form-label" id="ls-key-label">Clé</div><input class="form-input" id="ls-key-input" type="password" autocomplete="off" spellcheck="false"></div></div>
+      <div class="t-sm" style="display:flex;justify-content:space-between;gap:8px;margin:-4px 0 12px"><span>Lecture seule · clé gardée sur cet appareil</span><span id="ls-help-link" class="tap" style="color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap">Où la trouver ?</span></div>
+      <div id="ls-help" class="t-sm hidden" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--card2)"></div>
+      <button class="form-submit" id="ls-ok">Valider</button>
+      <div id="ls-back" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer">‹ Autre service</div>
+      <div id="ls-sync" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer">Synchroniser maintenant</div>
+      <div id="ls-del" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--loss);cursor:pointer">Supprimer la clé de cet appareil</div>
+    </div>
   </div>
 </div>
 
@@ -893,6 +892,7 @@
 <script src="js/core/back-handler.js"></script>
 <script src="js/core/app-update.js"></script>
 <script src="js/services/prices.js"></script>
+<script src="js/services/linked.js"></script>
 <script src="js/services/etoro.js"></script>
 <script src="js/services/csv-import.js"></script>
 <script src="js/features/lock.js"></script>
@@ -928,7 +928,7 @@
 <script src="js/screens/accounts.js"></script>
 <script src="js/screens/search.js"></script>
 <script src="js/screens/account.js"></script>
-<script src="js/screens/etoro.js"></script>
+<script src="js/screens/linked.js"></script>
 <script src="js/screens/stock.js"></script>
 <script src="js/screens/analysis.js"></script>
 <script src="js/screens/assistant.js"></script>

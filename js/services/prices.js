@@ -397,7 +397,7 @@ async function fetchLivePrices() {
   if (btnSvg) btnSvg.classList.add('spin');
 
   const allH = S.accounts.flatMap(a => a.holdings).filter(h => !priceLocked(h));   // cours saisis à la main ou synchronisés : jamais écrasés
-  const linked = S.accounts.some(a => a.sync);   // comptes liés à une API (eToro : js/services/etoro.js)
+  const linked = S.accounts.some(a => a.sync);   // comptes liés à un service (js/services/linked.js)
   // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
   if (!allH.length && !S.watchlist.length && !linked) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
   try {
@@ -406,7 +406,7 @@ async function fetchLivePrices() {
   await fetchFxRates();
 
   // Comptes liés : solde et positions relus chez le fournisseur, par le même proxy
-  const apiSync = linked ? await etoroSyncAll() : { synced: 0, failed: 0 };
+  const apiSync = linked ? await linkedSyncAll() : { synced: 0, failed: 0 };
 
   // Tickers uniques : comptes + watchlist (sauf crypto).
   // Fallback yahooSymbolFor → titres hors base envoyés avec leur ticker brut.
@@ -433,7 +433,7 @@ async function fetchLivePrices() {
 
   let updated = 0;
   const errors = [];
-  if (apiSync.failed) errors.push('eToro');
+  if (apiSync.failed) errors.push(apiSync.failed > 1 ? `${apiSync.failed} comptes liés` : 'compte lié');
   const prices = {}; // pour savePrices()
 
   // ── Proxy Cloudflare → Yahoo Finance (+ FMP en fallback) ──

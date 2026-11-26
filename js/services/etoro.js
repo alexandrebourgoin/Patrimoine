@@ -6,37 +6,16 @@
 // Solde = « equity » au sens d'eToro (guide « Calculate equity ») :
 //   liquidités disponibles + montants investis + plus-values latentes, copies de traders comprises. Montants en USD.
 //
-// Appels : via le proxy des cours (PROXY_URL, proxy-worker.js, route ?etoro=), eToro refusant les appels directs du navigateur (CORS).
-// Synchro : par le rafraîchissement des cours (fetchLivePrices, js/services/prices.js).
-// Les clés ne sont JAMAIS dans les données de l'app : stockage à part (ETORO_KEYS_STORE), hors du préfixe « patrimoine- »,
-// donc jamais sauvegardées, exportées ni restaurées. Elles ne quittent l'appareil que vers le proxy, qui les transmet à eToro sans les garder.
+// Service lié « eToro » du registre LINKED_SERVICES (js/services/linked.js) : appels par le proxy des cours
+// (?api=etoro&call=pnl | instruments), clés sur l'appareil, synchro avec les cours.
 //
 // Partie pure (testée sans réseau) : etoroPortfolio(). Partie réseau : etoroLoad(), etoroSync().
 
-const ETORO_KEYS_STORE = 'mp-api-keys';        // { [accountId]: { apiKey, userKey } } — volontairement hors « patrimoine-* »
 // Clé publique (x-api-key) : identique pour tous les utilisateurs, affichée par eToro dans Paramètres → Trading → Gestion des clés API
-// et publiée par eToro (www.etoro.com/wp-content/uploads/agent-portfolios/SKILL.md). Pré-remplie : seule la clé utilisateur est à saisir.
+// et publiée par eToro (www.etoro.com/wp-content/uploads/agent-portfolios/SKILL.md). Connue de l'app : seule la clé utilisateur est saisie.
 const ETORO_PUBLIC_KEY = 'sdgdskldFPLGfjHn1421dgnlxdGTbngdflg6290bRjslfihsjhSDsdgGHH25hjf';
-const ETORO_SYNC_EVERY_MS = 3600 * 1000;       // synchro automatique si la dernière date de plus d'1 h
 // Types d'instruments eToro (instrumentTypeID) → type de position de l'app
 const ETORO_TYPES = { 5: 'Action', 6: 'ETF', 10: 'Crypto' };
-
-// ── Clés (sur l'appareil uniquement) ──
-function etoroKeysAll(storage = localStorage) {
-  try { const o = JSON.parse(storage.getItem(ETORO_KEYS_STORE) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
-}
-function etoroKeys(accId, storage = localStorage) { return etoroKeysAll(storage)[accId] || null; }
-function etoroKeysSave(accId, keys, storage = localStorage) {
-  const all = etoroKeysAll(storage);
-  all[accId] = { apiKey: String(keys.apiKey || '').trim(), userKey: String(keys.userKey || '').trim() };
-  storage.setItem(ETORO_KEYS_STORE, JSON.stringify(all));
-}
-function etoroKeysDelete(accId, storage = localStorage) {
-  const all = etoroKeysAll(storage); delete all[accId];
-  storage.setItem(ETORO_KEYS_STORE, JSON.stringify(all));
-}
-// Clé affichée masquée : 4 premiers et 4 derniers caractères
-function etoroMask(k) { k = String(k || ''); return k.length > 10 ? k.slice(0, 4) + '…' + k.slice(-4) : (k ? '••••' : ''); }
 
 // ── Conversion pure : réponse eToro → positions et liquidités de l'app ──
 // Les exemples de la documentation mélangent « instrumentID » et « instrumentId » : on lit les deux.
@@ -97,6 +76,7 @@ function etoroPortfolio(pnl, instruments = {}) {
 }
 
 // Positions de l'app (format des comptes) à partir du portefeuille eToro. Les identifiants restent stables d'une synchro à l'autre.
+
 // Prix unitaires en USD : coût / unités et valeur / unités, pour que quantité × cours = valeur eToro.
 function etoroHoldings(port, today) {
   return port.holdings.filter(h => h.units > 0).map(h => {
@@ -112,34 +92,24 @@ function _etoroUuid() {
   return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID()
     : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); });
 }
-// Message clair pour chaque échec (affiché sur le compte et dans « À surveiller »)
-function etoroErrorText(status, retryAfter) {
-  if (status === 401) return 'Clés refusées par eToro : vérifie la clé publique et la clé utilisateur';
-  if (status === 403) return 'Accès refusé : la clé doit avoir la permission « Lecture » sur le compte réel';
-  if (status === 429) return `Trop de requêtes vers eToro : réessaie dans ${retryAfter || 60} s`;
-  // 0 : réseau coupé, ou proxy des cours pas encore redéployé avec la route ?etoro= (le pré-vol CORS des clés échoue)
-  if (status === 0) return "eToro injoignable : vérifie ta connexion, ou le proxy des cours n'a pas encore la route eToro";
-  if (status === 400 || status === 404) return 'Le proxy des cours ne connaît pas encore eToro (route ?etoro= à déployer)';
-  return `Erreur eToro (${status})`;
+// Messages propres à eToro (les autres : linkedErrorText)
+function etoroErrorText(status) {
+  if (status === 401) return 'Clé refusée par eToro : vérifie la clé utilisateur';
+  if (status === 403) return 'Accès refusé : la clé eToro doit avoir la permission « Lecture » sur le compte réel';
+  return '';
 }
-// query : 'etoro=pnl' ou 'etoro=instruments&ids=…' (routes de proxy-worker.js)
-async function etoroGet(query, keys) {
-  let r;
-  try {
-    r = await fetch(PROXY_URL + '?' + query, { headers: { 'x-api-key': keys.apiKey, 'x-user-key': keys.userKey, 'x-request-id': _etoroUuid() } });
-  } catch (e) { const err = new Error(etoroErrorText(0)); err.status = 0; throw err; }
-  if (!r.ok) { const err = new Error(etoroErrorText(r.status, r.headers.get('Retry-After'))); err.status = r.status; throw err; }
-  return r.json();
+function etoroGet(call, params, keys) {
+  return linkedGet('etoro', call, params, { 'x-api-key': keys.apiKey || ETORO_PUBLIC_KEY, 'x-user-key': keys.userKey, 'x-request-id': _etoroUuid() });
 }
 // Portefeuille + noms des instruments (par paquets de 100)
 async function etoroLoad(keys) {
-  const pnl = await etoroGet('etoro=pnl', keys);
+  const pnl = await etoroGet('pnl', '', keys);
   const cp = pnl.clientPortfolio || {};
   const ids = [...new Set((cp.positions || []).map(p => _enum(_eg(p, 'instrumentID', 'instrumentId'))).filter(Boolean))];
   const instruments = {};
   for (let i = 0; i < ids.length; i += 100) {
     try {
-      const d = await etoroGet('etoro=instruments&ids=' + ids.slice(i, i + 100).join(','), keys);
+      const d = await etoroGet('instruments', 'ids=' + ids.slice(i, i + 100).join(','), keys);
       (d.instrumentDisplayDatas || []).forEach(x => { instruments[_enum(_eg(x, 'instrumentID', 'instrumentId'))] = x; });
     } catch (e) { /* noms indisponibles : on garde les identifiants, le solde reste juste */ }
   }
@@ -160,8 +130,8 @@ function etoroApply(acc, port, today, nowMs) {
 const _etoroBusy = new Set();
 async function etoroSync(acc, { keys, quiet } = {}) {
   if (!acc || !acc.sync || _etoroBusy.has(acc.id)) return false;
-  keys = keys || etoroKeys(acc.id);
-  if (!keys || !keys.apiKey || !keys.userKey) { acc.sync.error = 'Clés API absentes sur cet appareil : saisis-les dans les réglages du compte'; return false; }
+  keys = keys || linkedKeys(acc.id);
+  if (!keys || !keys.userKey) { acc.sync.error = 'Clé eToro absente sur cet appareil : touche « eToro » sur le compte pour la saisir'; return false; }
   _etoroBusy.add(acc.id);
   try {
     const { pnl, instruments } = await etoroLoad(keys);
@@ -175,17 +145,13 @@ async function etoroSync(acc, { keys, quiet } = {}) {
     return false;
   } finally { _etoroBusy.delete(acc.id); }
 }
-// Comptes eToro à synchroniser automatiquement (dernière synchro de plus d'1 h ou en échec)
-function etoroDue(accounts, now = Date.now()) {
-  return (accounts || []).filter(a => a.sync && a.sync.provider === 'etoro' && (!a.sync.lastSync || now - a.sync.lastSync > ETORO_SYNC_EVERY_MS));
-}
-// Appelé par fetchLivePrices() (rafraîchissement des cours) : synchronise tous les comptes liés.
-// → { synced, failed } (nombre de comptes)
-async function etoroSyncAll() {
-  const out = { synced: 0, failed: 0 };
-  if (S.isDemo) return out;
-  for (const acc of S.accounts.filter(a => a.sync && a.sync.provider === 'etoro')) {
-    if (await etoroSync(acc, { quiet: true })) out.synced++; else out.failed++;
-  }
-  return out;
-}
+// Inscription dans le registre des services liés (js/services/linked.js), sous garde
+if (typeof LINKED_SERVICES !== 'undefined') LINKED_SERVICES.etoro = {
+  label: 'eToro', sub: 'Solde, positions, copies de traders', bank: 'eToro', currency: 'USD',
+  keyLabel: 'Clé utilisateur eToro', keyPlaceholder: 'Colle la clé (affichée une seule fois)',
+  help: "Sur etoro.com : Paramètres → Trading → Gestion des clés API → « Créer une clé API », environnement <b>Réel</b>, permission <b>Lecture</b>. Copie la clé utilisateur tout de suite : eToro ne l'affiche qu'une fois.",
+  keysFrom: input => ({ apiKey: ETORO_PUBLIC_KEY, userKey: String(input || '').trim() }),
+  keysReady: k => !!(k && k.userKey),
+  sync: (acc, o) => etoroSync(acc, o),
+  errorText: etoroErrorText,
+};

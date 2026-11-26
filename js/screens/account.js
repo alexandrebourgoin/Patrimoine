@@ -138,7 +138,7 @@ function renderAccount() {
       </div>
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
-    ${etoroBannerHTML(acc)}
+    ${linkedChipHTML(acc)}
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     <div class="stat-row">
       <div class="stat-box"><div class="t-label">P&amp;L Total</div>
@@ -478,7 +478,7 @@ SCREEN_BIND.account = function (el, id) {
     el.querySelector('#js-back')?.addEventListener('click',back);
 
     if(acc) renderHoldsHTML(acc);
-    bindEtoroAccount(el,acc);   // compte synchronisé : lecture seule (js/screens/etoro.js)
+    bindLinkedAccount(el,acc);   // compte lié à un service : lecture seule (js/screens/linked.js)
 
     el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
 
