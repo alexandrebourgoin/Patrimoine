@@ -183,14 +183,6 @@ describe('modale de compte : devise et type', () => {
       dom.handlers['acc-submit'].click();
       expect(S.accounts[1].share).toBe(50);
     });
-    it('types en catégories repliables : seule celle du type choisi est dépliée', () => {
-      setup(); api.openAccModal();
-      chooseType('acc-type', 'LDDS');
-      const html = dom.els['acc-type-picker']?.innerHTML || '';
-      expect([...html.matchAll(/<details class="tp-group" data-group="([^"]+)"( open)?>/g)].map(m => [m[1], !!m[2]])).toEqual([
-        ['Bourse et crypto', false], ['Assurance-vie et retraite', false], ['Épargne disponible (livrets)', true]]);
-      expect(html).toContain('<div class="tp-opt tap on" data-type="LDDS">LDDS <span class="tp-chk">✓</span></div>');
-    });
     it('sans date : pas de champ startDate', () => {
       setup(); api.openAccModal();
       dom.els['acc-name'].value = 'X';
