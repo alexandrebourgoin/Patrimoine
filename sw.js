@@ -48,6 +48,7 @@ const SHELL = [
   './js/features/realestate-storage.js',
   './js/features/wealth.js',
   './js/features/account-perf.js',
+  './js/features/tax-envelope.js',
   './js/features/benchmark.js',
   './js/features/cash-pockets.js',
   './js/features/account-rules.js',

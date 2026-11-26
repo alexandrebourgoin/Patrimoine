@@ -88,6 +88,28 @@ function accCashDetailHTML(acc, perf) {
     h += `<div class="t-sm" style="margin-top:6px;display:flex;gap:4px 14px;flex-wrap:wrap"><span>Apports cumulés <b class="t-num">${accNative(acc, perf.dep)}</b></span><span>Retraits cumulés <b class="t-num">${accNative(acc, perf.wit)}</b></span></div>`;
   return h;
 }
+// Enveloppe fiscale (E11) : jalon de durée (PEA 5 ans, assurance-vie 8 ans) et plafond de versements. Règles pures : js/features/tax-envelope.js
+function accEnvelopeHTML(acc) {
+  const info = taxEnvelopeInfo(acc, { today: _dayKey(Date.now()), conv: (v, c) => toRefCcy(v, c), accounts: S.accounts });
+  if (!info) return '';
+  const m = info.milestone, c = info.ceiling;
+  let h = '';
+  if (m) {
+    const when = !m.date ? `Saisis la date d'ouverture du compte pour suivre les ${m.years} ans`
+      : m.reached ? `✓ ${m.years} ans atteints le ${fmtDate(m.date)}`
+      : `${m.years} ans le ${fmtDate(m.date)} · encore ${m.daysLeft > 60 ? Math.round(m.daysLeft / 30.44) + ' mois' : m.daysLeft + ' j'}`;
+    h += `<div style="font-size:14px;font-weight:800;margin-top:4px${m.reached ? ';color:var(--gain)' : ''}">${when}</div>`
+      + (m.date && m.auto ? `<div class="t-sm">Compté depuis le 1er versement connu (${fmtDate(m.start)}) : précise la date d'ouverture dans « Modifier ».</div>` : '')
+      + `<div class="t-sm" style="margin-top:4px">${esc(m.text)}</div>`;
+  }
+  if (c) {
+    h += `<div class="t-sm" style="margin-top:8px;display:flex;justify-content:space-between;gap:8px"><span>Versements <b class="t-num">${masked(c.used)}</b> / ${masked(c.amount)}</span><span>${c.over ? '<b style="color:var(--loss)">Plafond dépassé</b>' : `Reste <b class="t-num">${masked(c.left)}</b>`}</span></div>
+    <div style="height:6px;border-radius:3px;background:rgba(127,127,127,.18);margin-top:4px;overflow:hidden"><div style="height:100%;width:${c.pct.toFixed(1)}%;background:${c.over ? 'var(--loss)' : 'var(--accent)'}"></div></div>`
+      + (c.sharedNote ? `<div class="t-sm" style="margin-top:4px">${esc(c.sharedNote)}</div>` : '');
+  }
+  if (info.note) h += `<div class="t-sm" style="margin-top:6px">${esc(info.note)}</div>`;
+  return `<div id="js-acc-env" style="margin-top:12px;padding:12px 14px;border-radius:14px;background:var(--card2)"><div class="t-label">Enveloppe fiscale · ${esc(info.short)}</div>${h}</div>`;
+}
 // Comparaison à l'indice : tableau Période / Compte / Indice / Écart, depuis la même date de début que le compte
 function accBenchHTML(acc, perf, sum) {
   const key = accBenchmarkKey(acc), b = BENCHMARKS[key];
@@ -149,6 +171,7 @@ function renderAccount() {
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     ${accPerfCardHTML(acc,perf,sum)}
     ${accBenchHTML(acc,perf,sum)}
+    ${accEnvelopeHTML(acc)}
     ${tracked?`<div class="row gap8" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);align-items:center">
       <div style="flex:1">
         <div class="t-label">Apport net</div>

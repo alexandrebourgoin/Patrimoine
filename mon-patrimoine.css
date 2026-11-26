@@ -563,3 +563,6 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .bg-shield-logo svg{width:34px;height:34px}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
+
+/* lignes d'aide masquées quand elles sont vides (.hidden n'avait d'effet que sur .form-row) */
+.t-sm.hidden{display:none}

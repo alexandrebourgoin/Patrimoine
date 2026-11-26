@@ -7,6 +7,7 @@ const rules = loadClassic('js/features/account-rules.js', {
   exports: ['ACCOUNT_TYPES', 'accountRulesProblems', 'allowedAssetTypes', 'assetTypeError', 'accTypeViolations', 'accCurrencyForType', 'assetTypeOptions'],
 });
 const cashPockets = loadClassic('js/features/cash-pockets.js', { globals: { PU: globalThis.PU }, exports: ['cfStampCcy'] });
+const taxEnv = loadClassic('js/features/tax-envelope.js', { exports: ['TAX_ENVELOPES', 'taxEnvelopeProblems'] });
 const PEA = "Plan d'Épargne en Actions (PEA)", CTO = 'Compte-Titres Ordinaire';
 
 const opts = (...values) => values.map(value => ({ value, disabled: false }));
@@ -27,7 +28,7 @@ describe('modale de compte : devise et type', () => {
     for (const id of ['acc-currency', 'rename-acc-currency']) dom.els[id] = { ...dom.document.getElementById(id), options: opts('EUR', 'USD', 'CHF', 'GBP', 'JPY') };
     api = loadClassic('js/modals/account.js', {
       globals: {
-        ...rules, ...cashPockets, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
+        ...rules, ...cashPockets, ...taxEnv, S, document: dom.document, PU: globalThis.PU, esc: s => String(s), setAccIcon() {}, closeIconPicker() {}, toast: m => toasts.push(m),
         refreshMain() { calls.main++; }, saveAccounts() { calls.saved++; }, accTotal: () => 1, renderScreen() {}, _dayKey: () => '2026-11-24',
         registerModal() {}, openConfirm() {}, back() {}, go() {}, iconHtml: s => s,
       },
@@ -36,6 +37,14 @@ describe('modale de compte : devise et type', () => {
   };
   const chooseType = (selId, type) => { dom.els[selId].value = type; dom.els[selId].onchange(); };
 
+  it('rappel de l enveloppe fiscale sous la date d ouverture, selon le type choisi', () => {
+    setup(); api.openAccModal();
+    expect(dom.els['acc-type-env'].textContent).toBe('');
+    chooseType('acc-type', PEA);
+    expect(dom.els['acc-type-env'].textContent).toMatch(/^PEA : fiscalité allégée après 5 ans, comptés depuis la date d'ouverture \(1er versement\) · plafond de versements 150.000 €\.$/);
+    chooseType('acc-type', 'Livret A');
+    expect(dom.els['acc-type-env'].textContent).toMatch(/^Livret A : plafond de versements 22.950 €\.$/);
+  });
   it('création : par défaut compte-titres en euros, devise modifiable', () => {
     setup(); api.openAccModal();
     expect(dom.els['acc-currency'].value).toBe('EUR');
