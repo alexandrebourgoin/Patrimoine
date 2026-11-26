@@ -34,7 +34,7 @@ function renderDash() {
     ${wlDetail}
     <div class="row gap8" style="margin:8px 0 0">
       <div class="badge ${wChg>=0?'up':'dn'}">${wChg>=0?'▲':'▼'} ${Math.abs(wChg).toFixed(2)}%</div>
-      <span style="font-size:12px;color:rgba(255,255,255,.75)">Comptes financiers aujourd'hui · ${S.accounts.length} compte${S.accounts.length>1?'s':''}${wl.count?` · ${wl.count} bien${wl.count>1?'s':''} immobilier${wl.count>1?'s':''}`:''}</span>
+      <span style="font-size:12px;color:rgba(255,255,255,.75)">Variation du jour des comptes financiers (hors immobilier et crédits) · ${S.accounts.length} compte${S.accounts.length>1?'s':''}${wl.count?` · ${wl.count} bien${wl.count>1?'s':''} immobilier${wl.count>1?'s':''}`:''}</span>
     </div>
     <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:6px">
       P&amp;L des positions financières&nbsp;·&nbsp;<span style="font-weight:700;color:${totPnl>=0?'rgba(110,255,200,1)':'rgba(255,150,150,1)'}">${S.privacy?'● ● ●':(totPnl>=0?'+':'')+fmtCur(totPnl)+'&nbsp;('+fmtPct(totPnlPct)+')'}</span>
@@ -49,11 +49,13 @@ function renderDash() {
 
 // ── GRANDES CLASSES D'ACTIFS (même calcul que l'Analyse : analysisNow().byPocket, immobilier net compris) ──
 function renderPocketCard() {
-  const segs = buildSegs(analysisNow().byPocket, POCKET_C);
+  const d = analysisNow();
+  const segs = buildSegs(d.byPocket, POCKET_C);
   if (!segs.length) return '';
   return `<div class="pocket-card tap anim" id="js-pocket-card" title="Ouvrir l'Analyse">
     <div class="pocket-head"><span>Grandes classes d'actifs</span><span class="pocket-more">Analyse →</span></div>
     ${donutBlock('', segs)}
+    ${pocketNotesHTML(d, 'pocket-note')}
   </div>`;
 }
 

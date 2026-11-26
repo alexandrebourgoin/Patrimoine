@@ -397,6 +397,20 @@ function buildSegs(obj, colors) {
 }
 // Donut + légende : le nom a sa propre ligne (avec le pourcentage), le montant passe dessous. Ainsi rien n'est tronqué
 // (« Obligati… », « ETF / Fo… » en largeur de téléphone) ; un nom vraiment trop long reste coupé par une ellipse.
+// Sous le camembert des grandes classes (Accueil et Analyse, même texte) : ce que le graphique ne montre pas.
+//   - classe nette négative (immobilier dont les crédits dépassent la valeur) : absente du camembert ;
+//   - autres crédits : déduits du patrimoine net mais pas répartis par classe, donc la somme des classes le dépasse d'autant.
+function pocketNotes(d) {
+  const notes = Object.entries(d.byPocket || {}).filter(([, v]) => v < -0.005)
+    .map(([n, v]) => `${n} : ${masked(v)} net (crédits supérieurs à la valeur), non représenté dans le graphique.`);
+  const od = d.wealth && d.wealth.otherDebt;
+  if (od > 0.005) notes.push(`Autres crédits : −${masked(od)}, déduits du patrimoine net mais non répartis par classe : la somme des classes dépasse le net de ce montant.`);
+  return notes;
+}
+function pocketNotesHTML(d, cls) {
+  const n = pocketNotes(d);
+  return n.length ? `<div class="t-sm ${cls || ''}">${n.map(esc).join('<br>')}</div>` : '';
+}
 function donutBlock(title, segs) {
   const legend=segs.map(s=>`<div class="legend-row legend-2l">
     <div class="leg-dot" style="background:${s.color}"></div>

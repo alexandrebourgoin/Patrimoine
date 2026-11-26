@@ -10,13 +10,13 @@ const TODAY = '2026-11-22';
 // Couleurs, segments et donut + légende : partagés par l'Analyse et l'Accueil (js/features/charts.js)
 const charts = loadClassic('js/features/charts.js', {
   globals: { esc: s => globalThis.PU.esc(s), masked: v => v.toFixed(2) },
-  exports: ['buildSegs', 'donutBlock', 'POCKET_C', 'ASSET_C', 'ACCTYPE_C', 'SEC_C'],
+  exports: ['buildSegs', 'donutBlock', 'pocketNotes', 'pocketNotesHTML', 'POCKET_C', 'ASSET_C', 'ACCTYPE_C', 'SEC_C'],
 });
 
 const prop = (over = {}) => ({ id: 'im1', name: 'Appart', kind: 'main', buyDate: '2025-09-11', price: 100000, notary: 0, works: 0, otherFees: 0, growth: 0, loan: { amount: 90000, rate: 0, years: 10, payment: 0, first: '' }, ...over });
 const hold = (over = {}) => ({ ticker: 'MC', type: 'Action', country: 'France', sector: 'Luxe', value: 1000, valueRef: 1000, pnlRef: 100, avgBuyPrice: 100, quantity: 10, currency: 'EUR', ...over });
 
-let S, props;
+let S, props, readWarnings = [];
 const globals = () => ({
   ...charts,
   S,
@@ -27,12 +27,13 @@ const globals = () => ({
   analysisNow: () => wealth.analysisData(S.accounts, props, TODAY, () => 0),
   masked: v => v.toFixed(2), esc: s => globalThis.PU.esc(s), fmtCur: v => v.toFixed(2) + ' €', fmtPct: v => v.toFixed(2) + ' %',
   timeSince: () => 'à l\'instant', toRefCcy: v => v, sparkData: () => [1, 2], totalWealth: () => S.accounts.filter(a => !a.observer).reduce((s, a) => s + a.value, 0),
+  homeReadWarnings: () => readWarnings,
   renderTopBar: () => '<TOPBAR/>', genHistData: () => Object.assign([100, 110], { real: true }), histSvg: () => '<svg/>',
   donutSvg: () => '<svg/>', SCREEN_BIND: {}, renderDcaProjectionNow: () => '<PROJECTION/>',
 });
 beforeEach(() => {
   S = { privacy: false, lastPriceUpdate: null, targets: {}, watchlist: [], histPeriod: '1M', accounts: [{ id: 'a', name: 'PEA', type: 'Plan d\'Épargne en Actions (PEA)', value: 1000, change1d: 1, holdings: [hold()] }] };
-  props = [];
+  props = []; readWarnings = [];
 });
 
 describe('Analyse', () => {
@@ -102,6 +103,20 @@ describe('Analyse', () => {
   });
 });
 
+describe('notes sous le camembert des grandes classes (Accueil et Analyse)', () => {
+  it('autres crédits : signalés, car la somme des classes dépasse le net de leur montant', () => {
+    const d = { byPocket: { Bourse: 1000 }, wealth: { otherDebt: 300 } };
+    expect(charts.pocketNotes(d)).toEqual(['Autres crédits : −300.00, déduits du patrimoine net mais non répartis par classe : la somme des classes dépasse le net de ce montant.']);
+    const sum = Object.values(d.byPocket).reduce((s, v) => s + v, 0);
+    expect(sum - d.wealth.otherDebt).toBe(700);
+  });
+  it('classe nette négative : signalée (absente du camembert)', () => {
+    expect(charts.pocketNotes({ byPocket: { Bourse: 1000, Immobilier: -5000 }, wealth: { otherDebt: 0 } }))
+      .toEqual(['Immobilier : -5000.00 net (crédits supérieurs à la valeur), non représenté dans le graphique.']);
+  });
+  it('rien à signaler : pas de note', () => expect(charts.pocketNotesHTML({ byPocket: { Bourse: 1 }, wealth: { otherDebt: 0 } })).toBe(''));
+});
+
 describe('Accueil', () => {
   // Lignes cliquables et bloc « À surveiller » : vrais modules (js/features/home-watch.js, js/screens/home-links.js)
   let HW;
@@ -135,13 +150,28 @@ describe('Accueil', () => {
     expect(html).toContain('Patrimoine net');
     expect(html).toContain(net.toFixed(2) + ' €');
   });
-  it('sans bien : le montant est celui des comptes ; lignes Comptes / Immobilier / Autres crédits cliquables, pas de crédits immobiliers', () => {
+  it('sans bien ni crédit : le montant est celui des comptes ; lignes Comptes / Immobilier cliquables, ni crédits ni brut', () => {
     const html = render();
     expect(html).toContain('1000.00 €');
     expect(html.includes('Crédits immobiliers')).toBe(false);
     expect(html).toContain('data-wgo="comptes"');
     expect(html).toContain('data-wgo="immo"');
-    expect(html).toContain('data-wgo="credits"');
+    expect(html.includes('data-wgo="credits"')).toBe(false);   // « Autres crédits » seulement s'il y en a
+    expect(html.includes('Patrimoine brut')).toBe(false);
+  });
+  it('avec des autres crédits : « Patrimoine brut » puis la ligne « Autres crédits » cliquable', () => {
+    const html = links().homeWealthRowsHTML({ financial: 1000, property: 0, debt: 0, otherDebt: 300, count: 0, credits: 1, gross: 1000, net: 700 });
+    expect(html).toMatch(/<span>Patrimoine brut<\/span><span class="t-num">1000.00/);
+    expect(html).toMatch(/data-wgo="credits"[^>]*><span>Autres crédits<\/span><span class="t-num">−300.00/);
+  });
+  it('crédits ou biens illisibles : avertissement dans la carte, le net ne les compte pas', () => {
+    const hw = loadClassic('js/features/home-watch.js', { exports: ['HOME_WATCH', 'homeWatchItems'] });
+    const mk = g => loadClassic('js/screens/home-links.js', { globals: { ...globals(), ...hw, ...g }, exports: ['homeWealthRowsHTML', 'homeReadWarnings'] });
+    const wl = { financial: 1000, property: 0, debt: 0, otherDebt: 0, count: 0, credits: 0, gross: 1000, net: 1000 };
+    expect(mk({ crReadError: () => '' }).homeReadWarnings()).toEqual([]);
+    const bad = mk({ crReadError: () => 'JSON invalide' });
+    expect(bad.homeReadWarnings().map(w => w.go)).toEqual(['credits']);
+    expect(bad.homeWealthRowsHTML(wl)).toContain('Crédits illisibles : le patrimoine net ne déduit pas les autres crédits.');
   });
   it('avec un bien : comptes, immobilier (ma part) et crédits immobiliers, chacun vers son module', () => {
     props = [prop()];

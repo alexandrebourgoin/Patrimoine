@@ -208,6 +208,12 @@ document.getElementById('acc-action-del').addEventListener('click',()=>{
 
 
 // Part détenue saisie (compte joint) : vide → 100 ; refus (toast, null) hors de 1 à 100 %
+// Quote-part modifiée sur un compte existant : les points d'historique déjà enregistrés gardent l'ancienne part
+// (snapshots de totalWealth) ; la courbe d'évolution fait donc un saut le jour du changement. '' si la part ne change pas.
+function accShareHistoryNote(before, after){
+  if(Math.abs(before-after)<1e-9) return '';
+  return `Les totaux comptent maintenant ${Math.round(after*100)} % de ce compte. L'historique déjà enregistré n'est pas recalculé : la courbe d'évolution fera un saut à partir d'aujourd'hui.`;
+}
 function accShareInput(id){
   const raw=String(document.getElementById(id).value||'').trim();
   if(!raw) return 100;
@@ -248,6 +254,7 @@ document.getElementById('rename-acc-close').addEventListener('click',closeRename
 document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   const renamedId=_renameAccId;
   const acc=S.accounts.find(a=>a.id===renamedId); if(!acc) return;
+  const shareBefore=accShare(acc);   // avant tout changement de type ou de part (message sur l'historique)
   const newType0=readAccType('rename-acc-type',acc.type||ACCOUNT_TYPES[0]);
   const name=document.getElementById('rename-acc-input').value.trim()||accDefaultName(newType0,document.getElementById('rename-acc-bank').value,S.accounts.filter(a=>a.id!==acc.id));
   if(newType0!==acc.type){ const limit=accTypeLimitError(S.accounts,newType0,acc.id,acc.observer); if(limit){toast(limit);return;} }
@@ -267,6 +274,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   if(rt.error){toast(rt.error);return;}
   if(rt.rate!=null) acc.rate=rt.rate; else delete acc.rate;
   if(share<100) acc.share=share; else delete acc.share;
+  const shareMsg=accShareHistoryNote(shareBefore, accShare(acc));
   if(startDate) acc.startDate=startDate; else delete acc.startDate;
   cfStampCcy(acc); // les apports anciens gardent leur devise : changer la devise du compte ne les réinterprète pas
   acc.currency=document.getElementById('rename-acc-currency').value||'EUR';
@@ -275,7 +283,7 @@ document.getElementById('rename-acc-submit').addEventListener('click',()=>{
   closeRenameAcc();
   refreshMain();
   if(S.screen==='account'&&S.accountId===renamedId) renderScreen('account');
-  toast(`Compte mis à jour ✓`);
+  toast(shareMsg?`Compte mis à jour ✓ ${shareMsg}`:`Compte mis à jour ✓`);
 });
 // Also submit on Enter key
 document.getElementById('rename-acc-input').addEventListener('keydown',e=>{

@@ -3,14 +3,28 @@
 // Dépend, À L'APPEL seulement, de S, masked, esc, go, runShortcut.
 
 // Lignes de répartition : comptes financiers, immobilier (ma part), crédits immobiliers, autres crédits. wl = wealthNow()
+// « Patrimoine brut » (non cliquable) dès qu'une dette est déduite ; « Autres crédits » seulement s'il y en a (comme les crédits immobiliers).
 function homeWealthRowsHTML(wl) {
   const row = (label, v, target, neg) => `<div class="wl-row dark wl-link tap" data-wgo="${target}" role="button"><span>${label}</span><span class="t-num">${neg && v > 0.005 ? '−' : ''}${masked(v)} <span class="wl-chev">›</span></span></div>`;
+  const hasDebt = wl.count || wl.credits;
   return `<div style="margin-top:10px">
+    ${hasDebt ? `<div class="wl-row dark"><span>Patrimoine brut</span><span class="t-num">${masked(wl.gross)}</span></div>` : ''}
     ${row('Comptes financiers', wl.financial, 'comptes')}
     ${row(wl.count ? 'Immobilier (ma part)' : 'Immobilier', wl.property, 'immo')}
     ${wl.count ? row('Crédits immobiliers', wl.debt, 'immo', true) : ''}
-    ${row('Autres crédits', wl.otherDebt || 0, 'credits', true)}
-  </div>`;
+    ${wl.credits ? row('Autres crédits', wl.otherDebt || 0, 'credits', true) : ''}
+  </div>${homeReadWarningsHTML()}`;
+}
+// Données de crédits ou de biens illisibles : lues comme une liste vide, donc le net serait faux sans le dire.
+// Appelée APRÈS wealthNow() / analysisNow(), qui viennent de relire ces données.
+function homeReadWarnings() {
+  const out = [];
+  if (typeof crReadError === 'function' && crReadError()) out.push({ text: 'Crédits illisibles : le patrimoine net ne déduit pas les autres crédits.', go: 'credits' });
+  if (typeof _imError !== 'undefined' && _imError) out.push({ text: "Biens immobiliers illisibles : le patrimoine net ne compte ni l'immobilier ni ses crédits.", go: 'immo' });
+  return out;
+}
+function homeReadWarningsHTML() {
+  return homeReadWarnings().map(w => `<div class="wl-warn tap" data-wgo="${w.go}" role="button">⚠ ${esc(w.text)} <span class="wl-chev">›</span></div>`).join('');
 }
 
 // Bloc « À surveiller » : rien du tout tant qu'aucune source n'a d'élément

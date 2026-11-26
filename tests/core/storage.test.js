@@ -9,7 +9,7 @@ const EXPORTS = ['STORE_ACCOUNTS', 'STORE_SETTINGS', 'STORE_PRICES', 'STORE_HIST
   'loadHistory', 'saveHistory', 'getHistorySeries', 'loadWealth', 'saveWealth', 'snapshotWealth',
   '_qtyOnDay', 'reconstructWealthOnDay', 'backfillWealthHistory'];
 
-function fresh() {
+function fresh(extra = {}) {
   const store = new Map();
   const localStorage = {
     getItem: k => (store.has(k) ? store.get(k) : null),
@@ -29,7 +29,7 @@ function fresh() {
       FX_RATES: { EUR: 1, USD: 1.08 }, _fxUpdatedAt: 1234,
       sanitizeNavItems: a => ['SAN', ...a],            // marqueur : prouve que loadData filtre via sanitizeNavItems
       totalWealth: () => S.accounts.filter(a => !a.observer).reduce((s, a) => s + (a.value || 0), 0),
-      toRefCcy: v => v, accCash: () => 0,
+      toRefCcy: v => v, accCash: () => 0, ...extra,
     },
     exports: EXPORTS,
   });
@@ -235,6 +235,11 @@ describe('reconstructWealthOnDay / backfillWealthHistory', () => {
   const account = (extra = {}) => ({ id: 'a', holdings: [{ ticker: 'T', currency: 'EUR', currentPrice: 100,
     transactions: [{ date: '2024-01-10', type: 'BUY', qty: 10 }] }], ...extra });
 
+  it('compte MA PART du compte, comme les snapshots (totalWealth) : pas de saut entre jours reconstruits et jours enregistrés', () => {
+    const { api, S } = fresh({ accShare: a => (a.share ? a.share / 100 : 1) });
+    S.accounts = [account({ share: 50 })];
+    expect(api.reconstructWealthOnDay('2024-02-01')).toBe(500);   // 10 × 100 × 50 %
+  });
   it('quantité détenue ce jour-là × cours courant (sans historique)', () => {
     const { api, S } = fresh(); S.accounts = [account()];
     expect(api.reconstructWealthOnDay('2024-01-09')).toBe(0);

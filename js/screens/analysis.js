@@ -64,15 +64,11 @@ function wealthCardHTML(d) {
     <div class="wl-amount t-num">${masked(d.tot)}</div>
     ${(w.count||w.otherDebt)?`${row('Patrimoine brut',w.gross)}${w.count?row('Crédits immobiliers restants',w.debt):''}${w.otherDebt?row('Autres crédits restants',w.otherDebt):''}${w.count?row('Dont immobilier brut',w.property):''}`:''}
     ${row('Dont comptes financiers',w.financial)}
+    ${homeReadWarnings().map(x=>`<div class="t-sm" style="margin-top:6px;color:var(--loss)">⚠ ${esc(x.text)}</div>`).join('')}
     <div class="t-sm" style="margin-top:8px">${parts} · comment le patrimoine est placé aujourd'hui</div>
   </div>`;
 }
 
-// Classe nette négative (ex. immobilier dont les crédits dépassent la valeur) : absente du camembert, signalée en clair
-function _anNegativeNote(obj) {
-  const neg=Object.entries(obj).filter(([,v])=>v<-0.005);
-  return neg.length?`<div class="t-sm px" style="padding-bottom:10px">${neg.map(([n,v])=>`${esc(n)} : ${masked(v)} net (crédits supérieurs à la valeur)`).join(' · ')} — non représenté dans le graphique.</div>`:'';
-}
 function renderAnalysis() {
   const d=analysisNow();
   // Vide seulement sans aucun actif : un patrimoine net négatif (crédits supérieurs aux actifs) s'analyse quand même
@@ -86,7 +82,7 @@ function renderAnalysis() {
   ${wealthCardHTML(d)}
   ${sec('Grandes classes')}
   ${donutBlock('',buildSegs(d.byPocket,POCKET_C))}
-  ${_anNegativeNote(d.byPocket)}
+  ${pocketNotesHTML(d, 'px pocket-note-an')}
   ${sec("Par type d'actif")}
   ${donutBlock('',buildSegs(d.byAsset,ASSET_C))}
   ${sec('Par type de compte')}
