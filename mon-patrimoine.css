@@ -546,3 +546,6 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .er-grid>.er-l{color:var(--text2)}
 .er-grid>.t-num,.er-grid>b:not(:first-child){text-align:right}
 .er-sens{grid-template-columns:1fr 1fr;margin-top:12px}
+
+/* comparaison masquée tant qu'aucune somme n'est saisie */
+#er-cmp-box.hidden{display:none}
