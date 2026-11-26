@@ -21,7 +21,8 @@
 (function(){try{
   var s = JSON.parse(localStorage.getItem('patrimoine-settings') || '{}');
   var dark = s.theme === 'dark' || (s.theme !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  if (dark) document.documentElement.setAttribute('data-theme','dark');
+  if (['sable','emeraude','graphite'].indexOf(s.theme) >= 0) document.documentElement.setAttribute('data-theme', s.theme);
+  else if (dark) document.documentElement.setAttribute('data-theme','dark');
   if (s.lockEnabled && s.lockHash) document.documentElement.classList.add('locked');
 }catch(e){}})();
 
@@ -855,6 +856,7 @@
 <script src="js/core/screens.js"></script>
 <script src="js/core/modals.js"></script>
 <script src="js/core/storage.js"></script>
+<script src="js/core/themes.js"></script>
 <script src="js/core/ui.js"></script>
 <script src="js/core/navigation.js"></script>
 <script src="js/core/shell.js"></script>

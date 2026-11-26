@@ -44,10 +44,12 @@ function dbgLog(tag, msg) {
 }
 
 // ═══════════════════════════════════════════════
+// Thèmes : liste, couleurs des graphiques et résolution d'« Auto » dans js/core/themes.js
 function applyTheme(theme) {
-  const dark = theme === 'dark' ||
-    (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.setAttribute('data-theme', dark ? '' : 'light');
+  const key = resolveTheme(theme, !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches));
+  document.documentElement.setAttribute('data-theme', key === 'dark' ? '' : key);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BG[key] || THEME_BG.dark);
+  applyChartPalette(key);
 }
 
 // ── Retour haptique (no-op sur desktop) ──
