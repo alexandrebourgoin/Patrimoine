@@ -542,3 +542,5 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 
 /* bouton « Intérêts » réservé aux livrets (il apparaissait sur tous les comptes) */
 .type-btn.hidden{display:none}
+/* lignes d'aide masquées quand elles sont vides (.hidden n'avait d'effet que sur .form-row) */
+.t-sm.hidden{display:none}
