@@ -539,3 +539,10 @@ html.bgshield #bg-shield{opacity:1;pointer-events:auto}
 .bg-shield-logo{width:64px;height:64px;border-radius:20px;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center}
 .bg-shield-logo svg{width:34px;height:34px}
 .bg-shield-name{font-size:15px;font-weight:700;color:var(--text2);letter-spacing:-.2px}
+
+/* Remboursement anticipé : tableaux avant / après et sensibilité (js/screens/early-repay.js) */
+.er-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:6px 10px;font-size:13px;margin-top:8px;align-items:baseline}
+.er-grid>b{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px}
+.er-grid>.er-l{color:var(--text2)}
+.er-grid>.t-num,.er-grid>b:not(:first-child){text-align:right}
+.er-sens{grid-template-columns:1fr 1fr;margin-top:12px}
