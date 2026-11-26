@@ -223,12 +223,12 @@ function stockChartSvg(h, w, ch, period) {
   const line = 'M'+xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join('L');
   const area = line+`L${xs[xs.length-1].toFixed(1)},${ch}L0,${ch}Z`;
   const gid = 'sc'+Math.random().toString(36).slice(2,7);
-  // PRU line with value label
+  // Ligne du PRU, étiquette à GAUCHE : le cours actuel est annoté à droite, les deux ne se chevauchent plus
   const pruClamp = Math.max(mn, Math.min(mx, h.avgBuyPrice));
   const pruY = (padT+(1-(pruClamp-mn)/rng)*(ch-padT-padB)).toFixed(1);
   const pruLabel = `PRU ${h.avgBuyPrice.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const pruLine = `<line x1="0" x2="${w}" y1="${pruY}" y2="${pruY}" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.8"/>
-    <text x="${w-4}" y="${(parseFloat(pruY)-3).toFixed(1)}" text-anchor="end" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
+    <text x="4" y="${Math.max(padT + 9, parseFloat(pruY) - 3).toFixed(1)}" text-anchor="start" font-size="9" fill="#2563eb" font-weight="700" opacity="0.9">${pruLabel}</text>`;
   // Current price annotation at the right edge
   const lastY = ys[ys.length - 1];
   const txtY = Math.max(padT + 10, Math.min(ch - padB - 2, lastY - 4));

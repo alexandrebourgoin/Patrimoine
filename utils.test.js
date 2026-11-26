@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import './utils.js';
 const {
   toRefCcy, accSum, accCash, accTotal, recalcHolding, computeRealizedPnL,
-  fmtPct, timeSince, initials, mkTx, fxSubText, esc, dayKey,
+  fmtPct, pctClass, timeSince, initials, mkTx, fxSubText, esc, dayKey,
 } = globalThis.PU;
 
 // Standard FX table used across tests: FX_RATES[X] = units of X per EUR
@@ -176,6 +176,16 @@ describe('fmtPct', () => {
   });
   it('zero shows "+"', () => {
     expect(fmtPct(0)).toBe(`+0,00${NNBSP}%`);
+  });
+  it('un « zéro » négatif arrondi (−0,004 %) s\'affiche « +0,00 % », jamais « -0,00 % »', () => {
+    expect(fmtPct(-0.004)).toBe(`+0,00${NNBSP}%`);
+    expect(fmtPct(-0.006)).toBe(`-0,01${NNBSP}%`);
+  });
+  it('pctClass : vert, rouge, ou neutre quand la variation arrondie est nulle', () => {
+    expect(pctClass(1.2)).toBe('t-gain');
+    expect(pctClass(-1.2)).toBe('t-loss');
+    expect(pctClass(-0.004)).toBe('');
+    expect(pctClass(0)).toBe('');
   });
 });
 

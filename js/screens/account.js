@@ -56,8 +56,8 @@ function accPerfCardHTML(acc, perf, sum) {
       <div style="display:flex;gap:2px;padding:2px;border-radius:20px;background:rgba(127,127,127,.15)">${modeBtn('ytd', 'YTD')}${modeBtn('all', 'Historique')}</div>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap">
-      ${cur ? `<div style="font-size:26px;font-weight:800" class="${cur.pct >= 0 ? 't-gain' : 't-loss'} t-num">${fmtPct(cur.pct)}</div>
-      <div style="font-size:14px;font-weight:700" class="${cur.gain >= 0 ? 't-gain' : 't-loss'} t-num">${cur.gain >= 0 ? '+' : ''}${accNative(acc, cur.gain)}</div>`
+      ${cur ? `<div style="font-size:26px;font-weight:800" class="${pctClass(cur.pct)} t-num">${fmtPct(cur.pct)}</div>
+      <div style="font-size:14px;font-weight:700" class="${Math.round(cur.gain * 100) === 0 ? '' : cur.gain > 0 ? 't-gain' : 't-loss'} t-num">${Math.round(cur.gain * 100) > 0 ? '+' : ''}${accNative(acc, Math.round(cur.gain * 100) === 0 ? 0 : cur.gain)}</div>`
         : '<div style="font-size:26px;font-weight:800" class="t-num">—</div>'}
     </div>
     <div class="t-sm" style="margin-top:4px">${sub}</div>
@@ -87,7 +87,7 @@ function accBenchHTML(acc, perf, sum) {
   if (!covers && !_benchTried[key + '|' + t0]) return wait("chargement de l'indice…");   // le chargement est lancé par le binding de l'écran
   if (!ser) return wait('indice indisponible pour le moment');
   const g = 'display:grid;grid-template-columns:1.7fr 1fr 1fr 1fr;gap:6px;align-items:baseline;font-size:12px';
-  const cell = v => v == null ? '<span class="t-sm">—</span>' : `<b class="${v < 0 ? 't-loss' : 't-gain'} t-num">${fmtPct(v)}</b>`;
+  const cell = v => v == null ? '<span class="t-sm">—</span>' : `<b class="${pctClass(v)} t-num">${fmtPct(v)}</b>`;
   const bAll = benchRet(ser.series, t0), sameYtd = t0 > sum.pye, bYtd = sameYtd ? bAll : benchRet(ser.series, sum.pye);
   const row = (lbl, a, r) => {
     const x = (a == null || r == null) ? null : a - r;
@@ -214,7 +214,7 @@ function renderHoldsHTML(acc) {
           </div>
           <div class="hold-item-bot">
             <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.quantity} × ${fmtNative(h.currentPrice, h.currency||'EUR')} · ${h.type}</div>
-            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
+            <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${pctClass(h.pnlPct)}">${fmtPct(h.pnlPct)}</div>
             <div class="hold-watch-btn" data-watch-hid="${h.id}" style="width:26px;height:26px;border-radius:7px;background:${watched?'rgba(245,158,11,.15)':'var(--card2)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="${watched?'#F59E0B':'none'}" stroke="${watched?'#F59E0B':'var(--text3)'}" stroke-width="2.2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             </div>

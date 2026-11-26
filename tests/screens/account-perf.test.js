@@ -18,7 +18,7 @@ describe('écran du compte : performance, poches, indice', () => {
       globals: {
         ...bench, ...perf, S, PU: globalThis.PU, SCREEN_BIND: {}, FX_RATES: { EUR: 1, USD: 1.08 },
         localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
-        masked: v => v.toFixed(2) + '€', maskedNative: (v, c) => `${v.toFixed(2)} ${c}`, esc: s => String(s), fmtDate: d => d, fmtPct: v => (v >= 0 ? '+' : '') + v.toFixed(2) + ' %',
+        masked: v => v.toFixed(2) + '€', maskedNative: (v, c) => `${v.toFixed(2)} ${c}`, esc: s => String(s), fmtDate: d => d, fmtPct: v => (v >= 0 ? '+' : '') + v.toFixed(2) + ' %', pctClass: v => globalThis.PU ? globalThis.PU.pctClass(v) : (v > 0 ? 't-gain' : v < 0 ? 't-loss' : ''),
         getHistorySeries: t => hist[t] || null, toRefCcy: (v, c) => v / ({ EUR: 1, USD: 1.08 }[c] || 1), _dayKey: () => '2026-06-30', _qtyOnDay: () => qty, accCash: () => 0,
       },
       exports: ['accPerfNow', 'accPerfPctNow', 'accPerfCardHTML', 'accCashDetailHTML', 'accBenchHTML', '_perfModeSet'],

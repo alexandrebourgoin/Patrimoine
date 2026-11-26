@@ -11,7 +11,11 @@
   function mkTx(date, type, qty, price) { return { date, type, qty, price }; }
 
   //   = espace fine insécable (typographie française), identique à l'implémentation historique
-  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %'; }
+  // Signe APRÈS arrondi au centième : −0,004 % est un zéro (affiché « +0,00 % », jamais « -0,00 % » en rouge).
+  function pctSign(v) { const r = Math.round(v * 100); return r > 0 ? 1 : r < 0 ? -1 : 0; }
+  function fmtPct(v) { const s = pctSign(v); return (s >= 0 ? '+' : '') + (s === 0 ? 0 : v).toFixed(2).replace('.', ',') + ' %'; }
+  // Classe de couleur d'une variation en % : gain, perte, ou neutre (zéro arrondi)
+  function pctClass(v) { const s = pctSign(v); return s > 0 ? 't-gain' : s < 0 ? 't-loss' : ''; }
 
   function fmtDate(s) {
     return new Date(s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -235,7 +239,7 @@
   }
 
   root.PU = {
-    mkTx, fmtPct, fmtDate, initials, fmtNative, fmtCur, esc, dayKey,
+    mkTx, fmtPct, pctSign, pctClass, fmtDate, initials, fmtNative, fmtCur, esc, dayKey,
     toRefCcy, accSum, cfCcy, accCashflowNet, accInvestedNet, accCashAnchor, accCashByCcy, accCash, accTotal,
     computeRealizedPnL, recalcHolding, timeSince, fxSubText, sortTx, oversells,
   };
