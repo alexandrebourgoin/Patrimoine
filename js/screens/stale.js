@@ -34,14 +34,7 @@ function renderStale() {
       </div>
     </div>`).join('');
   const empty = S.isDemo ? 'Indisponible en mode démo.' : 'Tous les cours sont à jour ✓';
-  return `<div class="back tap" id="js-back">
-    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-    Retour
-  </div>
-  <div class="settings-top" style="padding-top:4px">
-    <div class="t-title">Non synchro</div>
-    <div class="t-sm" style="margin-top:2px">Positions dont la date de cotation est inconnue ou remonte à plus de 4 jours (actions, ETF, obligations) ou de 24 h (cryptos)</div>
-  </div>
+  return `${moduleBarHTML('stale', "Positions dont la date de cotation est inconnue ou remonte à plus de 4 jours (actions, ETF, obligations) ou de 24 h (cryptos)")}
   <div style="padding:4px 16px 110px">
     <button class="form-submit" data-srefresh="1" style="margin:0 0 14px">Actualiser les cours</button>
     ${rows ? `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${rows}</div>`

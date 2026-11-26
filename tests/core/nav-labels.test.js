@@ -27,6 +27,7 @@ describe('libellés des modules', () => {
     ['assistant', 'js/screens/assistant.js'],
     ['settings', 'js/screens/settings.js'],
     ['immo', 'js/screens/immo.js'],
+    ['stale', 'js/screens/stale.js'],
   ])('le titre de l\'écran %s vient de moduleBarHTML(clé) → navLabel : aucun nom écrit en dur', (key, file) => {
     const src = readFileSync(file, 'utf8');
     expect(src).toContain(`moduleBarHTML('${key}'`);
