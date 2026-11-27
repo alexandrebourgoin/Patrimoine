@@ -15,6 +15,7 @@ function _applyAssetTypeRules(selectEl,acc,keepValue){
 let _posAccId=null;
 let _posYahooSymbol=null;   // symbole Yahoo complet (avec suffixe) si résolu via ISIN, sinon null
 function openPosModal(accId){
+  if(S.accounts.find(a=>a.id===accId)?.sync){ toast('Compte synchronisé (lecture seule) : les positions viennent de la source'); return; }
   _posAccId=accId;
   _posYahooSymbol=null;
   ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country'].forEach(id=>document.getElementById(id).value='');

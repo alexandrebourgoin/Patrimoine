@@ -24,6 +24,9 @@ const h = (o = {}) => ({ id: 'h1', ticker: 'AIR.PA', name: 'Airbus', type: 'Acti
 afterEach(() => { vi.useRealTimers(); S.accounts = []; S.isDemo = false; });
 
 describe('priceStale', () => {
+  it('position d un compte synchronisé (eToro) : jamais « non synchro » ici, suivie par la date de synchro du compte', () => {
+    expect(prices.priceStale(h({ quoteAt: null, sync: 'etoro' }), NOW)).toBe(false);
+  });
   it('action : signalée au-delà de 4 jours, pas avant ni à la limite exacte', () => {
     expect(prices.priceStale(h({ quoteAt: NOW - 3.9 * DAY }), NOW)).toBe(false);
     expect(prices.priceStale(h({ quoteAt: NOW - 4 * DAY }), NOW)).toBe(false);
@@ -147,7 +150,7 @@ describe('cours saisi à la main (h.manualPrice)', () => {
   });
   it('l\'actualisation en ligne ignore les cours saisis à la main (globale et titre seul)', () => {
     const src = readFileSync('js/services/prices.js', 'utf8');
-    expect(src).toContain('const allH = S.accounts.flatMap(a => a.holdings).filter(h => !isManualPrice(h));');
+    expect(src).toContain('const allH = S.accounts.flatMap(a => a.holdings).filter(h => !priceLocked(h));');
     const single = src.slice(src.indexOf('async function fetchTickerPrice'), src.indexOf('await _fetchSinglePrice(yhSym, cgId)'));
     expect(single).toContain('if (isManualPrice(h))');
   });

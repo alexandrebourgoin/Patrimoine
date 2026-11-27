@@ -101,6 +101,7 @@ function openAccModal(){
   document.getElementById('acc-currency').value='EUR';
   syncAccCurrency('acc-type','acc-currency',true);   // la devise suit le type proposé par défaut
   document.getElementById('acc-obs-tog').classList.remove('on');
+  if(typeof linkedAccReset==='function') linkedAccReset();   // « Mettre à jour via un service » (js/screens/linked.js)
   document.getElementById('acc-modal-bg').classList.add('show');
   document.getElementById('acc-modal-sheet').classList.add('show');
   syncAccNamePlaceholder();
@@ -117,7 +118,7 @@ document.getElementById('acc-obs-tog').addEventListener('click',()=>{
   _accObserver=!_accObserver;
   document.getElementById('acc-obs-tog').classList.toggle('on',_accObserver);
 });
-document.getElementById('acc-submit').addEventListener('click',()=>{
+document.getElementById('acc-submit').addEventListener('click',async()=>{
   const type=readAccType('acc-type',ACCOUNT_TYPES[0]);
   const bank=document.getElementById('acc-bank').value.trim();
   const name=document.getElementById('acc-name').value.trim()||accDefaultName(type,bank,S.accounts);   // nom proposé si vide
@@ -139,6 +140,7 @@ document.getElementById('acc-submit').addEventListener('click',()=>{
   }
   const acc={id,name,type,bank,currency,value:0,change1d:0,holdings:[],cashflows,observer:_accObserver,...(startDate?{startDate}:{}),...(share<100?{share}:{}),...(rate!=null?{rate}:{})};
   acc.value=accTotal(acc);
+  if(typeof linkedAccCreate==='function'&&await linkedAccCreate(acc)) return;   // compte lié à un service : créé seulement si le service répond (js/screens/linked.js)
   S.accounts.push(acc);
   closeAccModal();
   refreshMain();
@@ -153,6 +155,7 @@ function deleteAccount(accId){
   const acc=S.accounts.find(a=>a.id===accId); if(!acc) return;
   openConfirm(`Supprimer le compte "${acc.name}" ?`,()=>{
     S.accounts=S.accounts.filter(a=>a.id!==accId);
+    linkedKeysDelete(accId);   // clé d'un compte lié à un service : effacée de l'appareil avec le compte
     if(S.screen==='account'&&S.accountId===accId) back();
     refreshMain();
     toast('Compte supprimé');
