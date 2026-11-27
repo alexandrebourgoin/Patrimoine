@@ -117,3 +117,21 @@ async function symbolSearchAll(query) {
 function symbolEntry(c) {
   return c.kind === 'cg' ? { cg: c.id, label: c.name } : { yahoo: c.id, label: [c.id, c.place, c.currency].filter(Boolean).join(' · ') };
 }
+
+// ── Cours saisis à la main : rappel de mise à jour ──
+// Un titre sans cotation en ligne (fonds de 3e pilier…) garde le cours saisi ; au-delà de MANUAL_PRICE_DAYS jours
+// (ou si la date de saisie est inconnue : cours saisis avant ce rappel), il est proposé à la mise à jour
+// (« Non synchro » et « À surveiller »). h.manualAt = date de la dernière saisie (ms), posée à chaque saisie.
+const MANUAL_PRICE_DAYS = 30;
+function manualPriceDue(h, now = Date.now()) {
+  if (!h || h.manualPrice !== true || h.type === 'Cash' || !(h.quantity > 0)) return false;
+  const t = h.manualAt;
+  if (!(typeof t === 'number' && t > 0 && t <= now)) return true;
+  return now - t > MANUAL_PRICE_DAYS * 86400000;
+}
+function manualAgeLabel(h, now = Date.now()) {
+  const t = h && h.manualAt;
+  if (!(typeof t === 'number' && t > 0 && t <= now)) return 'Saisi à la main, date inconnue';
+  const d = Math.floor((now - t) / 86400000);
+  return 'Saisi à la main il y a ' + d + ' j';
+}

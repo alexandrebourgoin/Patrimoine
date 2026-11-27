@@ -2,11 +2,20 @@
 // Depend, A L APPEL seulement, de S et des helpers ; enregistre son binding (SCREEN_BIND) et sa pastille (NAV_BADGES).
 // L'ecran est declare dans mon-patrimoine.html (#s-stale) ; fenêtre « Trouver le cours » : #sym-sheet (même fichier).
 
-NAV_BADGES.stale = () => staleHoldings().length;
+// Cours saisis à la main à mettre à jour (js/features/symbols.js) : hors démo
+function manualDueHoldings(now = Date.now()) {
+  if (S.isDemo || typeof manualPriceDue !== 'function') return [];
+  return S.accounts.flatMap(acc => (acc.holdings || []).filter(h => manualPriceDue(h, now)).map(h => ({ acc, h })));
+}
+NAV_BADGES.stale = () => staleHoldings().length + manualDueHoldings().length;
 // Accueil « À surveiller » (registre HOME_WATCH, js/features/home-watch.js), s'il est présent
 if (typeof HOME_WATCH !== 'undefined') HOME_WATCH.stale = () => {
   const n = staleHoldings().length;
-  return n ? [{ level: 'alert', go: 'stale', text: `${n} position${n > 1 ? 's' : ''} non synchronisée${n > 1 ? 's' : ''}`, sub: 'Cours inconnu ou trop ancien' }] : [];
+  const m = manualDueHoldings().length;
+  return [
+    ...(n ? [{ level: 'alert', go: 'stale', text: `${n} position${n > 1 ? 's' : ''} non synchronisée${n > 1 ? 's' : ''}`, sub: 'Cours inconnu ou trop ancien' }] : []),
+    ...(m ? [{ level: 'soon', go: 'stale', text: `${m} cours saisi${m > 1 ? 's' : ''} à la main à mettre à jour`, sub: 'Dernière saisie il y a plus d\'un mois' }] : []),
+  ];
 };
 
 // Un seuil peut être franchi sans aucune action : pastille et écran recalculés au retour sur l'app et toutes les 10 min.
@@ -26,26 +35,35 @@ function staleSymbolHint(ticker) {
   return u ? 'Cotation choisie : ' + esc(u.label || u.yahoo || u.cg) + ' · changer' : 'Trouver le cours ›';
 }
 
-function renderStale() {
-  const list = staleHoldings();
-  const rows = list.map(({acc,h}) => `<div class="tap" data-sacc="${esc(String(acc.id))}" data-shold="${esc(String(h.id))}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer">
+// Une ligne : position, compte, action proposée ; à droite, l'âge (cotation ou saisie) et le cours
+function staleRowHTML(acc, h, age, ageColor, action) {
+  return `<div class="tap" data-sacc="${esc(String(acc.id))}" data-shold="${esc(String(h.id))}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer">
       <div class="ticker">${esc(String(h.ticker||'').slice(0,4))}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h.name)}</div>
         <div class="t-sm">${esc(acc.name)} · ${esc(h.type)}</div>
-        <div class="t-sm" style="color:var(--accent);font-weight:700;margin-top:2px">${staleSymbolHint(h.ticker)}</div>
+        <div class="t-sm" style="color:var(--accent);font-weight:700;margin-top:2px">${action}</div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;font-weight:700;color:var(--loss)">${priceAgeLabel(h.quoteAt)}</div>
+        <div style="font-size:12px;font-weight:700;color:${ageColor}">${esc(age)}</div>
         <div class="t-sm">${maskedNative(h.currentPrice, h.currency||'EUR')}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+}
+
+function renderStale() {
+  const list = staleHoldings();
+  const rows = list.map(({acc,h}) => staleRowHTML(acc, h, priceAgeLabel(h.quoteAt), 'var(--loss)', staleSymbolHint(h.ticker))).join('');
+  // Cours saisis à la main depuis plus d'un mois : à mettre à jour (même fenêtre, champ « cours actuel »)
+  const mrows = manualDueHoldings().map(({acc,h}) => staleRowHTML(acc, h, manualAgeLabel(h), 'var(--warn,#b45309)', 'Mettre à jour le cours ›')).join('');
   const empty = S.isDemo ? 'Indisponible en mode démo.' : 'Tous les cours sont à jour ✓';
   return `${moduleBarHTML('stale', "Positions dont la date de cotation est inconnue ou remonte à plus de 4 jours (actions, ETF, obligations) ou de 24 h (cryptos)")}
   <div style="padding:4px 16px 110px">
     <button class="form-submit" data-srefresh="1" style="margin:0 0 14px">Actualiser les cours</button>
     ${rows ? `<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${rows}</div>`
-           : `<div class="t-sm" style="text-align:center;padding:30px 0">${empty}</div>`}
+           : mrows ? '' : `<div class="t-sm" style="text-align:center;padding:30px 0">${empty}</div>`}
+    ${mrows ? `<div class="sec-title" style="margin:18px 2px 8px;font-size:13px;font-weight:700;color:var(--text2)">Cours saisis à la main depuis plus d'un mois</div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">${mrows}</div>` : ''}
   </div>`;
 }
 
@@ -82,7 +100,7 @@ function openSymbolSheet(acc, h) {
   document.getElementById('sym-title').textContent = h.name || h.ticker;
   document.getElementById('sym-sub').textContent = `${h.ticker} · ${n > 1 ? n + ' positions' : '1 position'} · le choix vaut pour toute l'app`;
   document.getElementById('sym-q').value = symbolQuery(h);
-  document.getElementById('sym-manual').value = '';
+  document.getElementById('sym-manual').value = h.manualPrice === true && h.currentPrice > 0 ? String(h.currentPrice) : '';
   document.getElementById('sym-manual-ccy').textContent = _sym.currency;
   document.getElementById('sym-manual-box').classList.toggle('hidden', _sym.crypto);
   document.getElementById('sym-list').innerHTML = '';
@@ -124,7 +142,7 @@ async function symbolSheetPick(id) {
   const c = ref.results.find(x => x.id === id); if (!c) return;
   symbolSet(ref.ticker, symbolEntry(c));
   // Une cotation choisie remplace un cours saisi à la main, partout
-  _symHoldings(ref.ticker).forEach(h => { delete h.manualPrice; });
+  _symHoldings(ref.ticker).forEach(h => { delete h.manualPrice; delete h.manualAt; });
   saveAccounts();
   closeSymbolSheet();
   toast(`${ref.ticker} : cotation ${c.kind === 'cg' ? c.name : c.id} retenue, actualisation…`);
@@ -134,7 +152,8 @@ function symbolSheetManual() {
   const ref = _sym; if (!ref) return;
   const v = parseFloat(String(document.getElementById('sym-manual').value).replace(',', '.'));
   if (!(v > 0)) { toast('Saisissez un cours supérieur à 0'); return; }
-  _symHoldings(ref.ticker).forEach(h => { h.currentPrice = v; h.manualPrice = true; recalcHolding(h); });
+  const now = Date.now();
+  _symHoldings(ref.ticker).forEach(h => { h.currentPrice = v; h.manualPrice = true; h.manualAt = now; recalcHolding(h); });
   S.accounts.forEach(a => { a.value = accTotal(a); });
   saveAccounts();
   closeSymbolSheet();

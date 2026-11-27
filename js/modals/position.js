@@ -287,7 +287,9 @@ document.getElementById('eh-submit').addEventListener('click',()=>{
     acc.value=accTotal(acc);
   }
   // Cours saisi à la main : protégé de l'actualisation et exclu de « Non synchro » (js/services/prices.js)
-  if(_ehManual) h.manualPrice=true; else delete h.manualPrice;
+  // Date de saisie : à chaque nouveau cours, ou au passage en « saisi à la main » (rappel au-delà d'un mois : js/features/symbols.js)
+  if(_ehManual){ if(newPrice>0 || h.manualPrice!==true || !h.manualAt) h.manualAt=Date.now(); h.manualPrice=true; }
+  else { delete h.manualPrice; delete h.manualAt; }
   saveAccounts();
   closeEditHolding();
   renderScreen('stock');

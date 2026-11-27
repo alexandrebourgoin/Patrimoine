@@ -449,6 +449,8 @@ async function fetchLivePrices() {
       const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
       dbgLog(r.ok?'[OK]':'[WRN]', `Proxy status=${r.status}`);
       if (r.ok) { yResults = parseV7(await r.json()); dbgLog('[OK]', `Proxy résultats=${yResults.length}`); }
+      // Symboles sans cours : à choisir dans « Non synchro » (Trouver le cours)
+      if (yResults) { const got = new Set(yResults.map(q => q.symbol)), miss = yahooSymbols.filter(x => !got.has(x)); if (miss.length) dbgLog('[WRN]', `Sans cours : ${miss.join(', ')}`); }
     } catch(e) { dbgLog('[ERR]', `Proxy: ${e?.message||e}`); }
 
     // Fallback FMP (si proxy en panne)

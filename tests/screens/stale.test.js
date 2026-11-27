@@ -155,7 +155,8 @@ describe('cours saisi à la main (h.manualPrice)', () => {
     expect(readFileSync('mon-patrimoine.html', 'utf8')).toContain('id="eh-manual-tog"');
     const src = readFileSync('js/modals/position.js', 'utf8');
     expect(src).toContain("_ehManual=h.manualPrice===true;");
-    expect(src).toContain('if(_ehManual) h.manualPrice=true; else delete h.manualPrice;');
+    expect(src).toContain('h.manualPrice=true; }');
+    expect(src).toContain('else { delete h.manualPrice; delete h.manualAt; }');
   });
 });
 
@@ -190,5 +191,23 @@ describe('accueil « À surveiller »', () => {
     expect(HOME_WATCH.stale()).toEqual([]);
     n = 2;
     expect(HOME_WATCH.stale()).toEqual([{ level: 'alert', go: 'stale', text: '2 positions non synchronisées', sub: 'Cours inconnu ou trop ancien' }]);
+  });
+});
+
+describe('cours saisi à la main : rappel de mise à jour', () => {
+  const SY = loadClassic('js/features/symbols.js', { globals: { localStorage: { getItem: () => null, setItem() {} } }, exports: ['manualPriceDue', 'manualAgeLabel', 'MANUAL_PRICE_DAYS'] });
+  it('au-delà d\'un mois, ou date de saisie inconnue ; jamais pour un cours en ligne, du cash ou une position soldée', () => {
+    expect(SY.MANUAL_PRICE_DAYS).toBe(30);
+    expect(SY.manualPriceDue(h({ manualPrice: true, manualAt: NOW - 29 * DAY }), NOW)).toBe(false);
+    expect(SY.manualPriceDue(h({ manualPrice: true, manualAt: NOW - 31 * DAY }), NOW)).toBe(true);
+    expect(SY.manualPriceDue(h({ manualPrice: true }), NOW)).toBe(true);
+    expect(SY.manualPriceDue(h({ manualPrice: true, manualAt: NOW + DAY }), NOW)).toBe(true);
+    expect(SY.manualPriceDue(h({ manualAt: NOW - 90 * DAY }), NOW)).toBe(false);
+    expect(SY.manualPriceDue(h({ manualPrice: true, type: 'Cash' }), NOW)).toBe(false);
+    expect(SY.manualPriceDue(h({ manualPrice: true, quantity: 0 }), NOW)).toBe(false);
+  });
+  it('libellé : âge de la saisie', () => {
+    expect(SY.manualAgeLabel(h({ manualAt: NOW - 45 * DAY }), NOW)).toBe('Saisi à la main il y a 45 j');
+    expect(SY.manualAgeLabel(h({}), NOW)).toBe('Saisi à la main, date inconnue');
   });
 });
