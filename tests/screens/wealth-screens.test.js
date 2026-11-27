@@ -19,6 +19,7 @@ const hold = (over = {}) => ({ ticker: 'MC', type: 'Action', country: 'France', 
 let S, props, readWarnings = [];
 const globals = () => ({
   ...charts,
+  chartWidth: (m = 0) => 390 - m,
   S,
   imRead: () => props,
   _dayKey: () => TODAY,

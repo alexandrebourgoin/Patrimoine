@@ -11,7 +11,7 @@ function renderStock() {
   const invested=h.avgBuyPrice*h.quantity;
   const pnl=h.value-invested;
   const pnlPct=invested>0?(pnl/invested)*100:0;
-  const chartW=Math.min(window.innerWidth,480);
+  const chartW=chartWidth();
 
   const divTotal=h.transactions.filter(t=>t.type==='DIV').reduce((s,t)=>s+t.qty*t.price,0);
   const realizedPnL=computeRealizedPnL(h);
@@ -157,7 +157,7 @@ SCREEN_BIND.stock = function (el, id) {
         const a=S.accounts.find(a=>a.id===S.accountId);
         const hh=a?.holdings.find(h=>h.id===S.holdingId);
         if(!wrap||!hh) return;
-        const cw=Math.min(window.innerWidth,480);
+        const cw=chartWidth();
         wrap.innerHTML=stockChartSvg(hh,cw,120,S.stockPeriod)+'<div class="stock-chart-tip" id="js-stock-chart-tip"></div>';
         initStockChart(wrap,hh);
         attachChartFs(wrap,'stock');

@@ -113,7 +113,7 @@ function renderHistCard() {
   const periods = ['1S','1M','3M','1A'];
   const pills = periods.map(p => `<div class="hperiod${p===S.histPeriod?' on':''}" data-period="${p}">${p}</div>`).join('');
   const pts = genHistData(S.histPeriod);
-  const chartW = Math.min(window.innerWidth, 480) - 72;
+  const chartW = chartWidth(72);
   const pct = ((pts[pts.length-1] - pts[0]) / pts[0] * 100);
   const color = pct >= 0 ? 'var(--gain)' : 'var(--loss)';
   const _real = !!pts.real;
@@ -145,7 +145,7 @@ SCREEN_BIND.dashboard = function (el, id) {
       const wrap=el.querySelector('#js-hist-wrap');
       if(!wrap) return;
       const pts=genHistData(S.histPeriod);
-      const chartW=Math.min(window.innerWidth,480)-72;
+      const chartW=chartWidth(72);
       wrap.innerHTML=histSvg(pts,chartW,80)+'<div class="hist-tip" id="js-hist-tip"></div>';
       el.querySelectorAll('.hperiod').forEach(x=>x.classList.toggle('on',x.dataset.period===S.histPeriod));
       const pct=((pts[pts.length-1]-pts[0])/pts[0]*100);

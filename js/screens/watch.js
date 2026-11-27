@@ -8,7 +8,7 @@ function renderWatchStock() {
 
   const period  = S.watchPeriod || '3M';
   const periods = ['1S','1M','3M','6M','1A'];
-  const chartW  = Math.min(window.innerWidth, 480);
+  const chartW  = chartWidth();
 
   // History for selected period (chart display)
   const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, period);
@@ -125,7 +125,7 @@ SCREEN_BIND.watchstock = function (el, id) {
       el.querySelectorAll('[data-wperiod]').forEach(b => b.classList.toggle('on', b.dataset.wperiod === S.watchPeriod));
       const watch = S.watchlist.find(w => w.ticker === S.watchTicker);
       if (!watch) return;
-      const chartW = Math.min(window.innerWidth, 480);
+      const chartW = chartWidth();
       const {pts, startDate} = genWatchHistory(watch.ticker, watch.price, S.watchPeriod);
       const wCur = watch.currency || SECURITIES_DB[watch.ticker]?.currency || 'EUR';
       const wrap = el.querySelector('#js-watch-chart-wrap');

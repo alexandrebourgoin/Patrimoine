@@ -17,6 +17,13 @@ function toast(msg) {
 
 function timeSince(ts) { return PU.timeSince(ts); }
 
+// Largeur d'un graphique en px : écran plafonné à 480, moins la marge. Jamais nulle ni négative, même quand la fenêtre
+// n'a pas encore de taille (innerWidth = 0 au démarrage de la PWA ou en arrière-plan) : on prend alors 390 px.
+function chartWidth(margin = 0) {
+  const vw = window.innerWidth || document.documentElement.clientWidth || 390;
+  return Math.max(160, Math.min(vw, 480) - margin);
+}
+
 // ── Log debug global (utilisé par fetch global ET refreshs individuels) ──
 function dbgLog(tag, msg) {
   if (!S.debug) return;
