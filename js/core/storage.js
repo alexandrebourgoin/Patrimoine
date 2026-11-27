@@ -16,6 +16,17 @@ const STORE_WEALTH   = 'patrimoine-wealth';   // snapshots quotidiens de la vale
 const STORE_LEGACY   = 'patrimoine-data';     // ancien format → migration automatique
 const STORE_VERSION  = 'patrimoine-version';  // dernière version vue (popup changelog)
 
+// Écriture refusée (quota plein, stockage bloqué) : sans message, l'utilisateur croit avoir enregistré des données qui
+// disparaîtront au prochain lancement. Au plus un message toutes les 10 s (les sauvegardes s'enchaînent).
+let _saveWarnAt = 0;
+function _saveFailed(what) {
+  const now = Date.now();
+  if (now - _saveWarnAt < 10000) return false;
+  _saveWarnAt = now;
+  if (typeof toast === 'function') toast('⚠ ' + what + ' non enregistrés : stockage plein ou bloqué. Faites une sauvegarde (menu ☰) !');
+  return false;
+}
+
 // ── Sauvegarde données financières ──
 function saveAccounts() {
   try {
@@ -26,7 +37,8 @@ function saveAccounts() {
       targets:   S.targets,
       user:      S.user,
     }));
-  } catch(e) {}
+    return true;
+  } catch(e) { return _saveFailed('Comptes'); }
 }
 
 // ── Sauvegarde préférences ──
@@ -57,11 +69,12 @@ function saveSettings() {
       lockUntil:   S.lockUntil,
       fmpApiKey:   S.fmpApiKey,
     }));
-  } catch(e) {}
+    return true;
+  } catch(e) { return _saveFailed('Réglages'); }
 }
 
 // ── Sauvegarde tout ──
-function saveData() { saveAccounts(); saveSettings(); }
+function saveData() { const a = saveAccounts(), r = saveSettings(); return a && r; }
 
 // ── Chargement avec migration automatique depuis l'ancien format ──
 function loadData() {

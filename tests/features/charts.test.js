@@ -134,3 +134,22 @@ describe('graphique d\'un titre détenu : étiquettes lisibles', () => {
     expect(svg).toMatch(/<text x="356" [^>]*text-anchor="end"[^>]*>734\.20 €<\/text>/);
   });
 });
+
+describe('chartWidth — largeur d\'un graphique', () => {
+  const widthFor = (innerWidth, margin) => loadClassic('js/features/charts.js', {
+    globals: { S, window: { innerWidth } }, exports: ['chartWidth'],
+  }).chartWidth(margin);
+
+  it('téléphone : largeur de la fenêtre moins la marge ; grand écran : plafonné à 480', () => {
+    expect(widthFor(375, 72)).toBe(303);
+    expect(widthFor(375)).toBe(375);
+    expect(widthFor(1024, 72)).toBe(408);
+    expect(widthFor(1024)).toBe(480);
+  });
+  it('fenêtre pas encore dimensionnée (innerWidth = 0) : jamais de largeur négative ni nulle (régression « -72 »)', () => {
+    expect(widthFor(0, 72)).toBe(160);
+    expect(widthFor(0)).toBe(160);
+    expect(widthFor(undefined, 72)).toBe(160);
+    expect(widthFor(100, 72)).toBe(160);
+  });
+});

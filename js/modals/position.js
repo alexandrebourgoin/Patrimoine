@@ -22,7 +22,7 @@ function openPosModal(accId){
   _applyAssetTypeRules(document.getElementById('pos-type'),S.accounts.find(a=>a.id===accId));
   document.getElementById('pos-currency').value='EUR';
   document.getElementById('pos-sector').value='Technologie';
-  document.getElementById('pos-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('pos-date').value=PU.dayKey(Date.now());
   document.getElementById('pos-ac-list').classList.add('hidden');
   document.getElementById('pos-modal-bg').classList.add('show');
   document.getElementById('pos-modal-sheet').classList.add('show');
@@ -161,7 +161,7 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const sector=document.getElementById('pos-sector').value||'Autre';
   const type=document.getElementById('pos-type').value;
   const currency=document.getElementById('pos-currency').value;
-  const dateVal=document.getElementById('pos-date').value||new Date().toISOString().slice(0,10);
+  const dateVal=document.getElementById('pos-date').value||PU.dayKey(Date.now());
   if(!ticker||!(qty>0)||!(pru>0)){toast('Ticker, quantité et PRU requis');return;}
   const acc=S.accounts.find(a=>a.id===_posAccId);
   if(!acc) return;

@@ -28,7 +28,7 @@ const globals = () => ({
   masked: v => v.toFixed(2), esc: s => globalThis.PU.esc(s), fmtCur: v => v.toFixed(2) + ' €', fmtPct: v => v.toFixed(2) + ' %',
   timeSince: () => 'à l\'instant', toRefCcy: v => v, sparkData: () => [1, 2], totalWealth: () => S.accounts.filter(a => !a.observer).reduce((s, a) => s + a.value, 0),
   homeReadWarnings: () => readWarnings,
-  renderTopBar: () => '<TOPBAR/>', genHistData: () => Object.assign([100, 110], { real: true }), histSvg: () => '<svg/>',
+  renderTopBar: () => '<TOPBAR/>', genHistData: () => Object.assign([100, 110], { real: true }), histSvg: () => '<svg/>', chartWidth: () => 300,
   donutSvg: () => '<svg/>', SCREEN_BIND: {}, renderDcaProjectionNow: () => '<PROJECTION/>',
 });
 beforeEach(() => {

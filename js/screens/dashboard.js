@@ -76,8 +76,8 @@ function renderWatchlistCard() {
     const cur   = w.currency || SECURITIES_DB[w.ticker]?.currency || 'EUR';
     const delta = w.price * w.change1d / 100;
     const up    = w.change1d >= 0;
-    return `<div class="watch-item tap" data-watch="${w.ticker}">
-      <div class="watch-tick">${w.ticker.slice(0,4)}</div>
+    return `<div class="watch-item tap" data-watch="${esc(w.ticker)}">
+      <div class="watch-tick">${esc(w.ticker.slice(0,4))}</div>
       <div class="flex1 col gap4" style="min-width:0">
         <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.name)}</div>
         <div class="t-sm">${fmtNative(w.price, cur)}</div>
@@ -86,7 +86,7 @@ function renderWatchlistCard() {
         <div class="badge ${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(w.change1d).toFixed(2)}%</div>
         <div style="font-size:11px;font-weight:600;color:${up?'var(--gain)':'var(--loss)'}">${up?'+':''}${fmtNative(Math.abs(delta), cur)}</div>
       </div>
-      <div class="hold-del-btn tap" data-wdel="${w.ticker}" style="width:28px;height:28px;border-radius:8px;margin-left:6px;flex-shrink:0">
+      <div class="hold-del-btn tap" data-wdel="${esc(w.ticker)}" style="width:28px;height:28px;border-radius:8px;margin-left:6px;flex-shrink:0">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
       </div>
     </div>`;
@@ -113,7 +113,7 @@ function renderHistCard() {
   const periods = ['1S','1M','3M','1A'];
   const pills = periods.map(p => `<div class="hperiod${p===S.histPeriod?' on':''}" data-period="${p}">${p}</div>`).join('');
   const pts = genHistData(S.histPeriod);
-  const chartW = Math.min(window.innerWidth, 480) - 72;
+  const chartW = chartWidth(72);
   const pct = ((pts[pts.length-1] - pts[0]) / pts[0] * 100);
   const color = pct >= 0 ? 'var(--gain)' : 'var(--loss)';
   const _real = !!pts.real;
@@ -145,7 +145,7 @@ SCREEN_BIND.dashboard = function (el, id) {
       const wrap=el.querySelector('#js-hist-wrap');
       if(!wrap) return;
       const pts=genHistData(S.histPeriod);
-      const chartW=Math.min(window.innerWidth,480)-72;
+      const chartW=chartWidth(72);
       wrap.innerHTML=histSvg(pts,chartW,80)+'<div class="hist-tip" id="js-hist-tip"></div>';
       el.querySelectorAll('.hperiod').forEach(x=>x.classList.toggle('on',x.dataset.period===S.histPeriod));
       const pct=((pts[pts.length-1]-pts[0])/pts[0]*100);

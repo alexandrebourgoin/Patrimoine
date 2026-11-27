@@ -37,7 +37,7 @@ function _csvCleanNum(s) {
 
 // ── Normalisation date → YYYY-MM-DD ──
 function _csvParseDate(s) {
-  if (!s) return new Date().toISOString().slice(0, 10);
+  if (!s) return PU.dayKey(Date.now());   // jour LOCAL (toISOString = UTC : la veille juste après minuit)
   const m = s.match(/^(\d{2})[-\/](\d{2})[-\/](\d{4})$/); // DD-MM-YYYY
   if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);

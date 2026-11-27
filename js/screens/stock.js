@@ -11,7 +11,7 @@ function renderStock() {
   const invested=h.avgBuyPrice*h.quantity;
   const pnl=h.value-invested;
   const pnlPct=invested>0?(pnl/invested)*100:0;
-  const chartW=Math.min(window.innerWidth,480);
+  const chartW=chartWidth();
 
   const divTotal=h.transactions.filter(t=>t.type==='DIV').reduce((s,t)=>s+t.qty*t.price,0);
   const realizedPnL=computeRealizedPnL(h);
@@ -55,7 +55,7 @@ function renderStock() {
   <div class="stock-hero" style="border-bottom:none;padding-bottom:8px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
       <div>
-        <div class="stock-ticker-badge">${esc(h.ticker)}${showProduit?` <span style="font-size:10px;opacity:.7">${hCur}</span>`:''}</div>
+        <div class="stock-ticker-badge">${esc(h.ticker)}${showProduit?` <span style="font-size:10px;opacity:.7">${esc(hCur)}</span>`:''}</div>
         <div style="font-size:19px;font-weight:800;letter-spacing:-.4px">${esc(h.name)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;margin-top:4px">
@@ -78,7 +78,7 @@ function renderStock() {
     </div>
     <div class="row gap8" style="margin-top:4px">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
-      <span class="t-sm">${h.type} · ${h.country} · ${h.sector}</span>
+      <span class="t-sm">${esc(h.type)} · ${esc(h.country)} · ${esc(h.sector)}</span>
     </div>
   </div>
   <div class="stock-chart-wrap" id="js-stock-chart-wrap" style="padding:8px 0 0">
@@ -157,7 +157,7 @@ SCREEN_BIND.stock = function (el, id) {
         const a=S.accounts.find(a=>a.id===S.accountId);
         const hh=a?.holdings.find(h=>h.id===S.holdingId);
         if(!wrap||!hh) return;
-        const cw=Math.min(window.innerWidth,480);
+        const cw=chartWidth();
         wrap.innerHTML=stockChartSvg(hh,cw,120,S.stockPeriod)+'<div class="stock-chart-tip" id="js-stock-chart-tip"></div>';
         initStockChart(wrap,hh);
         attachChartFs(wrap,'stock');

@@ -3,6 +3,10 @@
 // Dépend, À L APPEL seulement, de S, PU (utils.js), loadHistory/loadWealth, FX_RATES… (mon-patrimoine.js).
 // Aucun code exécuté à l évaluation : que des fonctions.
 
+// Largeur d'un graphique : celle de la fenêtre (480 max) moins une marge, jamais sous 160 px. Fenêtre pas encore dimensionnée
+// (innerWidth = 0 : PWA lancée en arrière-plan, onglet caché) : sans ce plancher la largeur devenait négative ("-72") et le SVG invalide.
+function chartWidth(margin = 0) { return Math.max(160, Math.min(window.innerWidth || 0, 480) - margin); }
+
 // ═══════════════════════════════════════════════
 // CHARTS
 // ═══════════════════════════════════════════════

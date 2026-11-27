@@ -19,7 +19,7 @@ describe('lignes de positions', () => {
   it('supprimer un titre : bouton dans « Modifier », avec confirmation, puis retour au compte', () => {
     expect(readFileSync('mon-patrimoine.html', 'utf8')).toContain('id="eh-delete"');
     expect(readFileSync('js/modals/position.js', 'utf8')).toContain('deleteHolding(accId,holdId);');
-    const del = account.slice(account.indexOf('function deleteHolding'), account.indexOf('function applyRefresh'));
+    const del = account.slice(account.indexOf('function deleteHolding'), account.indexOf('function initPTR'));
     expect(del).toContain('openConfirm(');
     expect(del).toContain("if (S.screen==='stock') back();");
   });

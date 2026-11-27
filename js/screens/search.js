@@ -55,14 +55,14 @@ function srchResults(q, mode) {
 
 function srchRow(h, acc) {
   return `<div class="hold-item" data-hid="${h.id}" data-accid="${acc.id}">
-    <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
+    <div class="ticker" style="margin-top:2px">${esc(h.ticker.slice(0,4))}</div>
     <div class="hold-item-body">
       <div class="hold-item-top">
         <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.name)}</div>
         <div style="font-size:14px;font-weight:800;flex-shrink:0" class="t-num">${masked(h.valueRef??h.value)}</div>
       </div>
       <div class="hold-item-bot">
-        <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)} · ${h.type}</div>
+        <div class="t-sm" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(acc.name)} · ${esc(h.type)}</div>
         <div style="font-size:12px;font-weight:700;flex-shrink:0" class="${h.pnl>=0?'t-gain':'t-loss'}">${fmtPct(h.pnlPct)}</div>
       </div>
     </div>

@@ -258,7 +258,7 @@ function renderHoldsHTML(acc) {
       const stale   = priceStale(h);   // cours trop ancien ou date de cotation inconnue (js/services/prices.js)
       return `
       <div class="hold-item" data-hid="${h.id}">
-        <div class="ticker" style="margin-top:2px">${h.ticker.slice(0,4)}</div>
+        <div class="ticker" style="margin-top:2px">${esc(h.ticker.slice(0,4))}</div>
         <div class="hold-item-body">
           <div class="hold-item-top">
             <div style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(h.name)}</div>
@@ -379,30 +379,6 @@ function deleteHolding(accId,holdId) {
     else renderHoldsHTML(acc);
     refreshMain();
     toast('Position supprimée');
-  });
-}
-
-function applyRefresh(accId) {
-  S._histCache={};
-  // Refresh watchlist prices
-  S.watchlist.forEach(w=>{
-    const chg=(Math.random()*.03-.01);
-    w.price=+(w.price*(1+chg)).toFixed(2);
-    w.change1d=+((Math.random()*4-1.5).toFixed(2));
-  });
-  const accs=accId?[S.accounts.find(a=>a.id===accId)]:S.accounts;
-  accs.filter(Boolean).forEach(acc=>{
-    acc.holdings.forEach(h=>{
-      const chg=(Math.random()*.028-.006);
-      h.currentPrice=+(h.currentPrice*(1+chg)).toFixed(2);
-      h.value=+(h.quantity*h.currentPrice).toFixed(2);
-      h.valueRef=+toRefCcy(h.value,h.currency).toFixed(2);
-      h.pnl=(h.currentPrice-h.avgBuyPrice)*h.quantity;
-      h.pnlRef=+toRefCcy(h.pnl,h.currency).toFixed(2);
-      h.pnlPct=h.avgBuyPrice>0?((h.currentPrice-h.avgBuyPrice)/h.avgBuyPrice)*100:0;
-    });
-    acc.value=accTotal(acc);
-    acc.change1d=+(Math.random()*4-1).toFixed(2);
   });
 }
 

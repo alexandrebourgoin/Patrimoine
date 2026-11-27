@@ -2,6 +2,16 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.122': [
+    { type:'fix', text:"Graphiques : si l'application se lance dans une fenêtre pas encore dimensionnée, la courbe ne devient plus invisible (largeur minimale garantie)." },
+  ],
+  '1.11.121': [
+    { type:'fix', text:"Date du jour : un nouvel ordre ou un import CSV sans date prend maintenant la date locale (avant, la veille juste après minuit)." },
+    { type:'fix', text:"Si le stockage de l'appareil est plein, un message prévient que les comptes ne sont pas enregistrés (avant, rien n'était signalé)." },
+  ],
+  '1.11.120': [
+    { type:'fix', text:"Sécurité : ticker, type, pays, secteur et clés API sont maintenant échappés à l'affichage (un fichier CSV ou une sauvegarde piégés ne peuvent plus injecter de code)." },
+  ],
   '1.11.119': [
     { type:'new', text:"Nouveau type de compte : « Compte épargne Suisse » (solde, taux, versements, retraits, intérêts ; CHF proposé par défaut, compte joint possible)." },
   ],

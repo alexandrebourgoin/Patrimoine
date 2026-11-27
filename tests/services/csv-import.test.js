@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import '../../utils.js';   // expose PU (PU.dayKey : date locale)
 import { loadClassic } from '../helpers/load-classic.js';
 
 // Tables de référence réelles (ISIN → ticker, base de titres) injectées comme dans le navigateur.
@@ -44,6 +45,10 @@ describe('_csvParseDate', () => {
     expect(_csvParseDate('2024-03-15')).toBe('2024-03-15');
     expect(_csvParseDate('2024-03-15T10:00:00Z')).toBe('2024-03-15');
     expect(_csvParseDate('hier')).toBe('hier');
+  });
+  it('date absente : jour LOCAL, pas UTC (00h30 locale = encore le même jour)', () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 10, 27, 0, 30));
+    expect(_csvParseDate('')).toBe('2026-11-27');
   });
   it('vide → date du jour', () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date(2024, 5, 15, 12));

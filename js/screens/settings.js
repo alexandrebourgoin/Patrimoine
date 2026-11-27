@@ -155,7 +155,7 @@ function renderSettings() {
         <div class="s-name" style="color:var(--text2)">Twelve Data <a class="api-link" href="https://twelvedata.com" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
         <div class="s-sub">Fallback · 800 req/jour · actions US</div>
       </div>
-      <input class="s-input" id="js-price-key" value="${S.priceApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
+      <input class="s-input" id="js-price-key" value="${esc(S.priceApiKey||'')}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
     </div>
     <div class="s-item">
       <div class="s-ico" style="background:rgba(99,102,241,.08)">
@@ -165,7 +165,7 @@ function renderSettings() {
         <div class="s-name" style="color:var(--text2)">Financial Modeling Prep <a class="api-link" href="https://financialmodelingprep.com/developer/docs" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a></div>
         <div class="s-sub">Fallback · 250 req/jour · EU + US</div>
       </div>
-      <input class="s-input" id="js-fmp-key" value="${S.fmpApiKey||''}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
+      <input class="s-input" id="js-fmp-key" value="${esc(S.fmpApiKey||'')}" placeholder="Clé API" style="max-width:110px;font-size:11px;opacity:.8">
     </div>
   </div>
 

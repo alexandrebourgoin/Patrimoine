@@ -71,6 +71,34 @@ describe('saveAccounts / saveSettings / saveData', () => {
   });
 });
 
+describe("écriture refusée (quota plein)", () => {
+  const full = { getItem: () => null, setItem() { throw new DOMException("quota", "QuotaExceededError"); }, removeItem() {} };
+  it("saveAccounts / saveSettings renvoient false et préviennent (au plus une fois toutes les 10 s)", () => {
+    const toast = vi.fn();
+    const { api } = fresh({ localStorage: full, toast });
+    expect(api.saveAccounts()).toBe(false);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0][0]).toContain("Comptes non enregistrés");
+    expect(api.saveSettings()).toBe(false);          // dans les 10 s : pas de second message
+    expect(toast).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(new Date(2024, 5, 15, 12, 0, 11));
+    expect(api.saveData()).toBe(false);
+    expect(toast).toHaveBeenCalledTimes(2);
+  });
+  it("écriture normale : renvoie true, aucun message", () => {
+    const toast = vi.fn();
+    const { api } = fresh({ toast });
+    expect(api.saveAccounts()).toBe(true);
+    expect(api.saveSettings()).toBe(true);
+    expect(api.saveData()).toBe(true);
+    expect(toast).not.toHaveBeenCalled();
+  });
+  it("sans toast défini (tests, chargement partiel) : pas d'exception", () => {
+    const { api } = fresh({ localStorage: full });
+    expect(() => api.saveAccounts()).not.toThrow();
+  });
+});
+
 describe('loadData', () => {
   it('aucune donnée → false, S inchangé (1re ouverture)', () => {
     const { api, S } = fresh();

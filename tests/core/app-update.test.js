@@ -63,7 +63,7 @@ describe('vérification au retour sur l\'application', () => {
   it('relance la vérification du service worker quand l\'app redevient visible', async () => {
     const t = setup();
     t.listeners.win.load();
-    await Promise.resolve(); await Promise.resolve();
+    await new Promise(r => setTimeout(r, 0));   // laisse la promesse d'enregistrement du SW se résoudre (indépendant du nombre de ticks)
     t.listeners.doc.visibilitychange();
     expect(t.reg.update).toHaveBeenCalledTimes(1);
   });
