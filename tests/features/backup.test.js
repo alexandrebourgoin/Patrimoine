@@ -140,6 +140,33 @@ describe('garde-fou : chaque clé de stockage du code est sauvegardée ou exclue
       .filter(k => !k.startsWith('patrimoine-'));
     expect(outside).toEqual(['accPerfMode']);   // préférence d'affichage YTD / Historique : volontairement hors sauvegarde
   });
+  // Règle : toute donnée ajoutée (nouveau module, nouveau réglage…) doit être sauvegardée. Chaque écriture dans le
+  // stockage est vérifiée : sa clé doit commencer par « patrimoine- » (alors sauvegardée automatiquement), ou la ligne
+  // doit dire pourquoi elle n'est pas sauvegardée (« hors sauvegarde : raison », ex. clés d'API).
+  it('chaque écriture dans le stockage vise une clé sauvegardée, ou dit pourquoi elle ne l\'est pas', () => {
+    const src = Object.fromEntries(files.map(f => [f, readFileSync(f, 'utf8')]));
+    const consts = {};
+    for (const t of Object.values(src)) for (const m of t.matchAll(/const ([A-Z_]+)\s*=\s*'([^']+)'/g)) consts[m[1]] = m[2];
+    const bad = [];
+    for (const [f, t] of Object.entries(src)) {
+      t.split('\n').forEach((line, i) => {
+        for (const m of line.matchAll(/\.setItem\(\s*([^,]+?)\s*,/g)) {
+          const arg = m[1], where = `${f}:${i + 1} (${arg})`;
+          if (/hors sauvegarde\s*:/.test(line)) continue;                               // exclusion justifiée sur la ligne
+          if (/^'[^']*'$/.test(arg)) { if (!arg.startsWith("'patrimoine-") && arg !== "'accPerfMode'") bad.push(where); continue; }
+          const id = arg.match(/^([A-Z_]+)$/);                                            // constante : sa valeur
+          if (id) { if (!(consts[id[1]] || '').startsWith('patrimoine-')) bad.push(where); continue; }
+          // clé calculée (préfixe + mode, clé de restauration…) : le fichier doit construire ses clés sous « patrimoine- »
+          if (!/'patrimoine-[a-z-]*'|BACKUP_PREFIX|STORE_[A-Z_]+/.test(t)) bad.push(where);
+        }
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+  it('pas d\'autre stockage que localStorage (il échapperait à la sauvegarde)', () => {
+    const other = files.filter(f => /\b(indexedDB|sessionStorage|document\.cookie)\b/.test(readFileSync(f, 'utf8')));
+    expect(other).toEqual([]);
+  });
 });
 
 describe('date de dernière sauvegarde visible dans le menu ☰', () => {

@@ -86,7 +86,7 @@ function renderSettings() {
       </div>
       <div class="flex1 col gap4">
         <div class="s-name">Sauvegarder mes données</div>
-        <div class="s-sub" id="js-backup-age" style="${backupDue(localStorage)&&!demo?'color:var(--loss);font-weight:600':''}">${backupAgeLabel(localStorage)} · tous les modules, dans le dossier de votre choix</div>
+        <div class="s-sub" id="js-backup-age" style="${backupDue(localStorage)&&!demo?'color:var(--loss);font-weight:600':''}">${backupAgeLabel(localStorage)} · tous les modules ; OneDrive, mail, dossier…</div>
       </div>
       <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
     </div>

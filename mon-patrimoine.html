@@ -118,7 +118,7 @@
 </div>
 <div id="toast"></div>
 <input type="file" id="csv-file" accept=".csv">
-<input type="file" id="backup-file" accept=".json,application/json" style="display:none">
+<input type="file" id="backup-file" accept=".json,application/json,.txt,text/plain" style="display:none">
 
 <!-- ADD ORDER MODAL -->
 <div id="modal-bg" class="modal-bg"></div>
@@ -324,6 +324,18 @@
 </div>
 
 <!-- RAPPEL DE SAUVEGARDE (js/features/backup.js) -->
+<!-- SAUVEGARDER MES DONNÉES : destination du fichier (js/features/backup.js) -->
+<div id="bk-bg" class="add-modal-bg"></div>
+<div id="bk-sheet" class="add-modal-sheet">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:4px"><div class="modal-title" style="margin-bottom:0">Sauvegarder mes données</div><div id="bk-close" class="oa-x">✕</div></div>
+    <div class="t-sm" id="bk-age" style="margin-bottom:12px"></div>
+    <div id="bk-list"></div>
+    <div class="t-sm" style="margin-top:12px">Le fichier contient toutes vos données (comptes, immobilier, crédits, réglages…), sans vos clés ni votre code. Pour le récupérer : Réglages → Restaurer une sauvegarde.</div>
+  </div>
+</div>
+
 <div id="backup-remind-bg" class="modal-bg" style="z-index:211"></div>
 <div id="backup-remind-sheet" class="confirm-sheet">
   <div class="modal-drag"></div>
