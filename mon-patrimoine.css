@@ -529,7 +529,8 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .ac-place{display:block;font-size:10px;font-weight:500;color:var(--text2);overflow:hidden;text-overflow:ellipsis}
 .ac-cand .ac-name{white-space:normal}
 /* Cotations trouvées en ligne : la liste prend la largeur du formulaire (la colonne du ticker est étroite) */
-.ac-list.ac-wide{right:auto;width:calc(min(100vw, 480px) - 40px);max-height:60vh;overflow-y:auto}
+.ac-list.ac-wide{right:auto;width:calc(min(100vw, 480px) - 40px);max-height:60vh;max-height:60dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#pos-modal-sheet{max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}   /* fiche plus haute que l'écran (petit téléphone, clavier ouvert) : elle défile */
 
 /* ─── EDIT / DELETE TRANSACTION ─── */
 .tx-edit-btn,.tx-del-btn{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s}

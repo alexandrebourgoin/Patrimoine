@@ -28,6 +28,7 @@ function openPosModal(accId){
   document.getElementById('pos-date').value=PU.dayKey(Date.now());
   document.getElementById('pos-ac-list').classList.add('hidden');
   document.getElementById('pos-ac-list').classList.remove('ac-wide');
+  const acl=document.getElementById('pos-ac-list'); if(acl.style) acl.style.maxHeight='';
   document.getElementById('pos-modal-bg').classList.add('show');
   document.getElementById('pos-modal-sheet').classList.add('show');
   setTimeout(()=>document.getElementById('pos-ticker').focus(),330);
@@ -81,6 +82,20 @@ function closePosModal(){
     document.getElementById('pos-type').value=info.type;
     toast(`ISIN résolu : ${info.ticker} (${info.name}) ✓`);
   }
+  // Hauteur de la liste = place réellement visible sous le champ (clavier ouvert compris) : au-delà, la liste défile
+  function fitAcList(){
+    if(acList.classList.contains('hidden') || !acList.style || !acList.getBoundingClientRect) return;
+    const vv=window.visualViewport;
+    const bottom=vv ? vv.offsetTop+vv.height : window.innerHeight;
+    const top=acList.getBoundingClientRect().top;
+    acList.style.maxHeight=Math.max(160, Math.floor(bottom-top-12))+'px';
+  }
+  const posSheet=document.getElementById('pos-modal-sheet');
+  if(posSheet && posSheet.addEventListener) posSheet.addEventListener('scroll', fitAcList, {passive:true});
+  if(typeof window!=='undefined' && window.visualViewport){
+    window.visualViewport.addEventListener('resize', fitAcList);
+    window.visualViewport.addEventListener('scroll', fitAcList);
+  }
   // Recherche en ligne (bourse + cryptos) : les cotations s'affichent dans la liste ; un toucher remplit la fiche
   let _acCands=[], _acBusy=false;
   async function searchOnline(q){
@@ -88,6 +103,7 @@ function closePosModal(){
     acList.classList.add('ac-wide');
     acList.innerHTML=`<div class="ac-item ac-empty"><span class="ac-tick">…</span><span class="ac-name">Recherche de « ${esc(q)} »…</span></div>`;
     acList.classList.remove('hidden');
+    fitAcList();
     try{
       _acCands=await symbolSearchAll(q);
       if(tickerInp.value.trim().toUpperCase()!==q && !_acBusy) return;
@@ -99,7 +115,7 @@ function closePosModal(){
         : `<div class="ac-item ac-empty"><span class="ac-tick">∅</span><span class="ac-name">Rien trouvé : essayez le nom ou l'ISIN, ou saisissez la position à la main</span></div>`;
     }catch(e){
       acList.innerHTML=`<div class="ac-item ac-empty"><span class="ac-tick">!</span><span class="ac-name">${esc(e.message||'Recherche impossible')}</span></div>`;
-    }finally{ _acBusy=false; }
+    }finally{ _acBusy=false; fitAcList(); acList.scrollTop=0; }
   }
   function pickCandidate(c){
     tickerInp.value=c.ticker;
@@ -112,7 +128,7 @@ function closePosModal(){
     toast(`${c.ticker} : cotation ${c.kind==='cg'?'CoinGecko':c.id} retenue ✓`);
   }
   tickerInp.addEventListener('input',()=>{
-    acList.classList.remove('ac-wide');
+    acList.classList.remove('ac-wide'); if(acList.style) acList.style.maxHeight='';
     _posYahooSymbol=null;   // toute frappe manuelle invalide un précédent symbole Yahoo résolu par ISIN
     _posPick=null;
     const q=tickerInp.value.trim().toUpperCase();
