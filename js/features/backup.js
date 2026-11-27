@@ -108,51 +108,85 @@ function backupAgeLabel(storage, now = Date.now()) {
 }
 
 // ═══════════════════════════════════════════════
-// INTERFACE (dépend, à l'appel seulement, de S, toast, APP_VERSION, openConfirm, registerModal)
+// INTERFACE (dépend, à l'appel seulement, de S, toast, APP_VERSION, openConfirm, registerModal, renderScreen)
 // ═══════════════════════════════════════════════
 
-// Enregistre le fichier là où l'utilisateur le choisit :
-//  1. sélecteur « Enregistrer sous » (Chrome / Edge sur ordinateur) : n'importe quel dossier, OneDrive compris ;
-//     id fixe → le navigateur rouvre le dernier dossier choisi ;
-//  2. sinon menu de partage (Android, iPhone) : OneDrive, Drive, « Enregistrer dans Fichiers »… ;
-//  3. sinon téléchargement classique.
-// Doit être appelée directement depuis un clic (le navigateur l'exige). Renvoie true si le fichier a été enregistré.
-async function saveBackupFile(json, filename) {
+// Destinations proposées pour le fichier de sauvegarde, selon ce que permet l'appareil (env : window / navigator,
+// injectable pour les tests). Une fenêtre les liste ; chaque choix est un toucher (les navigateurs l'exigent).
+//  - share  : menu de partage du téléphone (OneDrive, Gmail, Drive, Fichiers…). Chrome n'accepte de partager que
+//             certains types de fichiers (pas .json) : le fichier part en .txt (même contenu, restaurable tel quel).
+//  - folder : « Enregistrer sous » (Chrome / Edge sur ordinateur) : n'importe quel dossier, OneDrive synchronisé compris ;
+//             le navigateur rouvre le dernier dossier choisi.
+//  - download : téléchargement dans le dossier Téléchargements de l'appareil (toujours possible).
+const BACKUP_TARGETS = {
+  share:    { label: 'Envoyer ou partager', sub: 'OneDrive, Gmail, Drive, Fichiers…' },
+  folder:   { label: 'Choisir un dossier', sub: 'OneDrive ou tout dossier de l\'ordinateur' },
+  download: { label: 'Télécharger', sub: 'Dossier Téléchargements de l\'appareil' },
+};
+function backupFileName(now, ext = 'json') { return `patrimoine-sauvegarde-${new Date(now).toLocaleDateString('sv-SE')}.${ext}`; }
+function backupTargets(env = { window: typeof window !== 'undefined' ? window : {}, navigator: typeof navigator !== 'undefined' ? navigator : {} }) {
+  const out = [];
+  try {
+    const probe = typeof File === 'function' ? new File(['{}'], 'test.txt', { type: 'text/plain' }) : null;
+    if (probe && typeof env.navigator.share === 'function' && env.navigator.canShare?.({ files: [probe] })) out.push('share');
+  } catch (e) {}
+  if (typeof env.window.showSaveFilePicker === 'function') out.push('folder');
+  out.push('download');
+  return out;
+}
+
+// Enregistre le fichier vers la destination choisie. Renvoie true si c'est fait, false si l'utilisateur a annulé.
+async function saveBackupFile(json, now, target) {
+  if (target === 'share') {
+    const file = new File([json], backupFileName(now, 'txt'), { type: 'text/plain' });
+    try { await navigator.share({ files: [file], title: 'Sauvegarde Mon patrimoine' }); return true; }
+    catch (e) { if (e?.name === 'AbortError') return false; throw e; }
+  }
   const blob = new Blob([json], { type: 'application/json' });
-  if (typeof window.showSaveFilePicker === 'function') {
+  if (target === 'folder') {
     try {
       const h = await window.showSaveFilePicker({
-        suggestedName: filename, id: 'patrimoine-sauvegarde',
+        suggestedName: backupFileName(now), id: 'patrimoine-sauvegarde',
         types: [{ description: 'Sauvegarde Mon patrimoine', accept: { 'application/json': ['.json'] } }],
       });
       const w = await h.createWritable();
       await w.write(blob); await w.close();
       return true;
-    } catch (e) {
-      if (e?.name === 'AbortError') return false;    // annulé par l'utilisateur
-      // sinon : sélecteur refusé (iframe, droits) → méthodes suivantes
-    }
-  }
-  const file = typeof File === 'function' ? new File([blob], filename, { type: 'application/json' }) : null;
-  if (file && navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: filename }); return true; }
-    catch (e) { if (e?.name === 'AbortError') return false; }
+    } catch (e) { if (e?.name === 'AbortError') return false; throw e; }
   }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = filename;
+  a.href = url; a.download = backupFileName(now);
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
   return true;
 }
 
-async function runBackup() {
+// Fenêtre « Sauvegarder mes données » : une ligne par destination possible sur cet appareil.
+function backupSheetHTML(targets) {
+  return targets.map(t => `<button type="button" class="bk-target" data-target="${t}">
+    <span class="bk-name">${BACKUP_TARGETS[t].label}</span><span class="bk-sub">${BACKUP_TARGETS[t].sub}</span></button>`).join('');
+}
+function runBackup() {
+  document.getElementById('bk-list').innerHTML = backupSheetHTML(backupTargets());
+  document.getElementById('bk-age').textContent = backupAgeLabel(localStorage);
+  document.getElementById('bk-bg').classList.add('show');
+  document.getElementById('bk-sheet').classList.add('show');
+}
+function closeBackupSheet() {
+  document.getElementById('bk-bg').classList.remove('show');
+  document.getElementById('bk-sheet').classList.remove('show');
+}
+async function backupTo(target) {
   const now = Date.now();
   const json = JSON.stringify(buildBackup(localStorage, now, APP_VERSION), null, 2);
-  const ok = await saveBackupFile(json, `patrimoine-sauvegarde-${new Date(now).toLocaleDateString('sv-SE')}.json`);
+  let ok;
+  try { ok = await saveBackupFile(json, now, target); }
+  catch (e) { toast('Enregistrement impossible : ' + (e?.message || e) + '. Essayez « Télécharger ».'); return false; }
   if (!ok) { toast('Sauvegarde annulée'); return false; }
+  closeBackupSheet();
   markBackup(localStorage, Date.now());
-  toast('Sauvegarde enregistrée ✓');
+  toast(target === 'share' ? 'Sauvegarde envoyée ✓' : 'Sauvegarde enregistrée ✓');
   if (S.screen === 'settings') renderScreen('settings');
   return true;
 }
@@ -206,5 +240,9 @@ function maybeRemindBackup(tries = 0) {
 document.getElementById('backup-remind-later')?.addEventListener('click', closeBackupReminder);
 document.getElementById('backup-remind-bg')?.addEventListener('click', closeBackupReminder);
 document.getElementById('backup-remind-ok')?.addEventListener('click', () => { closeBackupReminder(); runBackup(); });
+document.getElementById('bk-list')?.addEventListener('click', e => { const b = e.target.closest('[data-target]'); if (b) backupTo(b.dataset.target); });
+document.getElementById('bk-bg')?.addEventListener('click', closeBackupSheet);
+document.getElementById('bk-close')?.addEventListener('click', closeBackupSheet);
 document.getElementById('backup-file')?.addEventListener('change', e => { restoreBackupFromFile(e.target.files?.[0]); e.target.value = ''; });
 registerModal('backup-remind-sheet', closeBackupReminder);
+registerModal('bk-sheet', closeBackupSheet);
