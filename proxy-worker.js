@@ -39,7 +39,7 @@ async function getCrumb(forceRefresh) {
   return _crumbCache;
 }
 
-export default {
+const routes = {   // exporté plus bas, derrière le contrôle des origines
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -113,4 +113,34 @@ export default {
       return new Response(JSON.stringify({ error: e.message }), { status: 500, headers: CORS });
     }
   }
+};
+
+/* ── ORIGINES AUTORISÉES ──────────────────────────────────────────────────
+   Seules les pages de l'application peuvent appeler ce worker depuis un navigateur : un autre site
+   reçoit 403 et ne consomme pas le quota Yahoo. La réponse renvoie l'origine appelante (au lieu de *).
+   Sans en-tête Origin (outil en ligne de commande, test) : accepté, le navigateur n'est pas en jeu.
+   Ajouter ici toute nouvelle adresse de l'application. */
+const ALLOWED_ORIGINS = [
+  'https://alexandrebourgoin.github.io',   // application
+  'https://julienluigi.github.io',         // aperçu de Julien
+];
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;   // développement
+
+function originAllowed(origin) {
+  return !origin || ALLOWED_ORIGINS.includes(origin) || LOCAL_ORIGIN.test(origin);
+}
+
+export default {
+  async fetch(req, env, ctx) {
+    const origin = req.headers.get('Origin');
+    if (!originAllowed(origin)) {
+      return new Response(JSON.stringify({ error: 'origine non autorisée' }), { status: 403, headers: { 'Content-Type': 'application/json', 'Vary': 'Origin' } });
+    }
+    const res = await routes.fetch(req, env, ctx);
+    if (!origin) return res;
+    const out = new Response(res.body, res);
+    out.headers.set('Access-Control-Allow-Origin', origin);
+    out.headers.append('Vary', 'Origin');
+    return out;
+  },
 };
