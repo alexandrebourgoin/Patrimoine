@@ -8,7 +8,7 @@ function fakeStorage(init = {}) {
 }
 const SY = loadClassic('js/features/symbols.js', {
   globals: { localStorage: fakeStorage() },
-  exports: ['SYMBOLS_STORE', 'symbolsAll', 'symbolUser', 'symbolSet', 'symbolClear', 'symbolQuery', 'yahooCandidates', 'cgCandidates'],
+  exports: ['SYMBOLS_STORE', 'symbolsAll', 'symbolUser', 'symbolSet', 'symbolClear', 'symbolQuery', 'yahooCandidates', 'cgCandidates', 'symbolEntry'],
 });
 
 describe('cotations choisies : stockage', () => {
@@ -33,6 +33,13 @@ describe('cotations choisies : stockage', () => {
   });
 });
 
+describe('entrée mémorisée pour une cotation choisie', () => {
+  it('symbole Yahoo avec place et devise, ou identifiant CoinGecko', () => {
+    expect(SY.symbolEntry({ kind: 'yahoo', id: '3CP.F', place: 'Frankfurt', currency: 'EUR' })).toEqual({ yahoo: '3CP.F', label: '3CP.F · Frankfurt · EUR' });
+    expect(SY.symbolEntry({ kind: 'cg', id: 'aave', name: 'Aave (AAVE)' })).toEqual({ cg: 'aave', label: 'Aave (AAVE)' });
+  });
+});
+
 describe('recherche proposée', () => {
   it('ISIN d\'abord (le plus fiable), sinon le nom ; crypto : le ticker', () => {
     expect(SY.symbolQuery({ ticker: 'JE00BDD9Q956', name: 'Wisdomtree Nat Gas' })).toBe('JE00BDD9Q956');
@@ -50,14 +57,15 @@ describe('analyse des réponses', () => {
       { symbol: 'XIACF', quoteType: 'OPTION' },
     ] };
     const quotes = { quoteResponse: { result: [
-      { symbol: '3CP.F', currency: 'EUR', regularMarketPrice: 3.52, fullExchangeName: 'Frankfurt' },
+      { symbol: '3CP.F', currency: 'EUR', regularMarketPrice: 3.52, fullExchangeName: 'Frankfurt', regularMarketTime: 1795800000 },
       { symbol: '1810.HK', currency: 'HKD', regularMarketPrice: 31.2, fullExchangeName: 'HKSE', longName: 'Xiaomi Corporation' },
     ] } };
     expect(SY.yahooCandidates(search, quotes)).toEqual([
-      { kind: 'yahoo', id: '3CP.F', name: 'XIAOMI CORP', place: 'Frankfurt', currency: 'EUR', price: 3.52 },
-      { kind: 'yahoo', id: '1810.HK', name: 'Xiaomi Corporation', place: 'HKSE', currency: 'HKD', price: 31.2 },
+      { kind: 'yahoo', id: '3CP.F', ticker: '3CP', type: 'Action', name: 'XIAOMI CORP', place: 'Frankfurt', currency: 'EUR', price: 3.52, quoteAt: 1795800000000 },
+      { kind: 'yahoo', id: '1810.HK', ticker: '1810', type: 'Action', name: 'Xiaomi Corporation', place: 'HKSE', currency: 'HKD', price: 31.2, quoteAt: null },
     ]);
-    expect(SY.yahooCandidates({ quotes: [{ symbol: 'A', quoteType: 'ETF' }] }, null)[0]).toMatchObject({ id: 'A', price: null, currency: '' });
+    expect(SY.yahooCandidates({ quotes: [{ symbol: 'A', quoteType: 'ETF' }] }, null)[0]).toMatchObject({ id: 'A', ticker: 'A', type: 'ETF', price: null, currency: '' });
+    expect(SY.yahooCandidates({ quotes: [{ symbol: '0P0001.SW', quoteType: 'MUTUALFUND' }] }, null)[0].type).toBe('ETF');
   });
   it('CoinGecko : symbole exact en tête, puis par capitalisation ; cours en USD', () => {
     const search = { coins: [
@@ -65,9 +73,9 @@ describe('analyse des réponses', () => {
       { id: 'aavegotchi', name: 'Aavegotchi', symbol: 'ghst', market_cap_rank: 300 },
       { id: 'aave', name: 'Aave', symbol: 'aave', market_cap_rank: 40 },
     ] };
-    const c = SY.cgCandidates(search, { aave: { usd: 111.3 } }, 'AAVE');
+    const c = SY.cgCandidates(search, { aave: { usd: 111.3, last_updated_at: 1795800000 } }, 'AAVE');
     expect(c.map(x => x.id)).toEqual(['aave', 'aavegotchi', 'aave-old']);
-    expect(c[0]).toEqual({ kind: 'cg', id: 'aave', name: 'Aave (AAVE)', place: 'Crypto · rang 40', currency: 'USD', price: 111.3 });
+    expect(c[0]).toEqual({ kind: 'cg', id: 'aave', ticker: 'AAVE', type: 'Crypto', name: 'Aave (AAVE)', place: 'Crypto · rang 40', currency: 'USD', price: 111.3, quoteAt: 1795800000000 });
   });
 });
 

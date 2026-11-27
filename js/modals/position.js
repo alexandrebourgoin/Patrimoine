@@ -14,9 +14,12 @@ function _applyAssetTypeRules(selectEl,acc,keepValue){
 // ═══════════════════════════════════════════════
 let _posAccId=null;
 let _posYahooSymbol=null;   // symbole Yahoo complet (avec suffixe) si résolu via ISIN, sinon null
+// Cotation choisie dans la recherche en ligne (js/features/symbols.js) : { ticker, cand } ; mémorisée pour toute l'app
+// à l'enregistrement de la position (symbolSet), avec le cours et l'heure de cotation reçus
+let _posPick=null;
 function openPosModal(accId){
   _posAccId=accId;
-  _posYahooSymbol=null;
+  _posYahooSymbol=null; _posPick=null;
   ['pos-ticker','pos-name','pos-qty','pos-pru','pos-country'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('pos-type').value='Action';
   _applyAssetTypeRules(document.getElementById('pos-type'),S.accounts.find(a=>a.id===accId));
@@ -24,6 +27,7 @@ function openPosModal(accId){
   document.getElementById('pos-sector').value='Technologie';
   document.getElementById('pos-date').value=PU.dayKey(Date.now());
   document.getElementById('pos-ac-list').classList.add('hidden');
+  document.getElementById('pos-ac-list').classList.remove('ac-wide');
   document.getElementById('pos-modal-bg').classList.add('show');
   document.getElementById('pos-modal-sheet').classList.add('show');
   setTimeout(()=>document.getElementById('pos-ticker').focus(),330);
@@ -77,8 +81,40 @@ function closePosModal(){
     document.getElementById('pos-type').value=info.type;
     toast(`ISIN résolu : ${info.ticker} (${info.name}) ✓`);
   }
+  // Recherche en ligne (bourse + cryptos) : les cotations s'affichent dans la liste ; un toucher remplit la fiche
+  let _acCands=[], _acBusy=false;
+  async function searchOnline(q){
+    _acBusy=true;
+    acList.classList.add('ac-wide');
+    acList.innerHTML=`<div class="ac-item ac-empty"><span class="ac-tick">…</span><span class="ac-name">Recherche de « ${esc(q)} »…</span></div>`;
+    acList.classList.remove('hidden');
+    try{
+      _acCands=await symbolSearchAll(q);
+      if(tickerInp.value.trim().toUpperCase()!==q && !_acBusy) return;
+      acList.innerHTML=_acCands.length ? _acCands.map((c,i)=>`<div class="ac-item ac-cand" data-cand="${i}">
+          <span class="ac-tick">${esc(c.ticker.slice(0,6))}</span>
+          <span class="ac-name">${esc(c.name)}<span class="ac-place">${esc([c.kind==='yahoo'?c.id:'',c.place,c.currency].filter(Boolean).join(' · '))}</span></span>
+          <span class="ac-sub">${c.price!=null?esc(fmtNative(c.price,c.currency||'EUR')):''}</span>
+        </div>`).join('')
+        : `<div class="ac-item ac-empty"><span class="ac-tick">∅</span><span class="ac-name">Rien trouvé : essayez le nom ou l'ISIN, ou saisissez la position à la main</span></div>`;
+    }catch(e){
+      acList.innerHTML=`<div class="ac-item ac-empty"><span class="ac-tick">!</span><span class="ac-name">${esc(e.message||'Recherche impossible')}</span></div>`;
+    }finally{ _acBusy=false; }
+  }
+  function pickCandidate(c){
+    tickerInp.value=c.ticker;
+    _posYahooSymbol=null;
+    _posPick={ticker:c.ticker,cand:c};
+    document.getElementById('pos-name').value=c.name.replace(/ \([A-Z0-9]+\)$/,'');
+    if(c.currency) setSelectValue(document.getElementById('pos-currency'), c.currency, c.currency);
+    document.getElementById('pos-type').value=c.type;
+    acList.classList.add('hidden');
+    toast(`${c.ticker} : cotation ${c.kind==='cg'?'CoinGecko':c.id} retenue ✓`);
+  }
   tickerInp.addEventListener('input',()=>{
+    acList.classList.remove('ac-wide');
     _posYahooSymbol=null;   // toute frappe manuelle invalide un précédent symbole Yahoo résolu par ISIN
+    _posPick=null;
     const q=tickerInp.value.trim().toUpperCase();
     if(!q){acList.classList.add('hidden');return;}
     // ISIN detection: 12 chars, 2 letters + 10 alphanumeric
@@ -90,10 +126,10 @@ function closePosModal(){
         return;
       }
       // ISIN absent de la base locale → proposer une résolution en ligne (recherche Yahoo)
-      acList.innerHTML=`<div class="ac-item ac-empty" data-isin="${q}">
+      acList.innerHTML=`<div class="ac-item ac-empty" data-search="${q}">
         <span class="ac-tick">🔍</span>
-        <span class="ac-name">Résoudre l'ISIN « ${q} » en ligne</span>
-        <span class="ac-sub">ticker + nom + devise auto</span>
+        <span class="ac-name">Chercher l'ISIN « ${q} » en ligne</span>
+        <span class="ac-sub">places, devises, cours</span>
       </div>`;
       acList.classList.remove('hidden');
       return;
@@ -103,10 +139,10 @@ function closePosModal(){
     ).slice(0,6);
     if(!matches.length){
       const safe=q.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-      acList.innerHTML=`<div class="ac-item ac-empty" data-manual="1">
+      acList.innerHTML=`<div class="ac-item ac-empty" data-search="${safe}">
         <span class="ac-tick">🔍</span>
-        <span class="ac-name">Rechercher « ${safe} » en ligne</span>
-        <span class="ac-sub">nom + devise auto</span>
+        <span class="ac-name">Chercher « ${safe} » en ligne</span>
+        <span class="ac-sub">bourse et cryptos</span>
       </div>`;
       acList.classList.remove('hidden');
       return;
@@ -117,29 +153,24 @@ function closePosModal(){
         <span class="ac-name">${db.name}</span>
         <span class="ac-sub">${db.type} · ${db.currency}</span>
       </div>`
-    ).join('');
+    ).join('')+`<div class="ac-item ac-empty" data-search="${q.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}">
+        <span class="ac-tick">🔍</span><span class="ac-name">Autre cotation : chercher en ligne</span><span class="ac-sub">bourse et cryptos</span></div>`;
     acList.classList.remove('hidden');
   });
   acList.addEventListener('click',e=>{
     const item=e.target.closest('.ac-item');
     if(!item) return;
-    if(item.dataset.isin){
-      acList.classList.add('hidden');
-      resolveIsinAndFill(item.dataset.isin);
-      document.getElementById('pos-name').focus();
-      return;
-    }
-    if(item.dataset.manual){
-      acList.classList.add('hidden');
-      resolveAndFill(tickerInp.value.trim().toUpperCase());
-      document.getElementById('pos-name').focus();
-      return;
-    }
+    if(item.dataset.search){ searchOnline(item.dataset.search); return; }
+    if(item.dataset.cand){ const c=_acCands[+item.dataset.cand]; if(c) pickCandidate(c); return; }
+    if(!item.dataset.ticker) return;
     tickerInp.value=item.dataset.ticker;
     fillFromDB(item.dataset.ticker);
   });
-  tickerInp.addEventListener('blur',()=>setTimeout(()=>acList.classList.add('hidden'),200));
+  // La liste reste ouverte pendant une recherche ou quand elle montre des cotations à choisir
+  tickerInp.addEventListener('blur',()=>setTimeout(()=>{ if(!_acBusy && !acList.querySelector('.ac-cand')) acList.classList.add('hidden'); },200));
   tickerInp.addEventListener('change',()=>{
+    // Cotation choisie, recherche en cours, ou liste encore ouverte (l'utilisateur la touche) : pas de résolution automatique
+    if(_posPick || _acBusy || !acList.classList.contains('hidden')) return;
     const tk=tickerInp.value.trim().toUpperCase();
     if(/^[A-Z]{2}[A-Z0-9]{10}$/.test(tk)){
       const entry=ISIN_MAP[tk];
@@ -173,9 +204,13 @@ document.getElementById('pos-submit').addEventListener('click',()=>{
   const newH={id:hid,ticker,name,quantity:qty,avgBuyPrice:pru,currentPrice:pru,
     type,country,sector,currency,
     ...(_posYahooSymbol && _posYahooSymbol!==ticker ? {yahooSymbol:_posYahooSymbol} : {}),
+    ...(_posPick && _posPick.ticker===ticker && _posPick.cand.price>0 ? {currentPrice:_posPick.cand.price, priceAt:Date.now(), ...(_posPick.cand.quoteAt?{quoteAt:_posPick.cand.quoteAt}:{})} : {}),
     transactions:[{date:dateVal,type:'BUY',qty,price:pru}],
     value:qty*pru,pnl:0,pnlPct:0,pnlRef:0,valueRef:+toRefCcy(qty*pru,currency).toFixed(2)};
+  // Cotation choisie en ligne : mémorisée pour toute l'app (toutes les positions de ce ticker, suivi, historiques)
+  if(_posPick && _posPick.ticker===ticker) symbolSet(ticker, symbolEntry(_posPick.cand));
   acc.holdings.push(newH);
+  recalcHolding(newH);
   acc.value=accTotal(acc);
   closePosModal();
   if(S.screen==='account'&&S.accountId===_posAccId) renderHoldsHTML(acc);

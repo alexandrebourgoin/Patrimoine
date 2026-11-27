@@ -526,6 +526,10 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .ac-sub{font-size:10px;color:var(--text2);flex-shrink:0}
 .ac-empty .ac-tick{font-size:15px;text-align:center;line-height:1}
 .ac-empty .ac-name{color:var(--text2);font-weight:600}
+.ac-place{display:block;font-size:10px;font-weight:500;color:var(--text2);overflow:hidden;text-overflow:ellipsis}
+.ac-cand .ac-name{white-space:normal}
+/* Cotations trouvées en ligne : la liste prend la largeur du formulaire (la colonne du ticker est étroite) */
+.ac-list.ac-wide{right:auto;width:calc(min(100vw, 480px) - 40px);max-height:60vh;overflow-y:auto}
 
 /* ─── EDIT / DELETE TRANSACTION ─── */
 .tx-edit-btn,.tx-del-btn{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s}

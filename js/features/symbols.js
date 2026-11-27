@@ -44,19 +44,24 @@ function symbolQuery(h) {
 }
 
 // ── Analyse des réponses ──
-// Recherche Yahoo (v1 search) + cours (v7 quote) → candidats { kind:'yahoo', id, name, place, currency, price }
+// Type de position de l'app selon le type de cotation Yahoo (fonds → ETF, le plus proche)
+const YAHOO_TYPES = { EQUITY: 'Action', ETF: 'ETF', MUTUALFUND: 'ETF', INDEX: 'ETF', BOND: 'Obligation' };
+// Recherche Yahoo (v1 search) + cours (v7 quote) → candidats
+// { kind:'yahoo', id, ticker (sans la place : 3CP.F → 3CP), type, name, place, currency, price, quoteAt }
 function yahooCandidates(search, quotes) {
   const q = new Map(((quotes?.quoteResponse?.result) || []).map(r => [r.symbol, r]));
   return ((search?.quotes) || [])
     .filter(x => x.symbol && ['EQUITY', 'ETF', 'MUTUALFUND', 'INDEX', 'BOND'].includes(x.quoteType))
     .map(x => {
       const r = q.get(x.symbol) || {};
-      return { kind: 'yahoo', id: x.symbol, name: r.longName || r.shortName || x.longname || x.shortname || x.symbol,
+      return { kind: 'yahoo', id: x.symbol, ticker: x.symbol.split('.')[0].toUpperCase(), type: YAHOO_TYPES[x.quoteType] || 'Action',
+        name: r.longName || r.shortName || x.longname || x.shortname || x.symbol,
         place: r.fullExchangeName || x.exchDisp || x.exchange || '', currency: (r.currency || '').toUpperCase(),
-        price: typeof r.regularMarketPrice === 'number' ? r.regularMarketPrice : null };
+        price: typeof r.regularMarketPrice === 'number' ? r.regularMarketPrice : null,
+        quoteAt: typeof r.regularMarketTime === 'number' ? r.regularMarketTime * 1000 : null };
     });
 }
-// Recherche CoinGecko + cours → candidats { kind:'cg', id, name, place:'Crypto · rang N', currency:'USD', price }
+// Recherche CoinGecko + cours → candidats { kind:'cg', id, ticker, type:'Crypto', name, place:'Crypto · rang N', currency:'USD', price, quoteAt }
 // Le symbole exact (AAVE) passe en tête, puis par capitalisation.
 function cgCandidates(search, prices, symbol) {
   const want = String(symbol || '').toLowerCase();
@@ -64,9 +69,10 @@ function cgCandidates(search, prices, symbol) {
     .sort((a, b) => ((b.symbol || '').toLowerCase() === want) - ((a.symbol || '').toLowerCase() === want)
       || (a.market_cap_rank ?? 1e9) - (b.market_cap_rank ?? 1e9))
     .slice(0, 6)
-    .map(c => ({ kind: 'cg', id: c.id, name: `${c.name} (${String(c.symbol || '').toUpperCase()})`,
+    .map(c => ({ kind: 'cg', id: c.id, ticker: String(c.symbol || '').toUpperCase(), type: 'Crypto', name: `${c.name} (${String(c.symbol || '').toUpperCase()})`,
       place: c.market_cap_rank ? `Crypto · rang ${c.market_cap_rank}` : 'Crypto', currency: 'USD',
-      price: typeof prices?.[c.id]?.usd === 'number' ? prices[c.id].usd : null }));
+      price: typeof prices?.[c.id]?.usd === 'number' ? prices[c.id].usd : null,
+      quoteAt: typeof prices?.[c.id]?.last_updated_at === 'number' ? prices[c.id].last_updated_at * 1000 : null }));
 }
 
 // ── Recherches réseau (dépend, À L'APPEL, de PROXY_URL) ──
@@ -81,7 +87,7 @@ async function symbolSearch(query, crypto) {
     let p = {};
     if (ids.length) {
       try {
-        const r2 = await fetch('https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&ids=' + ids.map(encodeURIComponent).join(','), { signal: AbortSignal.timeout(10000) });
+        const r2 = await fetch('https://api.coingecko.com/api/v3/simple/price?vs_currencies=usd&include_last_updated_at=true&ids=' + ids.map(encodeURIComponent).join(','), { signal: AbortSignal.timeout(10000) });
         if (r2.ok) p = await r2.json();
       } catch (e) {}
     }
@@ -99,4 +105,15 @@ async function symbolSearch(query, crypto) {
     } catch (e) {}
   }
   return yahooCandidates(s, qs);
+}
+// Ajout d'une position : bourse et cryptos interrogées ensemble (une source en panne n'empêche pas l'autre)
+async function symbolSearchAll(query) {
+  const [y, c] = await Promise.allSettled([symbolSearch(query, false), symbolSearch(query, true)]);
+  const ok = [y, c].filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+  if (!ok.length && y.status === 'rejected' && c.status === 'rejected') throw y.reason;
+  return ok;
+}
+// Entrée mémorisée pour un candidat choisi (symbolSet)
+function symbolEntry(c) {
+  return c.kind === 'cg' ? { cg: c.id, label: c.name } : { yahoo: c.id, label: [c.id, c.place, c.currency].filter(Boolean).join(' · ') };
 }

@@ -122,7 +122,7 @@ async function symbolSheetSearch() {
 async function symbolSheetPick(id) {
   const ref = _sym; if (!ref) return;
   const c = ref.results.find(x => x.id === id); if (!c) return;
-  symbolSet(ref.ticker, c.kind === 'cg' ? { cg: c.id, label: c.name } : { yahoo: c.id, label: [c.id, c.place, c.currency].filter(Boolean).join(' · ') });
+  symbolSet(ref.ticker, symbolEntry(c));
   // Une cotation choisie remplace un cours saisi à la main, partout
   _symHoldings(ref.ticker).forEach(h => { delete h.manualPrice; });
   saveAccounts();
