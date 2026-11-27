@@ -5,10 +5,10 @@ import { loadClassic } from '../helpers/load-classic.js';
 const R = loadClassic('js/features/account-rules.js', {
   exports: ['ACCOUNT_TYPES', 'accTypeRetired', 'accRetiredHint', 'accToReclassify', 'accApplyTypeChange'],
 });
-const RETIRED = ['SCPI / Immobilier', 'Métaux précieux', 'Compte à terme', 'Compte courant'];
+const RETIRED = ['SCPI / Immobilier', 'Métaux précieux', 'Compte à terme'];
 
 describe('types retirés', () => {
-  it('les quatre types retirés et une saisie libre ne sont plus proposés', () => {
+  it('les trois types retirés et une saisie libre ne sont plus proposés', () => {
     [...RETIRED, 'Tontine familiale'].forEach(t => expect(R.accTypeRetired(t), t).toBe(true));
   });
   it('un type de la liste ou un type vide ne sont pas « retirés »', () => {
@@ -17,7 +17,7 @@ describe('types retirés', () => {
     expect(R.accTypeRetired(undefined)).toBe(false);
   });
   it('un conseil adapté par famille de type, un conseil générique sinon', () => {
-    expect(R.accRetiredHint('Compte courant')).toMatch(/livret/);
+    expect(R.accRetiredHint('Compte courant')).toMatch(/plus proche/);
     expect(R.accRetiredHint('Compte à terme')).toMatch(/Liquidités/);
     expect(R.accRetiredHint('SCPI / Immobilier')).toMatch(/Immobilier/);
     expect(R.accRetiredHint('Métaux précieux')).toMatch(/Autres/);
@@ -27,10 +27,10 @@ describe('types retirés', () => {
 
 describe('comptes à reclasser', () => {
   const accs = [
-    { id: 'a', type: 'Compte courant' },
+    { id: 'a', type: 'Tontine familiale' },
     { id: 'b', type: 'Livret A' },
     { id: 'c', type: 'SCPI / Immobilier', keepType: 'SCPI / Immobilier' },   // gardé volontairement
-    { id: 'd', type: 'Métaux précieux', keepType: 'Compte courant' },        // gardé pour un AUTRE type : redemandé
+    { id: 'd', type: 'Métaux précieux', keepType: 'Tontine familiale' },        // gardé pour un AUTRE type : redemandé
     null,
   ];
   it('liste les comptes à type retiré non gardé', () => expect(R.accToReclassify(accs).map(a => a.id)).toEqual(['a', 'd']));
@@ -50,8 +50,8 @@ describe('changement de type', () => {
     expect(acc).toEqual({ type: 'Assurance-Vie' });
   });
   it('même type : rien ne change', () => {
-    const acc = { type: 'Compte courant', keepType: 'Compte courant' };
-    R.accApplyTypeChange(acc, 'Compte courant');
-    expect(acc).toEqual({ type: 'Compte courant', keepType: 'Compte courant' });
+    const acc = { type: 'Tontine familiale', keepType: 'Tontine familiale' };
+    R.accApplyTypeChange(acc, 'Tontine familiale');
+    expect(acc).toEqual({ type: 'Tontine familiale', keepType: 'Tontine familiale' });
   });
 });

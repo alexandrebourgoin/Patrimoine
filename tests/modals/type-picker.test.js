@@ -19,7 +19,7 @@ describe('choix du type de compte', () => {
   it('sections colorées, nom court et précision, coche sur le type choisi', () => {
     const html = T.typePickerHTML("Plan d'Épargne en Actions (PEA)");
     expect([...html.matchAll(/class="tp-head tp-(\w+)"><span class="tp-dot"><\/span>([^<]+)/g)].map(m => [m[1], m[2]]))
-      .toEqual([['bourse', 'Bourse et crypto'], ['retraite', 'Assurance-vie et retraite'], ['livret', 'Livrets et épargne logement']]);
+      .toEqual([['bourse', 'Bourse et crypto'], ['retraite', 'Assurance-vie et retraite'], ['livret', 'Livrets et comptes courants']]);
     expect((html.match(/data-type=/g) || []).length).toBe(R.ACCOUNT_TYPES.length);
     expect(html).toMatch(/class="tp-row tp-bourse on" data-type="Plan d&#39;|class="tp-row tp-bourse on" data-type="Plan d'/);
     expect((html.match(/tp-check/g) || []).length).toBe(1);

@@ -2,6 +2,10 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.115': [
+    { type:'fix', text:"Modification d'un compte : la fenêtre de choix du type s'ouvrait derrière la fenêtre de modification, impossible de sélectionner un type." },
+    { type:'new', text:"Nouveau type de compte : « Compte courant » (solde, versements, retraits, intérêts ; compte joint possible)." },
+  ],
   '1.11.114': [
     { type:'new', text:"Sauvegarde complète (Réglages) : tous les modules, dans le dossier de votre choix, restauration d'un fichier et rappel si la dernière sauvegarde a plus de 10 jours. Date de la dernière sauvegarde dans le menu ☰." },
     { type:'new', text:"Accueil : camembert des grandes classes d'actifs (dont « Fonds euros », distincte de la Bourse), lignes cliquables (Comptes, Immobilier, Crédits) et bloc « À surveiller » : alertes, ordres, échéances, sauvegarde, positions non synchronisées, jalons fiscaux." },
