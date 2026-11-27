@@ -462,6 +462,15 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .form-submit:active{opacity:.8}
 
 /* ─── CONFIRM DIALOG ─── */
+/* Trouver le cours d'un titre (js/screens/stale.js) */
+#sym-manual-box.hidden{display:none}
+.sym-res{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-bottom:8px;padding:10px 14px;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.sym-res:active{background:var(--card2)}
+.sym-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sym-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sym-sub{font-size:12px;color:var(--text2)}
+.sym-warn{font-size:11px;font-weight:700;color:var(--warn,#b45309)}
+.sym-price{font-size:13px;font-weight:700;flex-shrink:0}
 .confirm-sheet{position:fixed;bottom:0;left:50%;transform:translateX(-50%) translateY(110%);width:100%;max-width:480px;background:var(--surface);border-radius:20px 20px 0 0;z-index:212;transition:transform .28s cubic-bezier(.4,0,.2,1);padding-bottom:max(20px,env(safe-area-inset-bottom))}
 .confirm-sheet.show{transform:translateX(-50%) translateY(0)}
 .confirm-msg{font-size:16px;font-weight:700;letter-spacing:-.3px;text-align:center;padding:22px 24px 18px;color:var(--text)}
