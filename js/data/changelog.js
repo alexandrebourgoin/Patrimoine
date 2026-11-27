@@ -2,6 +2,9 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.116': [
+    { type:'fix', text:"Réglages : les pastilles de thème ont toutes la même taille." },
+  ],
   '1.11.115': [
     { type:'fix', text:"Modification d'un compte : la fenêtre de choix du type s'ouvrait derrière la fenêtre de modification, impossible de sélectionner un type." },
     { type:'new', text:"Nouveau type de compte : « Compte courant » (solde, versements, retraits, intérêts ; compte joint possible)." },

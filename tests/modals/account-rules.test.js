@@ -75,11 +75,12 @@ describe('modale de compte : devise et type', () => {
     chooseType('acc-type', CTO);
     expect(dom.els['acc-currency']).toMatchObject({ value: 'EUR', disabled: false, title: '' });
   });
-  it('création : types regroupés par catégorie, sans « Autre… » ni SCPI / métaux / compte courant / compte à terme', () => {
+  it('création : types regroupés par catégorie, sans « Autre… » ni SCPI / métaux / compte à terme, avec « Compte courant »', () => {
     setup(); api.openAccModal();
     const html = dom.els['acc-type'].innerHTML;
     expect([...html.matchAll(/<optgroup label="([^"]+)">/g)].map(m => m[1])).toEqual(['Bourse et crypto', 'Assurance-vie et retraite', 'Livrets et comptes courants']);
-    for (const gone of ['Autre…', 'SCPI', 'Métaux', 'Compte courant', 'Compte à terme']) expect(html.includes(gone)).toBe(false);
+    for (const gone of ['Autre…', 'SCPI', 'Métaux', 'Compte à terme']) expect(html.includes(gone)).toBe(false);
+    expect(html.includes('Compte courant')).toBe(true);
     expect(html.indexOf('LDDS')).toBeGreaterThan(html.indexOf('Épargne disponible'));
   });
   it('modification d un compte d un type retiré : son type est conservé dans « Type actuel »', () => {

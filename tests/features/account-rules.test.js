@@ -126,11 +126,12 @@ describe('assetTypeOptions : liste des types d\'actifs d\'un formulaire', () => 
 
 describe('compte joint, nombre de comptes, nom proposé', () => {
   const R2 = loadClassic('js/features/account-rules.js', { exports: ['accJointAllowed', 'accTypeLimitError', 'accTypeLimitProblems', 'accDefaultName', 'ACC_JOINT_TYPES'] });
-  it('détention à plusieurs : compte-titres et assurance-vie seulement (types anciens : autorisé)', () => {
-    expect(R2.ACC_JOINT_TYPES).toEqual([CTO, 'Assurance-Vie']);
+  it('détention à plusieurs : compte-titres, assurance-vie et compte courant seulement (types anciens : autorisé)', () => {
+    expect(R2.ACC_JOINT_TYPES).toEqual([CTO, 'Assurance-Vie', 'Compte courant']);
     for (const t of [PEA, 'PEA-PME', 'Livret A', 'LDDS', 'LEP', 'Livret Jeune', 'PEL / CEL', "Plan d'Épargne Retraite (PER)", 'Épargne salariale (PEE / PERCO)', 'Pilier 3a', 'Crypto / Exchange'])
       expect(R2.accJointAllowed(t), t).toBe(false);
     expect(R2.accJointAllowed('Compte courant')).toBe(true);
+    expect(R2.accJointAllowed('Tontine familiale')).toBe(true);
   });
   it('un PEA, un PEA-PME, un Livret A, un LDDS, un LEP, un Livret Jeune ; PEL / CEL : deux ; compte modifié et observateurs exclus', () => {
     const accs = [{ id: 'a', type: 'Livret A' }, { id: 'b', type: 'PEL / CEL' }, { id: 'o', type: PEA, observer: true }];
