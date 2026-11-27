@@ -2,6 +2,9 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.119': [
+    { type:'new', text:"Nouveau type de compte : « Compte épargne Suisse » (solde, taux, versements, retraits, intérêts ; CHF proposé par défaut, compte joint possible)." },
+  ],
   '1.11.118': [
     { type:'fix', text:"Réglages : pastille de couleur et nom du thème alignés à gauche." },
   ],

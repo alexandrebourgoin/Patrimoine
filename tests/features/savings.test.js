@@ -62,6 +62,17 @@ describe('livrets : plafond de versements', () => {
     expect(SV.savingsDepositError(livret('Compte courant', [cf('DEP', 1e6)]), 1e6)).toBe('');
     expect(SV.savingsDepositError(livret("Plan d'Épargne en Actions (PEA)", [cf('DEP', 150000)]), 1)).toBe('');
   });
+  it('compte courant et épargne suisse : traités comme des comptes de solde (sans titres), sans plafond ni taux proposé', () => {
+    ['Compte courant', 'Compte épargne Suisse'].forEach(t => {
+      expect(SV.SAVINGS_TYPES, t).toContain(t);
+      expect(SV.isSavingsAccount(livret(t)), t).toBe(true);
+      expect(SV.savingsView(livret(t)), t).toBe(true);
+      expect(SV.savingsCeiling(t), t).toBe(null);
+      expect(SV.SAVINGS_RATES[t], t).toBeUndefined();
+      expect(SV.savingsDepositError(livret(t, [cf('DEP', 1e6)]), 1e6), t).toBe('');
+      expect(SV.savingsOpeningFlows(t, 2000), t).toEqual([{ type: 'DEP', amount: 2000 }]);
+    });
+  });
   it('création avec un solde : au-delà du plafond, la différence est comptée comme intérêts', () => {
     expect(SV.savingsOpeningFlows('LDDS', 12500)).toEqual([{ type: 'DEP', amount: 12000 }, { type: 'INT', amount: 500 }]);
     expect(SV.savingsOpeningFlows('Livret A', 5000)).toEqual([{ type: 'DEP', amount: 5000 }]);

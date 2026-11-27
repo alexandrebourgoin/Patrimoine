@@ -36,7 +36,7 @@ function wealthBreakdown(accounts, properties, today, credits = []) {
 // liquidités) va dans sa classe : le cash d'un PEA reste dans la Bourse.
 function accPocket(acc) {
   const t = (acc.type || '').toLowerCase();
-  if (/\b(livret|ldds|lep|pel|cel)\b|courant|à terme/.test(t)) return 'Liquidités';
+  if (/\b(livret|ldds|lep|pel|cel)\b|courant|à terme|épargne suisse/.test(t)) return 'Liquidités';
   if (/crypto/.test(t)) return 'Crypto';
   if (/scpi|immo/.test(t)) return 'Immobilier';
   if (/métaux|metaux/.test(t)) return 'Autres';

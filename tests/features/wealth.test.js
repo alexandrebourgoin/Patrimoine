@@ -52,7 +52,7 @@ describe('wealthBreakdown', () => {
 
 describe('accPocket (grande classe d\'un compte)', () => {
   it.each([
-    ['Livret A', 'Liquidités'], ['Compte courant', 'Liquidités'], ['Compte à terme', 'Liquidités'], ['LDDS', 'Liquidités'],
+    ['Livret A', 'Liquidités'], ['Compte courant', 'Liquidités'], ['Compte épargne Suisse', 'Liquidités'], ['Compte à terme', 'Liquidités'], ['LDDS', 'Liquidités'],
     ['Plan d\'Épargne en Actions (PEA)', 'Bourse'], ['Compte-Titres Ordinaire', 'Bourse'], ['Assurance-vie', 'Bourse'],
     ['PER', 'Bourse'], ['Pilier 3a', 'Bourse'], ['Plan d\'épargne retraite', 'Bourse'],
     ['Crypto', 'Crypto'], ['SCPI / Immobilier', 'Immobilier'], ['Métaux précieux', 'Autres'], ['Divers', 'Autres'], ['', 'Autres'],

@@ -10,7 +10,7 @@
 const ACCOUNT_TYPE_GROUPS = [
   { label: 'Bourse et crypto', tone: 'bourse', types: ["Compte-Titres Ordinaire", "Plan d'Épargne en Actions (PEA)", "PEA-PME", "Crypto / Exchange"] },
   { label: 'Assurance-vie et retraite', tone: 'retraite', types: ["Assurance-Vie", "Plan d'Épargne Retraite (PER)", "Épargne salariale (PEE / PERCO)", "Pilier 3a"] },
-  { label: 'Livrets et comptes courants', tone: 'livret', types: ["Compte courant", "Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
+  { label: 'Livrets et comptes courants', tone: 'livret', types: ["Compte courant", "Compte épargne Suisse", "Livret A", "LDDS", "LEP", "Livret Jeune", "PEL / CEL"] },
 ];
 // Affichage du choix du type : nom court, abréviation de la pastille, précision sous le nom
 // (pour les livrets réglementés, la précision est le taux en vigueur : SAVINGS_RATES, js/features/savings.js).
@@ -24,6 +24,7 @@ const ACCOUNT_TYPE_INFO = {
   "Épargne salariale (PEE / PERCO)": { short: 'PEE / PERCO', abbr: 'PEE', sub: 'Épargne salariale' },
   "Pilier 3a": { short: 'Pilier 3a', abbr: '3a', sub: 'Prévoyance suisse' },
   "Compte courant": { short: 'Compte courant', abbr: 'CC', sub: 'Compte de dépôt, solde et mouvements' },
+  "Compte épargne Suisse": { short: 'Épargne Suisse', abbr: 'CH', sub: "Compte d'épargne en Suisse, en CHF" },
   "Livret A": { short: 'Livret A', abbr: 'A', sub: 'Livret réglementé' },
   "LDDS": { short: 'LDDS', abbr: 'DD', sub: 'Livret de développement durable et solidaire' },
   "LEP": { short: 'LEP', abbr: 'LEP', sub: "Livret d'épargne populaire" },
@@ -60,7 +61,7 @@ function accApplyTypeChange(acc, newType) {
 // le permettent. PEA, PEA-PME, livrets réglementés, PEL / CEL, PER, épargne salariale, Pilier 3a : un seul titulaire
 // (economie.gouv.fr « compte individuel, joint ou indivis » ; BOFiP : « le PEA ne peut avoir qu'un titulaire »), vérifié le 26/11/2026.
 // Un type hors liste (données anciennes) garde la possibilité.
-const ACC_JOINT_TYPES = ["Compte-Titres Ordinaire", "Assurance-Vie", "Compte courant"];
+const ACC_JOINT_TYPES = ["Compte-Titres Ordinaire", "Assurance-Vie", "Compte courant", "Compte épargne Suisse"];
 function accJointAllowed(type) { return !ACCOUNT_TYPES.includes(type) || ACC_JOINT_TYPES.includes(type); }
 
 // Nombre maximal de comptes d'un type par personne (comptes observés exclus : ils suivent le compte de quelqu'un d'autre).
@@ -86,7 +87,7 @@ function accTypeLimitProblems(accounts) {
 const ACC_DEFAULT_NAMES = {
   "Compte-Titres Ordinaire": 'Compte-titres', "Plan d'Épargne en Actions (PEA)": 'PEA', "PEA-PME": 'PEA-PME', "Crypto / Exchange": 'Crypto',
   "Assurance-Vie": 'Assurance-vie', "Plan d'Épargne Retraite (PER)": 'PER', "Épargne salariale (PEE / PERCO)": 'Épargne salariale', "Pilier 3a": '3e pilier',
-  "Compte courant": 'Compte courant', "Livret A": 'Livret A', "LDDS": 'LDDS', "LEP": 'LEP', "Livret Jeune": 'Livret Jeune', "PEL / CEL": 'PEL / CEL',
+  "Compte courant": 'Compte courant', "Compte épargne Suisse": 'Épargne Suisse', "Livret A": 'Livret A', "LDDS": 'LDDS', "LEP": 'LEP', "Livret Jeune": 'Livret Jeune', "PEL / CEL": 'PEL / CEL',
 };
 function accDefaultName(type, bank, accounts) {
   const base = [ACC_DEFAULT_NAMES[type] || type || 'Compte', String(bank || '').trim()].filter(Boolean).join(' ');
@@ -111,6 +112,7 @@ const ACC_TYPE_CCY = {
   "Assurance-Vie": ['EUR', false],
   "Compte-Titres Ordinaire": ['EUR', false],
   "Compte courant": ['EUR', false],
+  "Compte épargne Suisse": ['CHF', false],
 };
 
 // Types d'actifs acceptés par type de compte. Absent = aucune restriction.
@@ -125,7 +127,7 @@ const ACC_ASSET_TYPES = {
   "Épargne salariale (PEE / PERCO)": _ACC_MARKET_ASSETS,
   "Pilier 3a": _ACC_MARKET_ASSETS,
   // Livrets et comptes d'épargne : un solde et un taux, aucun titre (voir js/features/savings.js)
-  "Compte courant": [],   "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [],
+  "Compte courant": [], "Compte épargne Suisse": [], "Livret A": [], "LDDS": [], "LEP": [], "Livret Jeune": [], "PEL / CEL": [],
 };
 // Comptes dont les actions doivent appartenir à l'Espace économique européen
 const ACC_PEA_TYPES = ["Plan d'Épargne en Actions (PEA)", "PEA-PME"];
