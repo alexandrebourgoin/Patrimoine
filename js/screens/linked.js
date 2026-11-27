@@ -38,6 +38,10 @@ function bindLinkedAccount(el, acc) {
 // Compte existant (accId) : directement la clé, avec synchro et suppression de la clé.
 let _ls = { accId: null, svcId: null };
 let _accLink = null;   // { svcId, keys } choisi dans la création de compte
+// Une seule fenêtre à la fois : ouverte depuis la création de compte, la fenêtre remplace la fiche le temps du choix,
+// puis la fiche revient telle quelle (valeurs saisies conservées), au choix comme à l'annulation.
+const _LS_PARENTS = ['acc-modal-sheet', 'acc-modal-bg'];
+let _lsHidden = [];
 
 function _lsShow(on) {
   document.getElementById('ls-bg').classList.toggle('show', on);
@@ -85,9 +89,17 @@ function _lsRender() {
 function openLinkedSheet({ accId = null, svcId = null } = {}) {
   const acc = accId && S.accounts.find(a => a.id === accId);
   _ls = { accId: acc ? acc.id : null, svcId: acc ? acc.sync.provider : svcId };
-  _lsRender(); _lsShow(true);
+  _lsRender();
+  _lsHidden = acc ? [] : _LS_PARENTS.map(id => document.getElementById(id)).filter(el => el && el.classList.contains('show'));
+  _lsHidden.forEach(el => el.classList.remove('show'));
+  const sheet = document.getElementById('ls-sheet'); if (sheet) sheet.scrollTop = 0;
+  _lsShow(true);
 }
-function closeLinkedSheet() { _lsShow(false); _ls = { accId: null, svcId: null }; }
+function closeLinkedSheet() {
+  _lsShow(false); _ls = { accId: null, svcId: null };
+  _lsHidden.forEach(el => el.classList.add('show'));   // la fiche de création revient
+  _lsHidden = [];
+}
 
 // Valider : création → choix gardé en attente ; compte existant → test puis enregistrement de la clé
 async function submitLinkedSheet() {
