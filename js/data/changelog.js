@@ -2,6 +2,9 @@
 // La clé doit correspondre à APP_VERSION (mon-patrimoine.js). Sans entrée pour la version courante, aucun popup.
 
 const CHANGELOG = {
+  '1.11.118': [
+    { type:'fix', text:"Réglages : pastille de couleur et nom du thème alignés à gauche." },
+  ],
   '1.11.117': [
     { type:'fix', text:"Réglages : pastilles de thème plus grandes (2 par ligne), le nom ne dépasse plus." },
   ],
