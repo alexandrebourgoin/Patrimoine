@@ -388,6 +388,9 @@ async function fetchFxRates() {
   }
 }
 
+// Liste de symboles pour une URL : chacun encodé (^FCHI, EURUSD=X, BRK.B…), séparés par des virgules
+function symbolsParam(list) { return (list || []).map(encodeURIComponent).join(','); }
+
 async function fetchLivePrices() {
   if (_fetching) return;
   _fetching = true;
@@ -439,7 +442,7 @@ async function fetchLivePrices() {
 
     // Proxy Cloudflare (Yahoo Finance sans CORS)
     try {
-      const url = PROXY_URL + '?symbols=' + yahooSymbols.join(',');
+      const url = PROXY_URL + '?symbols=' + symbolsParam(yahooSymbols);
       const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
       dbgLog(r.ok?'[OK]':'[WRN]', `Proxy status=${r.status}`);
       if (r.ok) { yResults = parseV7(await r.json()); dbgLog('[OK]', `Proxy résultats=${yResults.length}`); }
@@ -450,7 +453,7 @@ async function fetchLivePrices() {
       try {
         dbgLog('[INF]', `FMP fallback → ${yahooSymbols.join(',')}`);
         const r = await fetch(
-          `https://financialmodelingprep.com/api/v3/quote/${yahooSymbols.join(',')}?apikey=${encodeURIComponent(S.fmpApiKey)}`,
+          `https://financialmodelingprep.com/api/v3/quote/${symbolsParam(yahooSymbols)}?apikey=${encodeURIComponent(S.fmpApiKey)}`,
           { signal: AbortSignal.timeout(10000) }
         );
         dbgLog(r.ok?'[OK]':'[WRN]', `FMP status=${r.status}`);
