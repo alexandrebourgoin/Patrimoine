@@ -28,11 +28,11 @@ function linkedKeysSave(accId, keys, storage = localStorage) {
   const all = linkedKeysAll(storage), clean = {};
   Object.entries(keys || {}).forEach(([k, v]) => { clean[k] = String(v || '').trim(); });
   all[accId] = clean;
-  storage.setItem(LINKED_KEYS_STORE, JSON.stringify(all));
+  storage.setItem(LINKED_KEYS_STORE, JSON.stringify(all));   // hors sauvegarde : clés d'API (secrets), jamais exportées
 }
 function linkedKeysDelete(accId, storage = localStorage) {
   const all = linkedKeysAll(storage); delete all[accId];
-  storage.setItem(LINKED_KEYS_STORE, JSON.stringify(all));
+  storage.setItem(LINKED_KEYS_STORE, JSON.stringify(all));   // hors sauvegarde : clés d'API (secrets), jamais exportées
 }
 // Clé affichée masquée : 4 premiers et 4 derniers caractères
 function linkedMask(k) { k = String(k || ''); return k.length > 10 ? k.slice(0, 4) + '…' + k.slice(-4) : (k ? '••••' : ''); }
