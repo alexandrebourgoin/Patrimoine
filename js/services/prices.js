@@ -396,13 +396,17 @@ async function fetchLivePrices() {
   const btnSvg = document.querySelector('#js-refresh-btn svg');
   if (btnSvg) btnSvg.classList.add('spin');
 
-  const allH = S.accounts.flatMap(a => a.holdings).filter(h => !isManualPrice(h));   // cours saisis à la main : jamais écrasés
+  const allH = S.accounts.flatMap(a => a.holdings).filter(h => !priceLocked(h));   // cours saisis à la main ou synchronisés : jamais écrasés
+  const linked = S.accounts.some(a => a.sync);   // comptes liés à un service (js/services/linked.js)
   // Watchlist seule = toujours rafraîchie (l'ancien return coupait aussi watchlist + FX)
-  if (!allH.length && !S.watchlist.length) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
+  if (!allH.length && !S.watchlist.length && !linked) { _fetching=false; if(btnSvg) btnSvg.classList.remove('spin'); return; }
   try {
 
   // Taux de change live (avant recalcHolding pour que valueRef soit correct)
   await fetchFxRates();
+
+  // Comptes liés : solde et positions relus chez le fournisseur, par le même proxy
+  const apiSync = linked ? await linkedSyncAll() : { synced: 0, failed: 0 };
 
   // Tickers uniques : comptes + watchlist (sauf crypto).
   // Fallback yahooSymbolFor → titres hors base envoyés avec leur ticker brut.
@@ -429,6 +433,7 @@ async function fetchLivePrices() {
 
   let updated = 0;
   const errors = [];
+  if (apiSync.failed) errors.push(apiSync.failed > 1 ? `${apiSync.failed} comptes liés` : 'compte lié');
   const prices = {}; // pour savePrices()
 
   // ── Proxy Cloudflare → Yahoo Finance (+ FMP en fallback) ──
@@ -526,7 +531,7 @@ async function fetchLivePrices() {
 
   // ── Finalisation ───────────────────────────────────────
   // Le log est mis à jour en live par dbgLog(), pas besoin de re-render
-  if (updated > 0) {
+  if (updated > 0 || apiSync.synced) {
     S.accounts.forEach(a=>{ a.value=accTotal(a); });
     savePrices(prices);
     snapshotWealth(); // fige la valeur totale du jour avec les cours fraîchement mis à jour
@@ -545,9 +550,9 @@ async function fetchLivePrices() {
     const total = allH.filter(h=>h.type!=='Crypto').length
                 + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
     const partial = updated < total ? ` (${updated}/${total})` : '';
-    toast(errors.length
-      ? `${updated} cours mis à jour · ⚠ ${errors.join(', ')}`
-      : `${updated} cours mis à jour ✓${partial}${partial?' · rafraîchir pour la suite':''}`);
+    const parts = [updated ? `${updated} cours mis à jour${errors.length?'':' ✓'}${partial}` : '',
+      apiSync.synced ? `${apiSync.synced} compte${apiSync.synced>1?'s':''} lié${apiSync.synced>1?'s':''} synchronisé${apiSync.synced>1?'s':''} ✓` : ''].filter(Boolean);
+    toast(parts.join(' · ') + (errors.length ? ` · ⚠ ${errors.join(', ')}` : partial ? ' · rafraîchir pour la suite' : ''));
   } else {
     toast(errors.length ? `Erreur : ${errors.join(', ')}` : 'Aucun cours trouvé');
   }
@@ -563,7 +568,7 @@ async function fetchLivePrices() {
 function applyPrices(priceData) {
   if(!priceData?.prices) return;
   S.accounts.flatMap(a=>a.holdings).forEach(h=>{
-    if(isManualPrice(h)) return;   // le cours saisi à la main fait foi
+    if(priceLocked(h)) return;   // le cours saisi à la main ou synchronisé fait foi
     const p=priceData.prices[h.ticker];
     if(p!=null){ h.currentPrice=p; recalcHolding(h); }
   });
@@ -591,8 +596,10 @@ function quoteTime(seconds) {
 }
 // Cours saisi à la main (interrupteur de la fiche « Modifier », js/modals/position.js).
 function isManualPrice(h) { return !!h && h.manualPrice === true; }
+// Cours imposé hors Yahoo / CoinGecko : saisi à la main, ou fourni par un compte synchronisé (eToro : js/services/etoro.js)
+function priceLocked(h) { return isManualPrice(h) || !!(h && h.sync); }
 function priceStale(h, now=Date.now()) {
-  if (S.isDemo || !h || isManualPrice(h) || h.type==='Cash' || !(h.quantity>0)) return false;
+  if (S.isDemo || !h || priceLocked(h) || h.type==='Cash' || !(h.quantity>0)) return false;   // compte synchronisé : suivi par sa date de synchro
   const limit = h.type==='Crypto' ? STALE_MS_CRYPTO : STALE_MS_DEFAULT;
   return !validQuoteTime(h.quoteAt, now) || (now - h.quoteAt) > limit;
 }

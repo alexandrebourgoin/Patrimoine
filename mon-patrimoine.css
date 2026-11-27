@@ -386,6 +386,11 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .hold-add-btn{width:32px;height:32px;border-radius:9px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;cursor:pointer;transition:background .15s}
 .hold-add-btn:active{background:var(--accent);color:#fff}
 .hold-add-btn svg{width:18px;height:18px;pointer-events:none}
+/* Compte lié à un service (js/screens/linked.js) : pas d'ajout ni de suppression de position */
+.acc-synced .hold-add-btn,.acc-synced .hold-del-btn{display:none!important}
+
+/* Compte lié : lien / récap de la création et étapes de la fenêtre « Mise à jour automatique » */
+#acc-link-api.hidden,#acc-link-recap.hidden,#ls-list.hidden,#ls-key.hidden,#ls-status.hidden,#ls-help.hidden,#ls-back.hidden,#ls-sync.hidden,#ls-del.hidden{display:none!important}
 .top-btn{width:36px;height:36px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0;cursor:pointer;transition:background .12s}
 .top-btn:active{background:var(--card2)}
 .assistant-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--loss);color:#fff;font-size:10px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--bg);box-sizing:border-box}

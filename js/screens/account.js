@@ -185,6 +185,7 @@ function renderAccount() {
     </div>
     <div class="acc-hero-val t-num" id="js-acc-val">${accHeroValHTML(acc)}</div>
     ${isSavingsAccount(acc)?`<div class="t-sm" style="margin-top:4px;color:var(--loss)">Ce ${esc(acc.type)} contient des titres saisis auparavant : supprime-les pour passer à l'affichage livret (solde, taux, versements).</div>`:''}
+    ${linkedChipHTML(acc)}
     ${tracked?`<div class="t-sm" style="margin-top:2px">${accNative(acc,secVal)} de titres · ${accNative(acc,cash)} de liquidités</div>`:''}${accCashDetailHTML(acc,perf)}
     ${accPerfCardHTML(acc,perf,sum)}
     ${accBenchHTML(acc,perf,sum)}
@@ -477,6 +478,7 @@ SCREEN_BIND.account = function (el, id) {
 
     const savings=savingsView(acc);
     if(acc) { if(savings) renderMovesHTML(acc); else renderHoldsHTML(acc); }
+    bindLinkedAccount(el,acc);   // compte lié à un service : lecture seule (js/screens/linked.js)
 
     el.querySelector('#js-add-hold')?.addEventListener('click',()=>openPosModal(S.accountId));
 

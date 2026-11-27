@@ -494,6 +494,30 @@
       <div class="toggle" id="acc-obs-tog"><div class="toggle-thumb"></div></div>
     </div>
     <button class="form-submit" id="acc-submit">Créer le compte</button>
+    <!-- Compte lié à un service (js/screens/linked.js) : lien discret, puis récap une fois le service choisi -->
+    <div id="acc-link-api" class="tap" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Mettre à jour via un service</div>
+    <div id="acc-link-recap" class="hidden" style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2);font-size:13px;font-weight:600"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span data-name style="flex:1"></span><span id="acc-link-edit" class="tap" style="color:var(--accent);cursor:pointer">Modifier</span><span id="acc-link-del" class="tap" style="color:var(--text3);cursor:pointer">Retirer</span></div>
+  </div>
+</div>
+
+<!-- MISE À JOUR AUTOMATIQUE : compte lié à un service (js/screens/linked.js, registre : js/services/linked.js) -->
+<div id="ls-bg" class="add-modal-bg" style="z-index:224"></div>
+<div id="ls-sheet" class="add-modal-sheet" style="z-index:225;max-height:92vh;overflow-y:auto">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:12px"><div class="modal-title" style="margin-bottom:0" id="ls-title">Mise à jour automatique</div><div id="ls-close" class="oa-x">✕</div></div>
+    <div id="ls-list"></div>
+    <div id="ls-key" class="hidden">
+      <div id="ls-status" class="t-sm hidden" style="margin-bottom:12px"></div>
+      <div class="form-row"><div class="form-field"><div class="form-label" id="ls-key-label">Clé</div><input class="form-input" id="ls-key-input" type="password" autocomplete="off" spellcheck="false"></div></div>
+      <div class="t-sm" style="display:flex;justify-content:space-between;gap:8px;margin:-4px 0 12px"><span>Lecture seule : aucun ordre possible</span><span id="ls-help-link" class="tap" style="color:var(--accent);font-weight:700;cursor:pointer;white-space:nowrap">Où la trouver ?</span></div>
+      <div id="ls-help" class="t-sm hidden" style="margin:-4px 0 12px;padding:10px 12px;border-radius:12px;background:var(--card2)"></div>
+      <div class="t-sm" id="ls-transit" style="margin:-4px 0 12px">Ta clé passe par le proxy des cours de l'application, qui la transmet au service sans la garder. Elle reste enregistrée sur cet appareil uniquement.</div>
+      <button class="form-submit" id="ls-ok">Valider</button>
+      <div id="ls-back" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer">‹ Autre service</div>
+      <div id="ls-sync" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer">Synchroniser maintenant</div>
+      <div id="ls-del" class="tap hidden" style="text-align:center;margin-top:12px;font-size:13px;font-weight:700;color:var(--loss);cursor:pointer">Supprimer la clé de cet appareil</div>
+    </div>
   </div>
 </div>
 
@@ -919,6 +943,8 @@
 <script src="js/core/back-handler.js"></script>
 <script src="js/core/app-update.js"></script>
 <script src="js/services/prices.js"></script>
+<script src="js/services/linked.js"></script>
+<script src="js/services/etoro.js"></script>
 <script src="js/services/csv-import.js"></script>
 <script src="js/features/home-watch.js"></script>
 <script src="js/features/lock.js"></script>
@@ -963,6 +989,7 @@
 <script src="js/screens/search.js"></script>
 <script src="js/screens/account.js"></script>
 <script src="js/screens/savings.js"></script>
+<script src="js/screens/linked.js"></script>
 <script src="js/screens/stock.js"></script>
 <script src="js/screens/analysis.js"></script>
 <script src="js/screens/assistant.js"></script>

@@ -149,7 +149,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=
 });
 // Auto-refresh au démarrage (uniquement si activé dans les réglages)
 if (S.autoRefresh && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000);
+  // Cours de plus de 15 min, ou compte lié à un service synchronisé il y a plus d'1 h (js/services/linked.js)
+  const _stale = !S.lastPriceUpdate || (Date.now() - S.lastPriceUpdate > 15 * 60 * 1000) || linkedDue(S.accounts).length > 0;
   if (_stale) setTimeout(fetchLivePrices, 800);
 }
 // Popup changelog si nouvelle version
