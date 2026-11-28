@@ -379,6 +379,24 @@
   </div>
 </div>
 
+<!-- TROUVER LE COURS d'un titre non synchronisé (écran Non synchro ; choix mémorisé : symbols.js) -->
+<div id="sym-bg" class="add-modal-bg"></div>
+<div id="sym-sheet" class="add-modal-sheet" style="max-height:92dvh;overflow-y:auto;overscroll-behavior:contain">
+  <div class="modal-drag"></div>
+  <div class="modal-body">
+    <div class="oa-head" style="margin-bottom:2px"><div class="modal-title" style="margin-bottom:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="sym-title">Trouver le cours</div><div id="sym-close" class="oa-x">✕</div></div>
+    <div class="t-sm" id="sym-sub" style="margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:6px"><input class="form-input" id="sym-q" type="search" autocomplete="off" spellcheck="false" placeholder="Nom, ticker ou ISIN" style="flex:1;min-width:0"><button type="button" class="form-input" id="sym-go" style="width:auto;padding:0 14px;font-weight:700;color:var(--accent);cursor:pointer">Chercher</button></div>
+    <div id="sym-list"></div>
+    <div id="sym-manual-box" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="form-label">Pas de cotation en ligne ?</div>
+      <div style="display:flex;gap:8px;align-items:stretch"><input class="form-input" id="sym-manual" type="text" inputmode="decimal" placeholder="Cours actuel" style="flex:1;min-width:0"><span class="t-sm" id="sym-manual-ccy" style="align-self:center">EUR</span><button type="button" class="form-input" id="sym-manual-ok" style="width:auto;padding:0 14px;font-weight:700;cursor:pointer">Utiliser</button></div>
+      <div class="t-sm" style="margin-top:6px">Le cours saisi s'applique à toutes les positions de ce titre ; il ne sera plus signalé.</div>
+    </div>
+    <div id="sym-open" class="tap" style="text-align:center;margin-top:14px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer">Voir la position</div>
+  </div>
+</div>
+
 <!-- FX RATES MODAL -->
 <div id="fx-modal-bg" class="add-modal-bg"></div>
 <div id="fx-modal-sheet" class="add-modal-sheet">
@@ -918,6 +936,7 @@
 <script src="js/core/shell.js"></script>
 <script src="js/core/back-handler.js"></script>
 <script src="js/core/app-update.js"></script>
+<script src="js/features/symbols.js"></script>
 <script src="js/services/prices.js"></script>
 <script src="js/services/csv-import.js"></script>
 <script src="js/features/home-watch.js"></script>

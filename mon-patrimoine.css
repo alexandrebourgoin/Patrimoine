@@ -309,6 +309,18 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .acc-hero{padding:8px 20px 18px;border-bottom:1px solid var(--border)}
 .acc-hero-val{background:linear-gradient(135deg,var(--text) 0%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:30px;font-weight:800;letter-spacing:-1px;margin:4px 0 10px}
 .ticker{width:44px;height:44px;border-radius:12px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--accent);letter-spacing:-.3px;flex-shrink:0}
+/* Trouver le cours d'un titre (js/screens/stale.js) */
+#sym-manual-box.hidden{display:none}
+.sym-res{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;margin-bottom:8px;padding:10px 14px;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.sym-res:active{background:var(--card2)}
+.sym-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sym-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sym-sub{font-size:12px;color:var(--text2)}
+.sym-warn{font-size:11px;font-weight:700;color:var(--warn,#b45309)}
+.sym-price{font-size:13px;font-weight:700;flex-shrink:0}
+.sym-src{margin-top:4px;font-size:12px;color:var(--text2)}   /* fiche du titre : source du cours */
+.sym-src.stale{color:var(--loss);font-weight:700}
+.sym-src-link{color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:2px}
 
 /* ─── STOCK DETAIL ─── */
 .stock-hero{padding:8px 20px 18px;border-bottom:1px solid var(--border)}
@@ -517,6 +529,11 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .ac-sub{font-size:10px;color:var(--text2);flex-shrink:0}
 .ac-empty .ac-tick{font-size:15px;text-align:center;line-height:1}
 .ac-empty .ac-name{color:var(--text2);font-weight:600}
+.ac-place{display:block;font-size:10px;font-weight:500;color:var(--text2);overflow:hidden;text-overflow:ellipsis}
+.ac-cand .ac-name{white-space:normal}
+/* Cotations trouvées en ligne : la liste prend la largeur du formulaire (la colonne du ticker est étroite) */
+.ac-list.ac-wide{right:auto;width:calc(min(100vw, 480px) - 40px);max-height:60vh;max-height:60dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+#pos-modal-sheet{max-height:92vh;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}   /* fiche plus haute que l'écran (petit téléphone, clavier ouvert) : elle défile */
 
 /* ─── EDIT / DELETE TRANSACTION ─── */
 .tx-edit-btn,.tx-del-btn{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .12s}

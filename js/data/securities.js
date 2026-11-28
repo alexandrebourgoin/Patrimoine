@@ -94,10 +94,18 @@ const YAHOO_MAP = {
   'SU':'SU.PA','CS':'CS.PA','CAP':'CAP.PA','HO':'HO.PA',
 };
 
-// Symbole Yahoo pour un titre : override du holding (résolution ISIN, ex. "PANX.PA") en priorité,
-// puis table explicite YAHOO_MAP, sinon le ticker brut.
-// Vrai pour la plupart des actions/ETF US cotés sans suffixe (ex: HOOD, AMD…).
-function yahooSymbolFor(ticker, override){ return override || YAHOO_MAP[ticker] || ticker; }
+// Symbole Yahoo pour un titre : symbole choisi par l'utilisateur (écran « Non synchro », js/features/symbols.js),
+// valable pour toute l'app ; puis override du holding (résolution ISIN, ex. "PANX.PA") ; puis table explicite
+// YAHOO_MAP ; sinon le ticker brut (vrai pour la plupart des actions/ETF US cotés sans suffixe : HOOD, AMD…).
+function yahooSymbolFor(ticker, override){
+  const u = typeof symbolUser === 'function' ? symbolUser(ticker) : null;
+  return (u && u.yahoo) || override || YAHOO_MAP[ticker] || ticker;
+}
+// Identifiant CoinGecko d'une crypto : choix de l'utilisateur, sinon table CG_IDS ; undefined si inconnue.
+function cgIdFor(ticker){
+  const u = typeof symbolUser === 'function' ? symbolUser(ticker) : null;
+  return (u && u.cg) || CG_IDS[ticker];
+}
 
 // ─── CoinGecko IDs (crypto uniquement) ───
 const CG_IDS = {

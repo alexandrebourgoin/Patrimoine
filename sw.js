@@ -33,6 +33,7 @@ const SHELL = [
   './js/core/shell.js',
   './js/core/back-handler.js',
   './js/core/app-update.js',
+  './js/features/symbols.js',
   './js/services/prices.js',
   './js/services/csv-import.js',
   './js/features/lock.js',

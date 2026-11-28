@@ -160,7 +160,7 @@ async function fetchTickerPrice(ticker, accId, holdingId) {
   const acc = S.accounts.find(a => a.id === accId);
   const h   = acc?.holdings.find(h => h.id === holdingId);
   const yhSym = yahooSymbolFor(ticker, h?.yahooSymbol);
-  const cgId  = CG_IDS[ticker];
+  const cgId  = cgIdFor(ticker);
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _tickerFetching=false; return; }
   if (isManualPrice(h)) { toast('Cours saisi à la main : désactivez l\'option dans « Modifier » pour l\'actualiser'); _tickerFetching=false; return; }
 
@@ -252,7 +252,7 @@ async function fetchTickerHistory(ticker, accId, holdingId) {
   const h   = acc?.holdings.find(h => h.id === holdingId);
   if (!h) return;
   const yhSym = yahooSymbolFor(ticker, h.yahooSymbol);
-  const cgId  = CG_IDS[ticker];
+  const cgId  = cgIdFor(ticker);
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
 
   _histFetching = true;
@@ -286,7 +286,7 @@ async function fetchWatchHistory(ticker) {
   const w = S.watchlist.find(w => w.ticker === ticker);
   if (!w) return;
   const yhSym = yahooSymbolFor(ticker);
-  const cgId  = CG_IDS[ticker];
+  const cgId  = cgIdFor(ticker);
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); return; }
 
   _watchHistFetching = true;
@@ -313,7 +313,7 @@ async function fetchWatchPrice(ticker) {
   if (_watchFetching) return;
   _watchFetching = true;
   const yhSym = yahooSymbolFor(ticker);
-  const cgId  = CG_IDS[ticker];
+  const cgId  = cgIdFor(ticker);
   if (!yhSym && !cgId) { toast('Ticker non reconnu'); _watchFetching=false; return; }
 
   const btn = document.querySelector('#js-watch-ticker-refresh svg');
@@ -410,7 +410,7 @@ async function fetchLivePrices() {
   // Tickers uniques : comptes + watchlist (sauf crypto).
   // Fallback yahooSymbolFor → titres hors base envoyés avec leur ticker brut.
   const watchSymbols = S.watchlist
-    .filter(w => !CG_IDS[w.ticker])           // crypto suivie → gérée par CoinGecko
+    .filter(w => !cgIdFor(w.ticker))           // crypto suivie → gérée par CoinGecko
     .map(w => yahooSymbolFor(w.ticker));
   const yahooSymbols = [...new Set([
     ...allH.filter(h=>h.type!=='Crypto').map(h=>yahooSymbolFor(h.ticker, h.yahooSymbol)),
@@ -418,17 +418,20 @@ async function fetchLivePrices() {
   ])];
   // Cryptos des comptes ET de la watchlist (une crypto suivie sans position n'était jamais rafraîchie)
   const cgIds = [...new Set([
-    ...allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]),
-    ...S.watchlist.map(w=>CG_IDS[w.ticker]),
+    ...allH.filter(h=>h.type==='Crypto').map(h=>cgIdFor(h.ticker)),
+    ...S.watchlist.map(w=>cgIdFor(w.ticker)),
   ].filter(Boolean))];
 
   // Map inverse : symbole Yahoo → ticker app
   const yahooRev = {};
   Object.entries(YAHOO_MAP).forEach(([app,yh])=>yahooRev[yh]=app);
   allH.forEach(h => { if(h.yahooSymbol) yahooRev[h.yahooSymbol]=h.ticker; }); // override par holding (résolution ISIN)
+  // Symboles choisis par l'utilisateur (js/features/symbols.js) : priment, pour toutes les positions du ticker
+  [...new Set([...allH.map(h=>h.ticker), ...S.watchlist.map(w=>w.ticker)])].forEach(t => { const u = typeof symbolUser==='function' && symbolUser(t); if (u?.yahoo) yahooRev[u.yahoo]=t; });
   // Map inverse : CoinGecko id → ticker app
   const cgRev = {};
   Object.entries(CG_IDS).forEach(([app,cg])=>cgRev[cg]=app);
+  [...new Set([...allH.map(h=>h.ticker), ...S.watchlist.map(w=>w.ticker)])].forEach(t => { const u = typeof symbolUser==='function' && symbolUser(t); if (u?.cg) cgRev[u.cg]=t; });
 
   let updated = 0;
   const errors = [];
@@ -446,6 +449,8 @@ async function fetchLivePrices() {
       const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
       dbgLog(r.ok?'[OK]':'[WRN]', `Proxy status=${r.status}`);
       if (r.ok) { yResults = parseV7(await r.json()); dbgLog('[OK]', `Proxy résultats=${yResults.length}`); }
+      // Symboles sans cours : à choisir dans « Non synchro » (Trouver le cours)
+      if (yResults) { const got = new Set(yResults.map(q => q.symbol)), miss = yahooSymbols.filter(x => !got.has(x)); if (miss.length) dbgLog('[WRN]', `Sans cours : ${miss.join(', ')}`); }
     } catch(e) { dbgLog('[ERR]', `Proxy: ${e?.message||e}`); }
 
     // Fallback FMP (si proxy en panne)
@@ -546,7 +551,7 @@ async function fetchLivePrices() {
       if (dot) dot.style.background = 'var(--gain)';
     });
     const total = allH.filter(h=>h.type!=='Crypto').length
-                + allH.filter(h=>h.type==='Crypto').map(h=>CG_IDS[h.ticker]).filter(Boolean).length;
+                + allH.filter(h=>h.type==='Crypto').map(h=>cgIdFor(h.ticker)).filter(Boolean).length;
     const partial = updated < total ? ` (${updated}/${total})` : '';
     toast(errors.length
       ? `${updated} cours mis à jour · ⚠ ${errors.join(', ')}`
