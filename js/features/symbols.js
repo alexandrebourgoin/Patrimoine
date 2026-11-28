@@ -118,6 +118,23 @@ function symbolEntry(c) {
   return c.kind === 'cg' ? { cg: c.id, label: c.name } : { yahoo: c.id, label: [c.id, c.place, c.currency].filter(Boolean).join(' · ') };
 }
 
+// Source du cours d'une position, pour la fiche du titre : { state, text, action }
+//   stale  : pas de cours à jour → « Trouver le cours » ; manual : cours saisi à la main → « Trouver une cotation » ;
+//   live   : cotation suivie (choix de l'utilisateur, sinon table de l'app) → « Changer de cotation » (autre place, autre titre du même ISIN)
+// deps injectables pour les tests : { stale(h), yahoo(ticker, override), cg(ticker), user(ticker) }
+function symbolSourceInfo(h, deps = {}) {
+  const stale = deps.stale || (x => typeof priceStale === 'function' && priceStale(x));
+  const user = deps.user || symbolUser;
+  const yahoo = deps.yahoo || ((t, o) => (typeof yahooSymbolFor === 'function' ? yahooSymbolFor(t, o) : t));
+  const cg = deps.cg || (t => (typeof cgIdFor === 'function' ? cgIdFor(t) : null));
+  if (!h || h.type === 'Cash') return null;
+  if (h.manualPrice === true) return { state: 'manual', text: 'Cours saisi à la main', action: 'Trouver une cotation' };
+  if (stale(h)) return { state: 'stale', text: 'Cours non synchronisé', action: 'Trouver le cours' };
+  const u = user(h.ticker);
+  const src = u ? (u.label || u.yahoo || u.cg) : h.type === 'Crypto' ? (cg(h.ticker) ? `${cg(h.ticker)} (CoinGecko)` : h.ticker) : yahoo(h.ticker, h.yahooSymbol);
+  return { state: 'live', text: `Cotation : ${src}`, action: 'Changer de cotation' };
+}
+
 // ── Cours saisis à la main : rappel de mise à jour ──
 // Un titre sans cotation en ligne (fonds de 3e pilier…) garde le cours saisi ; au-delà de MANUAL_PRICE_DAYS jours
 // (ou si la date de saisie est inconnue : cours saisis avant ce rappel), il est proposé à la mise à jour

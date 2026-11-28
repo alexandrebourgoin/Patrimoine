@@ -146,7 +146,7 @@ async function symbolSheetPick(id) {
   saveAccounts();
   closeSymbolSheet();
   toast(`${ref.ticker} : cotation ${c.kind === 'cg' ? c.name : c.id} retenue, actualisation…`);
-  try { await fetchLivePrices(); } finally { if (S.screen === 'stale') renderScreen('stale'); renderNav(); }
+  try { await fetchLivePrices(); } finally { if (S.screen === 'stale' || S.screen === 'stock') renderScreen(S.screen); renderNav(); }
 }
 function symbolSheetManual() {
   const ref = _sym; if (!ref) return;
@@ -159,7 +159,7 @@ function symbolSheetManual() {
   closeSymbolSheet();
   refreshMain();
   toast(`${ref.ticker} : cours saisi à la main (${fmtNative(v, ref.currency)})`);
-  if (S.screen === 'stale') renderScreen('stale');
+  if (S.screen === 'stale' || S.screen === 'stock') renderScreen(S.screen);
   renderNav();
 }
 if (typeof document !== 'undefined' && document.getElementById?.('sym-sheet')) {

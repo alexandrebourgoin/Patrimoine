@@ -1,5 +1,6 @@
 // Cotations choisies par l'utilisateur : mémorisées par ticker, valables partout, sauvegardées
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { loadClassic } from '../helpers/load-classic.js';
 
 function fakeStorage(init = {}) {
@@ -94,5 +95,30 @@ describe('le choix vaut pour toute l\'app', () => {
     expect(D.cgIdFor('AAVE')).toBeUndefined();
     S.symbolSet('AAVE', { cg: 'aave' }, st);
     expect(D.cgIdFor('AAVE')).toBe('aave');
+  });
+});
+
+describe('fiche du titre : source du cours et accès direct à « Trouver le cours »', () => {
+  const X = loadClassic('js/features/symbols.js', { globals: { localStorage: fakeStorage() }, exports: ['symbolSourceInfo'] });
+  const deps = (o = {}) => ({ stale: () => false, user: () => null, yahoo: (t, ov) => ov || t, cg: t => (t === 'BTC' ? 'bitcoin' : null), ...o });
+  it('cours non synchronisé (import CSV, titre inconnu) : « Trouver le cours »', () => {
+    expect(X.symbolSourceInfo({ ticker: '3CP', type: 'Action' }, deps({ stale: () => true }))).toEqual({ state: 'stale', text: 'Cours non synchronisé', action: 'Trouver le cours' });
+  });
+  it('cours saisi à la main : proposer une cotation', () => {
+    expect(X.symbolSourceInfo({ ticker: 'CH0429081620', type: 'Fonds', manualPrice: true }, deps({ stale: () => true })).action).toBe('Trouver une cotation');
+  });
+  it('titre synchronisé : cotation affichée et « Changer de cotation »', () => {
+    expect(X.symbolSourceInfo({ ticker: 'AI', type: 'Action', yahooSymbol: 'AI.PA' }, deps())).toEqual({ state: 'live', text: 'Cotation : AI.PA', action: 'Changer de cotation' });
+    expect(X.symbolSourceInfo({ ticker: '3CP', type: 'Action' }, deps({ user: () => ({ yahoo: '3CP.F', label: '3CP.F · Frankfurt · EUR' }) })).text).toBe('Cotation : 3CP.F · Frankfurt · EUR');
+    expect(X.symbolSourceInfo({ ticker: 'BTC', type: 'Crypto' }, deps()).text).toBe('Cotation : bitcoin (CoinGecko)');
+  });
+  it('liquidités : rien', () => {
+    expect(X.symbolSourceInfo({ ticker: 'EUR', type: 'Cash' }, deps())).toBe(null);
+  });
+  it('branché sur la fiche du titre ; un choix rafraîchit la fiche', () => {
+    const stock = readFileSync('js/screens/stock.js', 'utf8');
+    expect(stock).toContain('symbolSourceInfo(h)');
+    expect(stock).toContain('openSymbolSheet(a,hh)');
+    expect(readFileSync('js/screens/stale.js', 'utf8').match(/S\.screen === 'stock'\) renderScreen\(S\.screen\)/g).length).toBe(2);
   });
 });

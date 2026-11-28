@@ -76,6 +76,7 @@ function renderStock() {
         <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
       </div>
     </div>
+    ${(src=>src?`<div class="sym-src ${src.state}">${src.state==='stale'?'⚠ ':''}${esc(src.text)} · <span id="js-sym-find" class="tap sym-src-link">${esc(src.action)}</span></div>`:'')(symbolSourceInfo(h))}
     <div class="row gap8" style="margin-top:4px">
       <div class="badge ${pnl>=0?'up':'dn'}">${pnl>=0?'▲':'▼'} ${Math.abs(pnlPct).toFixed(2)}%</div>
       <span class="t-sm">${esc(h.type)} · ${esc(h.country)} · ${esc(h.sector)}</span>
@@ -165,6 +166,11 @@ SCREEN_BIND.stock = function (el, id) {
       });
     });
     // Edit holding button
+    // Trouver ou changer la cotation directement depuis la position (même fenêtre que « Non synchro », js/screens/stale.js)
+    el.querySelector('#js-sym-find')?.addEventListener('click',()=>{
+      const a=S.accounts.find(x=>x.id===S.accountId), hh=a?.holdings.find(x=>x.id===S.holdingId);
+      if(a&&hh) openSymbolSheet(a,hh);
+    });
     el.querySelector('#js-edit-holding')?.addEventListener('click',()=>{
       const a=S.accounts.find(a=>a.id===S.accountId);
       const hh=a?.holdings.find(h=>h.id===S.holdingId);

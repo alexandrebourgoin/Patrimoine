@@ -318,6 +318,9 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg
 .sym-sub{font-size:12px;color:var(--text2)}
 .sym-warn{font-size:11px;font-weight:700;color:var(--warn,#b45309)}
 .sym-price{font-size:13px;font-weight:700;flex-shrink:0}
+.sym-src{margin-top:4px;font-size:12px;color:var(--text2)}   /* fiche du titre : source du cours */
+.sym-src.stale{color:var(--loss);font-weight:700}
+.sym-src-link{color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:2px}
 
 /* ─── STOCK DETAIL ─── */
 .stock-hero{padding:8px 20px 18px;border-bottom:1px solid var(--border)}
